@@ -1,0 +1,61 @@
+# Configuracion local y secretos (en cualquier carpeta)
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+.aws/
+secrets.local/
+credentials.json
+service-account*.json
+
+# Node, TypeScript y Expo
+node_modules/
+.expo/
+.expo-shared/
+dist/
+build/
+coverage/
+.nyc_output/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Go: binarios y resultados locales
+/bin/
+/tmp/
+*.test
+coverage.out
+coverage.html
+
+# Terraform: conservar .terraform.lock.hcl
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+!*.tfvars.json.example
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Logs, editores y sistema operativo
+*.log
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo

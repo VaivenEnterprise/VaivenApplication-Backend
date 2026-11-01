@@ -1,0 +1,117 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "opencode/big-pickle",
+  "small_model": "opencode/ling-flash-free",
+  "instructions": [
+    "constitution.md",
+    "memoria.md"
+  ],
+  "agent": {
+    "plan": {
+      "model": "opencode/nemotron-3-ultra-free"
+    },
+    "build": {
+      "model": "opencode/nemotron-3-lightning-free"
+    },
+    "spec-writer": {
+      "model": "opencode/nemotron-3-ultra-free"
+    },
+    "modelador-mongo": {
+      "model": "opencode/nemotron-3-ultra-free"
+    },
+    "dev-go": {
+      "model": "opencode/nemotron-3-lightning-free"
+    },
+    "qa-go": {
+      "model": "opencode/ling-flash-free"
+    },
+    "devops-mcp": {
+      "model": "opencode/nemotron-3-ultra-free",
+      "tools": {
+        "mongodb_*": true,
+        "cloudinary-assets_*": true,
+        "cloudinary-config_*": true,
+        "render_*": true
+      }
+    },
+    "revisor-constitucion": {
+      "model": "opencode/big-pickle"
+    }
+  },
+  "permission": {
+    "skill": {
+      "*": "allow"
+    },
+    "edit": "ask",
+    "bash": {
+      "*": "ask",
+      "ls*": "allow",
+      "go version": "allow"
+    },
+    "mongodb_*": "deny",
+    "cloudinary-assets_*": "deny",
+    "cloudinary-config_*": "deny",
+    "render_*": "deny"
+  },
+  "mcp": {
+    "mongodb": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "mongodb-mcp-server"
+      ],
+      "environment": {
+        "MDB_MCP_API_CLIENT_ID": "{env:MDB_MCP_API_CLIENT_ID}",
+        "MDB_MCP_API_CLIENT_SECRET": "{env:MDB_MCP_API_CLIENT_SECRET}"
+      },
+      "enabled": true
+    },
+    "cloudinary-assets": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "--package",
+        "@cloudinary/asset-management-mcp",
+        "--",
+        "mcp",
+        "start"
+      ],
+      "environment": {
+        "CLOUDINARY_URL": "{env:CLOUDINARY_URL}"
+      },
+      "enabled": true
+    },
+    "cloudinary-config": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "--package",
+        "@cloudinary/environment-config-mcp",
+        "--",
+        "mcp",
+        "start"
+      ],
+      "environment": {
+        "CLOUDINARY_URL": "{env:CLOUDINARY_URL}"
+      },
+      "enabled": true
+    },
+    "render": {
+      "type": "remote",
+      "url": "https://mcp.render.com/mcp",
+      "headers": {
+        "Authorization": "Bearer {env:RENDER_API_KEY}"
+      },
+      "enabled": true
+    }
+  },
+  "tools": {
+    "mongodb_*": false,
+    "cloudinary-assets_*": false,
+    "cloudinary-config_*": false,
+    "render_*": false
+  }
+}
