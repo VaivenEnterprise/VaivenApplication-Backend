@@ -1,7 +1,7 @@
 # Tareas 014 — Sugerencias con IA (backend)
 
 - **Dueño:** BE-A · **Estado:** sin ejecutar · `[P]` = paralelizable
-- Se ejecuta **después** del congelamiento de la 1.0 (15 nov); no toca el AAB en revisión.
+- Se ejecuta **después** del congelamiento de la 1.0 (22 nov); no toca el AAB en revisión.
 
 - [ ] **T001** Contrato OpenAPI
   - Archivos: `api/paths/ai.yaml`, `api/openapi.yaml` (referencia), `/meta` con `features.aiSuggestions`
@@ -48,14 +48,14 @@
 - [ ] **T008** Variables en producción y revisión
   - Archivos: `docs/produccion.md` (sección IA), `memoria.md` (solo anexar)
   - Agente: `revisor-constitucion` · Depende de: T007, 013-T008
-  - Aceptación: pasos para definir `AI_API_KEY` y `AI_ENABLED` en Render (sin valores); procedimiento de apagado; **CONFORME**
+  - Aceptación: pasos para definir `AI_API_KEY` y `AI_ENABLED` en el `.env` de la VM de Azure (sin valores); procedimiento de apagado; **CONFORME**
   - Refs: RF-06, CA-06
 
-- [ ] **T009** Despliegue de la spec en staging por MCP
+- [ ] **T009** Despliegue de la spec en Azure (staging)
   - Archivos: `memoria.md` (solo anexar)
   - Agente: `devops-mcp` · Depende de: T008 (y todas las anteriores `[x]`)
-  - Aceptación: `make fmt lint test` en verde; `trigger_deploy` de `vaiven-staging` y espera con `list_deploys`; `/healthz` y `/readyz` devuelven 200; cada endpoint nuevo de esta spec (`api/paths/<modulo>.yaml`) responde con una petición correcta y una inválida en el formato de error del Art. IV; `list_logs` sin secretos ni datos personales; resultado anotado en `memoria.md`. **La spec siguiente no empieza hasta que esta tarea pase.**
-  - Refs: Art. XIII.4
+  - Aceptación: `make fmt lint test` en verde; `scripts/deploy.sh staging` (construye, envía a la VM y reinicia la API); `/healthz` y `/readyz` devuelven 200 por HTTPS sin `-k`; cada endpoint nuevo de esta spec (`api/paths/<modulo>.yaml`) responde con una petición correcta y una inválida en el formato de error del Art. IV; registros sin secretos ni datos personales; resultado anotado en `memoria.md`. **La spec siguiente no empieza hasta que esta tarea pase.**
+  - Refs: Art. XIII.5
 
 | Total | 9 tareas |
 |---|---|

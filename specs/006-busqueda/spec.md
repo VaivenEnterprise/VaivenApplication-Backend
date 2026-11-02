@@ -1,7 +1,7 @@
 # Spec 006 — Búsqueda (backend)
 
-- **Dueño:** BE-B · **Prioridad:** P0 · **Ventana:** 3–5 nov · **Depende de:** 005 (modelo `items`)
-- **Constitución:** v1.3.0 · **Políticas:** POL-14 · **Estado:** Borrador
+- **Dueño:** BE-B · **Prioridad:** P0 · **Ventana:** 8–10 nov · **Depende de:** 005 (modelo `items`)
+- **Constitución:** v1.4.0 · **Políticas:** POL-14 · **Estado:** Borrador
 
 ## 1. Objetivo y por qué
 Que una persona encuentre objetos por texto, categoría, zona, modalidad y disponibilidad en el periodo que necesita, con resultados ordenados y paginados, sin exponer datos sensibles.

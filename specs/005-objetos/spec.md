@@ -1,7 +1,7 @@
 # Spec 005 — Objetos (backend)
 
-- **Dueño:** BE-A · **Prioridad:** P0 · **Ventana:** 3–5 nov · **Depende de:** 003, 004
-- **Constitución:** v1.3.0 · **Políticas:** POL-01, POL-04, POL-13, POL-14, POL-16 · **Estado:** Borrador
+- **Dueño:** BE-A · **Prioridad:** P0 · **Ventana:** 8–10 nov · **Depende de:** 003, 004
+- **Constitución:** v1.4.0 · **Políticas:** POL-01, POL-04, POL-13, POL-14, POL-16 · **Estado:** Borrador
 
 ## 1. Objetivo y por qué
 Permitir que una persona publique objetos disponibles (préstamo gratuito o renta), los edite y los pause para controlar futuras solicitudes. Es el inventario sobre el que se construyen búsqueda, solicitudes y reservas.

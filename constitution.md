@@ -1,6 +1,6 @@
 # Constitución del Backend — VAIVÉN
 
-> **Versión 1.3.0** · Ratificada el 2026-10-26 · Enmendada el 2026-10-28 (Cloudinary para imágenes; Art. XII trabajo en paralelo), el 2026-10-29 (Art. VII), y el 2026-11-01 (repositorios separados; **MINOR:** se elimina todo lo de repositorio y pipeline —incluida la spec 016—, se agrega el Art. XIII de servicios y despliegue por MCP y se reordena el roadmap) · Proyecto: `vaiven-backend/` (Go + MongoDB)
+> **Versión 1.4.0** · Ratificada el 2026-10-26 · Enmendada el 2026-10-28 (Cloudinary para imágenes; Art. XII trabajo en paralelo), el 2026-10-29 (Art. VII), y el 2026-11-01 (repositorios separados; **MINOR:** se elimina todo lo de repositorio y pipeline —incluida la spec 016—, se agrega el Art. XIII de servicios y despliegue por MCP y se reordena el roadmap) · Proyecto: `vaiven-backend/` (Go + MongoDB)
 >
 > Esta es la máxima autoridad técnica del backend. Si `AGENTS.md`, `memoria.md`, `spec.md`, `plan.md`, `tasks.md`, un agente o una skill la contradicen, **gana la constitución** y el otro archivo debe corregirse.
 > La constitución del móvil (`../vaiven-frontend/constitution.md`) comparte los Artículos IV y V; ambas deben mantenerse idénticas en esos puntos.
@@ -104,13 +104,21 @@ El backend es una **API REST en Go** con persistencia en **MongoDB**. Es la úni
 5. **`memoria.md` es solo-anexar:** cada persona agrega líneas nuevas al final de su sección con su etiqueta (`[BE-A]`, `[BE-B]`); ante un conflicto de fusión se conservan ambas.
 6. Mientras una dependencia entre specs no esté lista, se usa el puerto vacío; nunca se duplica ni se copia código de otro módulo.
 
-### Art. XIII — Servicios y despliegue por MCP (enmienda 1.3.0)
-1. Todo servicio externo (MongoDB Atlas, Cloudinary, Render) se aprovisiona, configura y verifica con **servidores MCP** invocados desde OpenCode (spec 001), no con paneles manuales. Solo se hace a mano lo que ningún MCP cubre (alta de cuenta, creación de las credenciales de API), y se anota en `memoria.md` sin valores secretos.
-2. Los MCP se declaran **únicamente en `opencode.json`** y sus credenciales vienen de variables de entorno locales (`{env:...}`); nunca en el repositorio, en `memoria.md` ni en specs.
-3. Solo el agente `devops-mcp` tiene permiso para usar los MCP; los demás agentes no. Las herramientas destructivas (`drop-database`, `drop-collection`, `delete-*`, borrar recursos) están denegadas por permiso; una excepción exige aprobación humana.
-4. **Cada spec termina desplegada.** La última tarea de cada spec (tarea «Despliegue») se ejecuta solo cuando todas las anteriores están `[x]` y `make fmt lint test` pasa: `devops-mcp` lanza el despliegue de `vaiven-staging` en Render (`trigger_deploy`), espera a que termine, verifica `/healthz`, `/readyz` y los endpoints de la spec contra staging, y anota el resultado en `memoria.md`. No se empieza la spec siguiente hasta que ese despliegue verifique.
-5. `vaiven-prod` solo se toca en la spec 013.
-6. El origen del despliegue (repositorio o imagen que Render consume) queda **por definir** cuando se integre el repositorio; mientras no exista, la tarea «Despliegue» no puede cerrarse.
+### Art. XIII — Infraestructura en Azure y despliegue por MCP (enmienda 1.4.0)
+1. La infraestructura del backend es **Azure, en la cuenta principal del proyecto** (la misma con la que se compró la licencia de Google Play; no en una cuenta personal ni de estudiantes), con la **cuenta gratuita de Azure** (crédito de 200 USD durante 30 días, 12 meses de servicios gratuitos y tarjeta registrada, pero **sin cobros mientras no se actualice a pago por uso**): una máquina virtual Linux de una talla elegible para la capa gratuita, con **Docker Compose**; Azure es obligatorio para el curso. Fuera de Azure solo quedan Cloudinary (imágenes) y la landing (Render). La talla preferida es **Standard_B2ats_v2** (x86-64, 2 vCPU, 1 GiB); alternativas: `Standard_B1s` y `Standard_B2pts_v2` (ARM64, que exige compilar la imagen para `linux/arm64`). Todo debe mantenerse en capas gratuitas, con una **excepción conocida**: la IP pública (SKU Estándar, obligatoria desde 2025) cuesta cerca de 3–4 USD al mes y sale del crédito; cualquier otro recurso con costo se detiene y se consulta.
+2. **Trabajo humano mínimo; todo lo demás lo hace OpenCode.** La persona solo se **registra** (cuenta de Azure y de Cloudinary), inicia sesión (`az login`), copia `CLOUDINARY_URL` y **aprueba** las acciones que OpenCode le solicite. Crear la VM y los discos, abrir puertos, fijar la IP, instalar Docker, levantar MongoDB y Redis, emitir el certificado, desplegar y verificar lo hace `devops-mcp` desde OpenCode, usando **primero los MCP** (MCP de Azure —no en modo solo lectura— y MCP de Cloudinary) y, solo para lo que ningún MCP cubre, la CLI `az` o SSH a la VM, siempre ejecutados por OpenCode. Cualquier paso manual adicional se justifica en `docs/servicios.md`.
+3. Los MCP se declaran **únicamente en `opencode.json`**; sus credenciales vienen de variables de entorno locales (`{env:...}`) o de la sesión de `az`; nunca en el repositorio, en `memoria.md` ni en specs.
+4. Solo el agente `devops-mcp` puede usar los MCP, la CLI `az` y SSH a la VM. Como el MCP de Azure permite también borrar, **cada llamada a Azure pide aprobación** y el agente tiene prohibido borrar la VM, los discos, la IP, las reglas de red o el grupo de recursos, y ejecutar `docker compose down -v` o borrar volúmenes (excepción solo con aprobación humana explícita).
+5. **Cada spec termina desplegada.** La última tarea de cada spec (tarea «Despliegue») se ejecuta solo cuando todas las anteriores están `[x]` y `make fmt lint test` pasa: `devops-mcp` ejecuta `scripts/deploy.sh staging`, que construye la imagen (para la arquitectura de la VM), la envía a la VM, reinicia la API (un corte de unos segundos) y espera a que `/healthz` responda; después verifica por **HTTPS** `/healthz`, `/readyz` y los endpoints de la spec, revisa los registros y anota el resultado en `memoria.md`. No se empieza la spec siguiente hasta que ese despliegue verifique.
+6. **Entornos:** `staging` (specs 001–012, puerto 8443) y `production` (spec 013, puerto 443) son proyectos de Compose separados, con bases de datos, volúmenes y secretos distintos. Como la capa gratuita da una sola VM, comparten la máquina con límites de memoria por contenedor.
+7. **El despliegue no depende del repositorio:** la imagen se construye en la máquina de quien despliega y viaja a la VM por SSH (`docker save | ssh … docker load`). No hay registro de imágenes (Azure Container Registry no es gratuito).
+
+### Art. XIV — Redis obligatorio y HTTPS forzoso (enmienda 1.4.0)
+1. La API es **sin estado**: nada que deba compartirse entre peticiones vive en la memoria del proceso, de modo que pueda escalar a más réplicas sin cambiar código. Hoy corre **una sola réplica** (`api`): la VM gratuita tiene ~1 GiB de RAM y **no hay nginx ni balanceador**; se acepta un corte de unos segundos al desplegar.
+2. **Redis es obligatorio** (contenedor en la VM, sin puerto publicado, con contraseña y `maxmemory`). Se usa para el **límite de tasa** (POL-11 y los intentos de inicio de sesión) y para **caché de lecturas** con TTL corto (categorías y resultados de búsqueda). **Redis nunca es la fuente de verdad:** todo estado de negocio (QR de un solo uso, sesiones, tokens, candados de trabajos) vive en MongoDB. Si Redis cae, la API sigue funcionando: el límite de tasa baja a un límite local, la caché se omite y `/readyz` informa `redis: degradado` sin devolver 503.
+3. Redis se accede por puertos (`ratelimit.Limiter`, `cache.Cache`) y solo el adaptador importa `github.com/redis/go-redis/v9` (Art. III). Las claves llevan el prefijo `vaiven:<entorno>:`.
+4. **HTTPS forzoso, sin proxy.** En `staging` y `production` la API **solo** sirve HTTPS (no existe puerto HTTP de la API). El certificado es de **Let's Encrypt** para el nombre DNS de la IP pública, emitido y renovado con `certbot` en la VM (validación en el puerto 80) y montado de solo lectura en el contenedor; la API lee el certificado de archivos (`TLS_CERT_FILE`, `TLS_KEY_FILE`) y lo **recarga sin reiniciarse**. En desarrollo local puede usarse HTTP. MongoDB y Redis **nunca** publican puertos.
+5. Cada contenedor tiene límite de memoria; la API usa `GOMEMLIMIT`; la VM lleva 2 GB de swap (las tallas gratuitas nuevas no traen disco temporal).
 
 ---
 
@@ -127,12 +135,15 @@ El backend es una **API REST en Go** con persistencia en **MongoDB**. Es la úni
 | Configuración | Variables de entorno (biblioteca estándar) |
 | Pruebas | `testing` + `testify` + `testcontainers-go` (módulo mongodb) |
 | Calidad | `gofmt`, `go vet`, `golangci-lint` |
-| Contenedores | Docker + Docker Compose (desarrollo), Dockerfile multi‑etapa |
+| Contenedores | Docker + Docker Compose (desarrollo y despliegue), Dockerfile multi‑etapa |
 | Contrato | OpenAPI 3.1 en `api/openapi.yaml` + `api/paths/<modulo>.yaml` |
 | Autenticación | JWT de acceso (`golang-jwt/jwt/v5`) + refresh rotativo; contraseñas con `argon2id` (`x/crypto`) |
 | Imágenes | Cloudinary (capa gratuita), firmas emitidas por el backend, sin SDK |
 | Notificaciones push | API HTTP de Expo Push, sin SDK |
-| Servicios y despliegue | Servidores **MCP** declarados en `opencode.json`: MongoDB (Atlas), Cloudinary y Render |
+| Nube | **Azure** (cuenta gratuita): una VM Linux con Docker Compose |
+| TLS | **Let's Encrypt** con `certbot` en la VM; la API sirve HTTPS directamente (Art. XIV.4), sin nginx |
+| Caché y límite de tasa (obligatorio) | **Redis 7**, cliente `github.com/redis/go-redis/v9` (Art. XIV) |
+| Servicios y despliegue | **MCP de Azure** (`@azure/mcp`) + CLI `az` + MCP de Cloudinary, declarados en `opencode.json` |
 
 ## 4. Estructura del repositorio
 
@@ -151,6 +162,8 @@ vaiven-backend/             # raíz del repositorio
 │  └─ platform/               # logger, cliente Mongo, reloj, generador de IDs
 ├─ api/openapi.yaml
 ├─ test/e2e/                  # recorrido de punta a punta (spec 012); las unitarias van junto al código
+├─ deploy/                    # bootstrap.sh de la VM, base/ (Mongo+Redis+TLS) y docker-compose.yml de la API (specs 001 y 002)
+├─ scripts/                   # deploy.sh <env> [--rollback]: construye, envía por SSH y reinicia (spec 002)
 ├─ specs/NNN-nombre/{spec.md, plan.md, tasks.md}
 ├─ .opencode/{agents, skills}
 ├─ constitution.md · AGENTS.md · memoria.md · opencode.json

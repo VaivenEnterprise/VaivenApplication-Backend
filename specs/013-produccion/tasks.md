@@ -1,35 +1,35 @@
 # Tareas 013 — Entorno de producción (backend)
 
 - **Dueño:** BE-B · **Estado:** sin ejecutar · `[P]` = paralelizable
-- Las tareas «manual» son trámites en Render, Atlas, Cloudinary o el monitor; se registran en `docs/produccion.md` y `memoria.md` sin valores secretos.
+- Las tareas «manual» son trámites en la VM de Azure, Cloudinary o el monitor; se registran en `docs/produccion.md` y `memoria.md` sin valores secretos.
 
-## Fase 1 — Entorno (30 oct–1 nov)
+## Fase 1 — Entorno (6–8 nov)
 
-- [ ] **T001** Servicio de producción en Render (**manual**)
+- [ ] **T001** Entorno de producción en la VM (**devops-mcp**)
   - Archivos: `config/prod.example.env`, `docs/produccion.md` (sección servicio)
-  - Agente: `dev-go` (documentación) · Depende de: 002-T027
-  - Aceptación: `vaiven-prod` creado por MCP (`create_web_service`, solo `devops-mcp`, Art. XIII.5); variables definidas (nombres en `prod.example.env`); `/healthz` y `/readyz` responden 200 (CA-01); la URL queda anotada para el móvil (mobile 013-T001)
-  - Refs: RF-01 · P-01
+  - Agente: `devops-mcp` (infraestructura) y `dev-go` (documentación) · Depende de: 002-T031
+  - Aceptación: proyecto `vaiven-production` en la VM con `scripts/deploy.sh production` (puerto 443); **HTTPS válido** (certificado de Let\'s Encrypt servido por la API; CA-07); variables definidas (nombres en `prod.example.env`); `/healthz` y `/readyz` responden 200 por HTTPS (CA-01); la URL queda anotada para el móvil (mobile 013-T001); uso de memoria con staging y producción juntos anotado (RF-12)
+  - Refs: RF-01, RF-12 · P-01
 
-- [ ] **T002** [P] Base de datos de producción en Atlas (**manual**)
+- [ ] **T002** [P] Base de datos de producción
   - Archivos: `docs/produccion.md` (sección base de datos)
-  - Agente: `modelador-mongo` (documentación e índices) · Depende de: 002-T026
-  - Aceptación: base `vaiven_prod`, usuario de permisos mínimos, contraseña distinta de staging (CA-02); `indexes` sin faltantes tras el primer arranque; riesgo de `0.0.0.0/0` anotado (P-02)
+  - Agente: `modelador-mongo` (documentación e índices) y `devops-mcp` · Depende de: 002-T029
+  - Aceptación: base `vaiven_prod` en un Mongo con volumen propio, usuario de permisos mínimos, contraseña distinta de staging (CA-02); Mongo y Redis sin puertos publicados; `indexes` sin faltantes tras el primer arranque
   - Refs: RF-02 · P-02
 
-- [ ] **T003** [P] Carpeta de Cloudinary de producción (**manual**)
+- [ ] **T003** [P] Carpeta de Cloudinary de producción
   - Archivos: `docs/produccion.md` (sección imágenes)
   - Agente: `dev-go` (documentación y prueba de firma) · Depende de: 004-T009
-  - Aceptación: `CLOUDINARY_FOLDER=vaiven/production`; subida de prueba con firma real; secreto solo en Render
+  - Aceptación: `CLOUDINARY_BASE_FOLDER=vaiven/production`; subida de prueba con firma real; secreto solo en el `.env` de producción
   - Refs: RF-03 · P-03
 
-- [ ] **T004** [P] Monitor de disponibilidad (**manual**)
-  - Archivos: `docs/produccion.md` (sección monitoreo y arranque en frío)
-  - Agente: `dev-go` (documentación) · Depende de: T001
-  - Aceptación: servicio gratuito de ping a `/healthz` cada 5–10 min; documentado cuál es y cómo pausarlo; CA-05
+- [ ] **T004** [P] Monitor de disponibilidad y reinicio automático
+  - Archivos: `docs/produccion.md` (sección monitoreo)
+  - Agente: `dev-go` (documentación) y `devops-mcp` · Depende de: T001
+  - Aceptación: servicio gratuito de ping a `/healthz` cada 5 min con aviso por correo; `restart: unless-stopped` en todos los contenedores y Docker habilitado al arranque; tras reiniciar la VM ambos entornos vuelven solos (CA-05)
   - Refs: RF-06 · P-07
 
-## Fase 2 — Operación (12–15 nov)
+## Fase 2 — Operación (19–22 nov)
 
 - [ ] **T005** Secretos, administrador y cuenta de revisión
   - Archivos: `docs/produccion.md` (sección secretos)
@@ -50,15 +50,15 @@
   - Refs: RF-08 · P-04
 
 - [ ] **T008** Guía de operación y revisión de registros
-  - Archivos: `docs/produccion.md` (despliegue, reversión, logs, límites, Atlas M0 al 80 %)
+  - Archivos: `docs/produccion.md` (despliegue, reversión con `--rollback`, logs, memoria y disco, reinicio, vencimiento del crédito)
   - Agente: `spec-writer` · Depende de: T004, T006, T007
-  - Aceptación: otra persona del equipo ejecuta una reversión siguiendo la guía; revisión de los registros de una sesión completa sin datos personales (CA-06); límite de tasa verificado en producción
+  - Aceptación: otra persona del equipo ejecuta una reversión (`deploy.sh production --rollback`) siguiendo la guía; revisión de los registros de una sesión completa sin datos personales (CA-06); límite de tasa en Redis verificado en producción
   - Refs: RF-09, RF-10, RF-11
 
 - [ ] **T009** Lista de comprobación de producción y conformidad
   - Archivos: `docs/produccion.md` (lista firmada), `memoria.md` (solo anexar)
   - Agente: `revisor-constitucion` · Depende de: T008, 012-T011
-  - Aceptación: lista completa (secretos, índices, sin seed, monitor, respaldo, humo, registros); veredicto **CONFORME**; hito H5 (producción) marcado
+  - Aceptación: lista completa (secretos, índices, sin seed, monitor, respaldo, humo, registros, HTTPS, capacidad de la VM); veredicto **CONFORME**; hito H5 (producción) marcado
   - Refs: RNF-01, RNF-02
 
 | Total | 9 tareas |

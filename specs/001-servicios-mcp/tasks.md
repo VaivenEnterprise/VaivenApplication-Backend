@@ -1,50 +1,62 @@
-# Tareas 001 — Servicios externos con MCP (backend)
+# Tareas 001 — Infraestructura en Azure y servicios (backend)
 
 - **Dueño:** BE-B · **Estado:** sin ejecutar · `[P]` = paralelizable
-- Las cuentas (Atlas, Cloudinary, Render) y sus credenciales de API las crea la persona administradora a mano (ningún MCP crea cuentas). Todo lo demás lo hace `devops-mcp`.
-- Esta spec no tiene tarea «Despliegue»: todavía no hay nada que desplegar (Art. XIII.4 aplica desde la 002).
+- **Lo único humano (Art. XIII.2):** registrarse en Azure y Cloudinary, `az login`, definir `CLOUDINARY_URL` y aprobar las acciones. Todo lo demás lo hace `devops-mcp` desde OpenCode (primero MCP; `az` y SSH para lo que el MCP no cubra).
+- Esta spec no tiene tarea «Despliegue»: todavía no hay API que desplegar (Art. XIII.5 aplica desde la 002).
 
-- [ ] **T001** Variables locales y conexión de los tres MCP (**la hace una persona** con `devops-mcp`)
+- [ ] **T001** Conexión de los MCP y sesión de `az` (**la hace una persona** con `devops-mcp`)
   - Archivos: `memoria.md` (solo anexar)
   - Agente: — (manual) y `devops-mcp` · Depende de: —
-  - Aceptación: variables del plan §3 definidas en el sistema (sin valores en el repo); `opencode mcp list` muestra `mongodb`, `cloudinary` y `render` conectados (CA-01); `dev-go` rechaza una herramienta MCP y `devops-mcp` la ejecuta (CA-02)
+  - Aceptación: la cuenta Microsoft se crea con el correo de la cuenta principal del proyecto y el alta de Azure la hace un integrante del equipo que **no haya usado antes la oferta gratuita** (responsable: por definir; debe seguir en el equipo hasta el final); la suscripción queda a nombre de la cuenta del proyecto y `az login` se hace con esa cuenta, no con la personal. Cuenta de Azure creada con el correo de la cuenta principal del proyecto y cuenta de Cloudinary creada, `az login` hecho y `az account show` apunta a la suscripción gratuita; `CLOUDINARY_URL` definida en el sistema (únicos pasos manuales, anotados en `memoria.md`); `opencode mcp list` muestra `azure`, `cloudinary-assets` y `cloudinary-config` conectados (CA-01); `dev-go` rechaza una herramienta MCP y `devops-mcp` la ejecuta (CA-02)
   - Refs: RF-01, RF-02 · Art. XIII
 
-- [ ] **T002** Atlas: clúster, usuario y lista de acceso
+- [ ] **T002** [P] Cloudinary: verificar la nube y crear la carpeta base
   - Archivos: `memoria.md` (solo anexar)
   - Agente: `devops-mcp` · Depende de: T001
-  - Aceptación: si no existe ya un clúster gratuito en el proyecto, se crea `vaiven` (M0); usuario `vaiven_staging` con `readWrite` solo sobre `vaiven_staging`; lista de acceso `0.0.0.0/0`; contraseña generada con 24+ caracteres, **nunca escrita en el repo ni en `memoria.md`**; `MONGO_URI` guardada solo como variable local
-  - Refs: RF-03 · P-06
-
-- [ ] **T003** [P] Verificar la conexión a MongoDB
-  - Archivos: `opencode.json` (agregar `MDB_MCP_CONNECTION_STRING: "{env:MONGO_URI}"` al bloque `mongodb`), `memoria.md` (solo anexar)
-  - Agente: `devops-mcp` · Depende de: T002
-  - Aceptación: tras reiniciar OpenCode con `MONGO_URI` definida, por MCP se conecta y lista las bases de datos; no escribe ni borra datos de negocio (CA-03)
-  - Refs: RF-04
-
-- [ ] **T004** [P] Cloudinary: verificar la nube y crear la carpeta base
-  - Archivos: `memoria.md` (solo anexar)
-  - Agente: `devops-mcp` · Depende de: T001
-  - Aceptación: por MCP se confirma que la nube responde y se crea la carpeta `vaiven/staging` (CA-04); el *API secret* no se imprime en ninguna salida
-  - Refs: RF-05
-
-- [ ] **T005** [P] Render: verificar el espacio de trabajo
-  - Archivos: `memoria.md` (solo anexar)
-  - Agente: `devops-mcp` · Depende de: T001
-  - Aceptación: `select_workspace` de un espacio solo para VAIVÉN; `list_services` sin servicios previos o con `vaiven-staging` ya existente; se anota que la creación ocurre en 002-T027
+  - Aceptación: por MCP se confirma que la nube responde y se crea `vaiven/staging` (CA-06); el *API secret* no se imprime en ninguna salida
   - Refs: RF-06
 
-- [ ] **T006** `docs/servicios.md` y `.env.example`
+- [ ] **T003** Archivos de infraestructura: `bootstrap.sh` y stack base
+  - Archivos: `deploy/bootstrap.sh`, `deploy/base/docker-compose.yml`, `deploy/base/tls.md`
+  - Agente: `dev-go` · Depende de: T001
+  - Aceptación: `bootstrap.sh` (idempotente) instala Docker, el plugin de Compose y `certbot`, crea 2 GB de swap, el usuario `deploy` y `/opt/vaiven`, y activa actualizaciones de seguridad; el Compose define `mongo` (replica set `rs0`, autenticación, volumen, sin puerto publicado) y `redis` (contraseña, `maxmemory`, sin puerto publicado) con límites de memoria; `tls.md` documenta la emisión y renovación con `certbot` y la comprobación; ningún secreto escrito (todo por `.env`)
+  - Refs: RF-03, RF-04, RF-05 · P-03…P-06
+
+- [ ] **T004** Azure: región y talla, VM por MCP; IP estática y reglas
+  - Archivos: `memoria.md` (solo anexar)
+  - Agente: `devops-mcp` · Depende de: T001, T003
+  - Aceptación: con `learn=true` se anota qué cubre el MCP de Azure; antes de crear nada se revisa con `az vm list-skus … --size Standard_B --all` qué regiones y tallas (B2ats_v2 → B1s → B2pts_v2) no tienen `Restrictions` (y, si es «Azure for Students», las regiones permitidas); el agente genera la llave SSH dedicada (`ssh-keygen`, la privada nunca se imprime), crea `rg-vaiven` y la VM con **`compute_vm_create`** (talla gratuita pasada explícitamente, Ubuntu 24.04 LTS, llave pública, **sin zonas de disponibilidad**, disco de SO Premium de hasta 64 GB; la talla por defecto del MCP, `Standard_DS1_v2`, **no** es gratuita); lo que el MCP no cubra —IP pública estándar estática con nombre DNS y reglas del NSG (80, 443 y 8443 abiertos; 22 solo desde la IP pública detectada con `curl`)— lo hace con `az`; cada creación con aprobación; se anotan región, talla y nombre DNS (sin secretos); alerta de presupuesto creada; el único cargo esperado es la IP pública
+  - Refs: RF-00, RF-03 · RNF-02
+
+- [ ] **T005** Preparar y verificar la VM
+  - Archivos: `memoria.md` (solo anexar)
+  - Agente: `devops-mcp` · Depende de: T004
+  - Aceptación: `deploy/bootstrap.sh` copiado y ejecutado por SSH; luego `docker --version`, `docker compose version`, swap de 2 GB activo, memoria y disco libres anotados; desde fuera, los puertos 27017 y 6379 no responden (CA-03)
+  - Refs: RF-03
+
+- [ ] **T006** Levantar MongoDB y Redis del stack base
+  - Archivos: `memoria.md` (solo anexar)
+  - Agente: `devops-mcp` · Depende de: T005
+  - Aceptación: se anota el consumo de memoria de Mongo y Redis (`docker stats`) y los créditos de CPU de la VM; `.env` de la VM generado en la propia VM con contraseñas fuertes (permisos 600, nunca en el repo ni en la conversación); `rs.status()` con el nodo en `PRIMARY`; usuario de aplicación con permisos solo sobre la base `vaiven_staging`; `redis-cli ping` = `PONG` autenticado (CA-04)
+  - Refs: RF-04 · P-04, P-05
+
+- [ ] **T007** HTTPS: certificado de Let's Encrypt
+  - Archivos: `memoria.md` (solo anexar)
+  - Agente: `devops-mcp` · Depende de: T006
+  - Aceptación: `certbot --standalone` emite el certificado para el nombre DNS de la IP (puerto 80 abierto); `certbot renew --dry-run` termina bien y el temporizador de renovación está activo; una prueba temporal (`openssl s_server` en el puerto 8443, que luego se detiene) se valida desde fuera con `curl` sin `-k` y con `openssl s_client` (CA-05); las rutas de los archivos quedan anotadas para el Compose de la spec 002; la clave privada nunca se imprime
+  - Refs: RF-05 · P-06 · Art. XIV.4
+
+- [ ] **T008** `docs/servicios.md` y `.env.example`
   - Archivos: `docs/servicios.md`, `.env.example`
-  - Agente: `spec-writer` · Depende de: T003, T004, T005
-  - Aceptación: lista de servicios, variables (sin valores reales), cómo se obtuvo cada credencial, cómo rotarlas y riesgos conocidos (`0.0.0.0/0`, arranque en frío de Render, secretos y contexto del modelo)
+  - Agente: `spec-writer` · Depende de: T002, T007
+  - Aceptación: lista de servicios, región, talla, variables (sin valores reales), cómo se obtuvo y rota cada credencial, cómo recuperar el acceso SSH y riesgos conocidos (memoria justa, crédito de 30 días, secretos y contexto del modelo)
   - Refs: RF-07, RNF-01
 
-- [ ] **T007** Revisión de conformidad
+- [ ] **T009** Revisión de conformidad
   - Archivos: ninguno (solo informe)
-  - Agente: `revisor-constitucion` · Depende de: T006
-  - Aceptación: veredicto **CONFORME**; búsqueda de cadenas sospechosas sin hallazgos (CA-05); hito H0 (servicios) marcado
+  - Agente: `revisor-constitucion` · Depende de: T008
+  - Aceptación: veredicto **CONFORME**; búsqueda de cadenas sospechosas sin hallazgos (CA-07); hito H0 (infraestructura) marcado
   - Refs: DoD
 
-| Total | 7 tareas |
+| Total | 9 tareas |
 |---|---|

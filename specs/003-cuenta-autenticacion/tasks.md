@@ -65,7 +65,7 @@
 
 - [ ] **T011** [P] Comando `create-admin`
   - Archivos: `cmd/admin/create_admin.go`, `cmd/admin/create_admin_test.go`
-  - Agente: `dev-go` · Depende de: T005, 002-T026
+  - Agente: `dev-go` · Depende de: T005, 002-T029
   - Aceptación: crea usuario `admin` leyendo correo y contraseña por entrada estándar; no acepta la contraseña por argumento; idempotente (existe → mensaje y código ≠ 0)
   - Refs: RF-10
 
@@ -81,11 +81,11 @@
   - Aceptación: dependencias registradas; veredicto **CONFORME**; hito H1 (backend) marcado
   - Refs: DoD
 
-- [ ] **T014** Despliegue de la spec en staging por MCP
+- [ ] **T014** Despliegue de la spec en Azure (staging)
   - Archivos: `memoria.md` (solo anexar)
   - Agente: `devops-mcp` · Depende de: T013 (y todas las anteriores `[x]`)
-  - Aceptación: `make fmt lint test` en verde; `trigger_deploy` de `vaiven-staging` y espera con `list_deploys`; `/healthz` y `/readyz` devuelven 200; cada endpoint nuevo de esta spec (`api/paths/<modulo>.yaml`) responde con una petición correcta y una inválida en el formato de error del Art. IV; `list_logs` sin secretos ni datos personales; resultado anotado en `memoria.md`. **La spec siguiente no empieza hasta que esta tarea pase.**
-  - Refs: Art. XIII.4
+  - Aceptación: `make fmt lint test` en verde; `scripts/deploy.sh staging` (construye, envía a la VM y reinicia la API); `/healthz` y `/readyz` devuelven 200 por HTTPS sin `-k`; cada endpoint nuevo de esta spec (`api/paths/<modulo>.yaml`) responde con una petición correcta y una inválida en el formato de error del Art. IV; registros sin secretos ni datos personales; resultado anotado en `memoria.md`. **La spec siguiente no empieza hasta que esta tarea pase.**
+  - Refs: Art. XIII.5
 
 | Total | 14 tareas |
 |---|---|

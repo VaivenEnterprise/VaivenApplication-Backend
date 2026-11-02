@@ -29,7 +29,7 @@ Las solicitudes se leen de `bookings` (solo lectura, campos estables según la s
 | P-01 | Matemática en el paquete `model`, funciones puras y deterministas (sin Mongo, sin hora actual) para pruebas exactas | Arquitectura limpia |
 | P-02 | Similitud coseno sobre vectores dispersos con `map[string]float64`; sin librerías | II |
 | P-03 | Arreglos acotados (20 vecinos) dentro del documento del objeto | Modelo Mongo |
-| P-04 | Recalculo perezoso con candado en `reco_meta`; en Render gratuito no hay trabajos programados | — |
+| P-04 | Recalculo perezoso con candado en `reco_meta`; no hay trabajos programados; el candado vive en `reco_meta` (Mongo, no Redis) para que siga siendo correcto si algún día hay más de una réplica | — |
 | P-05 | Lectura de `bookings` mediante un puerto `RequestSource` implementado en `reco/adapter/mongo`; excepción documentada y revisada por BE-A | XIII |
 | P-06 | El modelo se evalúa con *leave-last-out* y se compara siempre contra popularidad | — |
 | P-07 | Los datos sintéticos incluyen patrones reales (grupos por categoría y municipio) para que la evaluación sea significativa, y se declaran como sintéticos en el informe | — |

@@ -3,7 +3,7 @@
 Plataforma móvil de préstamo y renta de objetos entre personas (México, MXN).
 Contexto completo: [`docs/VAIVEN_Idea_y_Objetivo.pdf`](docs/VAIVEN_Idea_y_Objetivo.pdf). Calendario, reparto entre personas y políticas confirmadas: [`ROADMAP.md`](ROADMAP.md).
 
-**Stack:** Go + chi + MongoDB (NoSQL)
+**Stack:** Go + chi + MongoDB (NoSQL) · Redis · HTTPS con Let's Encrypt · Docker Compose en una VM de **Azure** (cuenta gratuita) · Cloudinary
 
 Este repositorio es **independiente**. Forma parte de VAIVÉN junto con [`vaiven-frontend`](../vaiven-frontend) (app móvil) y [`vaiven-landing-page`](../vaiven-landing-page) (sitio informativo). Se asume que los tres repositorios están clonados lado a lado, porque algunos documentos del SDD apuntan al repositorio hermano con rutas `../vaiven-*`.
 
@@ -16,17 +16,24 @@ Este repositorio es **independiente**. Forma parte de VAIVÉN junto con [`vaiven
 | `memoria.md` | Decisiones, estado, modelos asignados, dependencias y aprendizajes. |
 | `opencode.json` | Modelos gratuitos por agente, instrucciones cargadas y permisos. |
 | `.opencode/agents/` y `.opencode/skills/` | Subagentes propios y skills con plantillas y listas de comprobación. |
-| `specs/001…015/` | `spec.md`, `plan.md` y `tasks.md` de cada fase: **001 servicios por MCP**, 002 arquitectura base, cuenta, imágenes, objetos, búsqueda, reservas, chat, entrega y pagos, calificaciones, notificaciones, integración, producción, IA y ML. Cada una termina con su tarea «Despliegue». |
+| `specs/001…015/` | `spec.md`, `plan.md` y `tasks.md` de cada fase: **001 infraestructura en Azure y servicios**, 002 arquitectura base (incluye Redis, HTTPS y `deploy/`), cuenta, imágenes, objetos, búsqueda, reservas, chat, entrega y pagos, calificaciones, notificaciones, integración, producción, IA y ML. Cada una termina con su tarea «Despliegue». |
 | `ROADMAP.md`, `docs/` | Copia del plan maestro y del documento de idea del proyecto. |
 
 Contrato de API: `api/openapi.yaml` (Art. IV). El móvil (`../vaiven-frontend`) desarrolla contra `api/paths/<modulo>.yaml`.
 
+## Infraestructura (Azure)
+
+```
+Internet ─ HTTPS ─► api (Go) ─► MongoDB (rs0) · Redis      ← una VM de Azure, Docker Compose
+```
+Staging en el puerto 8443 y producción en el 443 (proyectos de Compose separados). La API **solo** sirve HTTPS, con un certificado de Let's Encrypt emitido con `certbot` en la VM (sin nginx). **Redis es obligatorio** (límite de tasa y caché; nunca fuente de verdad, Art. XIV). Cloudinary guarda las fotos. Una sola réplica: la VM gratuita tiene ~1 GiB de RAM.
+
 ## Flujo: OpenCode + MCP, spec por spec
 
-1. Define las variables de entorno de los MCP (`MDB_MCP_API_CLIENT_ID`, `MDB_MCP_API_CLIENT_SECRET`, `CLOUDINARY_URL`, `RENDER_API_KEY`) y reinicia OpenCode; `opencode mcp list` debe mostrarlos conectados.
-2. Spec **001**: `@devops-mcp` aprovisiona Atlas, Cloudinary y Render.
-3. Desde la **002**: se implementan las tareas con `@dev-go`; la última tarea de cada spec es «Despliegue» (`@devops-mcp` despliega en staging y verifica los endpoints). **La spec siguiente no empieza hasta que esa tarea pase.**
-4. Repositorio, ramas, revisión y pipeline: **no están definidos**; se integrarán de cero.
+1. Inicia sesión con `az login` y define `CLOUDINARY_URL`; reinicia OpenCode y comprueba con `opencode mcp list` que `azure` y los dos MCP de Cloudinary estén conectados.
+2. Spec **001**: `@devops-mcp` elige región y talla gratuitas, crea la VM, la red y el stack base (MongoDB y Redis) y emite el certificado HTTPS.
+3. Desde la **002**: se implementan las tareas con `@dev-go`; la última tarea de cada spec es «Despliegue» (`@devops-mcp` ejecuta `scripts/deploy.sh staging` y verifica). **La spec siguiente no empieza hasta que esa tarea pase.**
+4. El despliegue no depende del repositorio (la imagen viaja por SSH). Repositorio, ramas, revisión y pipeline: **no están definidos**; se integrarán de cero.
 
 ## Cómo se usa con OpenCode
 

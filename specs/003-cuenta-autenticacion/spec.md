@@ -1,7 +1,7 @@
 # Spec 003 — Cuenta y autenticación (backend)
 
-- **Dueño:** BE-A · **Prioridad:** P0 · **Ventana:** 31 oct–2 nov · **Depende de:** 001, 002
-- **Constitución:** v1.3.0 · **Políticas:** POL-12, POL-17 · **Estado:** Borrador
+- **Dueño:** BE-A · **Prioridad:** P0 · **Ventana:** 5–7 nov · **Depende de:** 001, 002
+- **Constitución:** v1.4.0 · **Políticas:** POL-12, POL-17 · **Estado:** Borrador
 
 ## 1. Objetivo y por qué
 Permitir que una persona cree su cuenta, inicie sesión y administre su perfil, y dejar listas las piezas que usan todas las demás specs: identidad en el contexto, roles, módulos registrables y puertos vacíos (`notify.Notifier`, `moderation.Checker`). Una misma cuenta puede publicar y solicitar.

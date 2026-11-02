@@ -66,14 +66,14 @@
 - [ ] **T011** Revisión final y congelamiento
   - Archivos: `memoria.md` (solo anexar)
   - Dueño: BE-A · Agente: `revisor-constitucion` · Depende de: T008, T010
-  - Aceptación: veredicto **CONFORME** sobre todo el repositorio; `make fmt lint test` + integración + E2E pasan; código congelado el 15 de nov
+  - Aceptación: veredicto **CONFORME** sobre todo el repositorio; `make fmt lint test` + integración + E2E pasan; código congelado el 22 de nov
   - Refs: RNF-01, RNF-02
 
-- [ ] **T012** Despliegue de la spec en staging por MCP
+- [ ] **T012** Despliegue de la spec en Azure (staging)
   - Archivos: `memoria.md` (solo anexar)
   - Agente: `devops-mcp` · Depende de: T011 (y todas las anteriores `[x]`)
-  - Aceptación: `make fmt lint test` en verde; `trigger_deploy` de `vaiven-staging` y espera con `list_deploys`; `/healthz` y `/readyz` devuelven 200; cada endpoint nuevo de esta spec (`api/paths/<modulo>.yaml`) responde con una petición correcta y una inválida en el formato de error del Art. IV; `list_logs` sin secretos ni datos personales; resultado anotado en `memoria.md`. **La spec siguiente no empieza hasta que esta tarea pase.**
-  - Refs: Art. XIII.4
+  - Aceptación: `make fmt lint test` en verde; `scripts/deploy.sh staging` (construye, envía a la VM y reinicia la API); `/healthz` y `/readyz` devuelven 200 por HTTPS sin `-k`; cada endpoint nuevo de esta spec (`api/paths/<modulo>.yaml`) responde con una petición correcta y una inválida en el formato de error del Art. IV; registros sin secretos ni datos personales; resultado anotado en `memoria.md`. **La spec siguiente no empieza hasta que esta tarea pase.**
+  - Refs: Art. XIII.5
 
 | Total | 12 tareas |
 |---|---|

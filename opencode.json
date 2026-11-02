@@ -28,10 +28,9 @@
     "devops-mcp": {
       "model": "opencode/nemotron-3-ultra-free",
       "tools": {
-        "mongodb_*": true,
+        "azure_*": true,
         "cloudinary-assets_*": true,
-        "cloudinary-config_*": true,
-        "render_*": true
+        "cloudinary-config_*": true
       }
     },
     "revisor-constitucion": {
@@ -48,23 +47,20 @@
       "ls*": "allow",
       "go version": "allow"
     },
-    "mongodb_*": "deny",
     "cloudinary-assets_*": "deny",
     "cloudinary-config_*": "deny",
-    "render_*": "deny"
+    "azure_*": "deny"
   },
   "mcp": {
-    "mongodb": {
+    "azure": {
       "type": "local",
       "command": [
         "npx",
         "-y",
-        "mongodb-mcp-server"
+        "@azure/mcp@latest",
+        "server",
+        "start"
       ],
-      "environment": {
-        "MDB_MCP_API_CLIENT_ID": "{env:MDB_MCP_API_CLIENT_ID}",
-        "MDB_MCP_API_CLIENT_SECRET": "{env:MDB_MCP_API_CLIENT_SECRET}"
-      },
       "enabled": true
     },
     "cloudinary-assets": {
@@ -98,20 +94,11 @@
         "CLOUDINARY_URL": "{env:CLOUDINARY_URL}"
       },
       "enabled": true
-    },
-    "render": {
-      "type": "remote",
-      "url": "https://mcp.render.com/mcp",
-      "headers": {
-        "Authorization": "Bearer {env:RENDER_API_KEY}"
-      },
-      "enabled": true
     }
   },
   "tools": {
-    "mongodb_*": false,
+    "azure_*": false,
     "cloudinary-assets_*": false,
-    "cloudinary-config_*": false,
-    "render_*": false
+    "cloudinary-config_*": false
   }
 }

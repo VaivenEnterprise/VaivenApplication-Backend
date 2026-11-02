@@ -1,7 +1,7 @@
 # Tareas 015 — Recomendaciones con ML (backend)
 
 - **Dueño:** BE-B · **Estado:** sin ejecutar · `[P]` = paralelizable
-- Se ejecuta **después** del congelamiento de la 1.0 (15 nov).
+- Se ejecuta **después** del congelamiento de la 1.0 (22 nov).
 
 - [ ] **T001** Contrato OpenAPI
   - Archivos: `api/paths/recommendations.yaml`, `api/openapi.yaml` (referencia), `/meta` con `features.recommendations`
@@ -63,11 +63,11 @@
   - Aceptación: **CONFORME**; BE-A confirma la lectura de `bookings`
   - Refs: DoD
 
-- [ ] **T011** Despliegue de la spec en staging por MCP
+- [ ] **T011** Despliegue de la spec en Azure (staging)
   - Archivos: `memoria.md` (solo anexar)
   - Agente: `devops-mcp` · Depende de: T010 (y todas las anteriores `[x]`)
-  - Aceptación: `make fmt lint test` en verde; `trigger_deploy` de `vaiven-staging` y espera con `list_deploys`; `/healthz` y `/readyz` devuelven 200; cada endpoint nuevo de esta spec (`api/paths/<modulo>.yaml`) responde con una petición correcta y una inválida en el formato de error del Art. IV; `list_logs` sin secretos ni datos personales; resultado anotado en `memoria.md`. **La spec siguiente no empieza hasta que esta tarea pase.**
-  - Refs: Art. XIII.4
+  - Aceptación: `make fmt lint test` en verde; `scripts/deploy.sh staging` (construye, envía a la VM y reinicia la API); `/healthz` y `/readyz` devuelven 200 por HTTPS sin `-k`; cada endpoint nuevo de esta spec (`api/paths/<modulo>.yaml`) responde con una petición correcta y una inválida en el formato de error del Art. IV; registros sin secretos ni datos personales; resultado anotado en `memoria.md`. **La spec siguiente no empieza hasta que esta tarea pase.**
+  - Refs: Art. XIII.5
 
 | Total | 11 tareas |
 |---|---|

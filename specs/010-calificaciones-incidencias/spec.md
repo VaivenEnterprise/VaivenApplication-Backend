@@ -1,7 +1,7 @@
 # Spec 010 — Calificaciones e incidencias (backend)
 
-- **Dueño:** BE-B · **Prioridad:** P1 · **Ventana:** 8–11 nov · **Depende de:** 007, 009 (parcial)
-- **Constitución:** v1.3.0 · **Políticas:** POL-08, 09, 10, 13, 15 · **Estado:** Borrador
+- **Dueño:** BE-B · **Prioridad:** P1 · **Ventana:** 13–17 nov · **Depende de:** 007, 009 (parcial)
+- **Constitución:** v1.4.0 · **Políticas:** POL-08, 09, 10, 13, 15 · **Estado:** Borrador
 
 ## 1. Objetivo y por qué
 Construir confianza: cada persona puede calificar a su contraparte al concluir una operación, y cuando hay un desacuerdo se abre una **incidencia** vinculada a la reserva, con evidencia y seguimiento manual. Las sanciones se registran aparte y no cambian el promedio.

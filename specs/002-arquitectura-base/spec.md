@@ -35,7 +35,7 @@ Dejar listo un esqueleto de backend ejecutable, probado y documentado sobre el c
 | RF-02 | Se incluye un entorno local reproducible con MongoDB 7+ como replica set de un nodo, levantable con un comando. |
 | RF-03 | Al iniciar, el servicio se conecta a MongoDB y falla si no lo logra dentro del tiempo configurado. |
 | RF-04 | `GET /healthz` responde 200 mientras el proceso vive, sin consultar la base de datos. |
-| RF-05 | `GET /readyz` responde 200 si MongoDB responde a un *ping* y 503 (`service_unavailable`) si no. |
+| RF-05 | `GET /readyz` responde 200 si MongoDB responde a un *ping* y 503 (`service_unavailable`) si no. Incluye `redis: "ok"` o `"degradado"`; Redis caído **no** produce 503 (Art. XIV.3). |
 | RF-06 | `GET /api/v1/meta` responde 200 con `name`, `version`, `environment` y `serverTime` (UTC). Sirve para que el móvil compruebe conectividad. |
 | RF-07 | Toda respuesta incluye `X-Request-Id`; si la petición lo trae válido, se reutiliza; si no, se genera uno. |
 | RF-08 | Todo error HTTP usa el envoltorio único `{ "error": { code, message, details, requestId } }` con los códigos de la constitución (Art. IV). |
@@ -90,16 +90,23 @@ Dejar listo un esqueleto de backend ejecutable, probado y documentado sobre el c
 
 Art. I (esta spec), II (RF-02/03/13), III (RNF-07), IV (RF-06/08/09/15), V (alcance), VI (RF-01/12, RNF-05), VII (RNF-01/02), VIII (RNF-06), IX (RF-04/05/07/11/14), X (proceso).
 
-## 7. Servicios externos y despliegue (movido desde la antigua spec de servicios)
+## 7. Servicios, Redis, HTTPS y despliegue en Azure (Art. XIII y XIV)
 | ID | Requisito |
 |---|---|
 | RF-S1 | La configuración se divide en subestructuras cargadas desde archivos separados (`Cloudinary` y las que agreguen specs posteriores); `Load()` las reúne y reporta **todos** los errores juntos. |
 | RF-S2 | Variables nuevas: `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` (obligatorias salvo `APP_ENV=test`), `CLOUDINARY_BASE_FOLDER` (por defecto `vaiven/<APP_ENV>`); `APP_ENV=staging` permitido; `CORS_ALLOWED_ORIGINS` soportado. |
-| RF-S3 | `go run ./cmd/admin check-services` verifica MongoDB (ping) y Cloudinary (`GET /v1_1/<cloud>/ping`) e imprime `OK`/`FALLA` por servicio sin imprimir secretos; sale con código ≠ 0 si alguno falla. |
-| RF-S4 | Esta spec termina **desplegada en staging por MCP** (Art. XIII): `/healthz`, `/readyz` y `/api/v1/meta` responden por HTTPS conectados a Atlas. |
+| RF-S3 | `go run ./cmd/admin check-services` verifica MongoDB (ping), Redis (`PING`) y Cloudinary (`GET /v1_1/<cloud>/ping`) e imprime `OK`/`FALLA` por servicio sin imprimir secretos; sale con código ≠ 0 si alguno falla. |
+| RF-S4 | Esta spec termina **desplegada en la VM de Azure** (Art. XIII): `/healthz`, `/readyz` y `/api/v1/meta` responden por **HTTPS** en `https://<host>:8443`, conectados a MongoDB y Redis. |
+| RF-S5 | **Redis:** variable `REDIS_URL`; adaptador `internal/platform/redis` (único que importa `go-redis`) con los puertos `ratelimit.Limiter` y `cache.Cache` y una versión **en memoria** de cada uno para pruebas y para el modo degradado. Prefijo de claves `vaiven:<APP_ENV>:`. |
+| RF-S6 | **Sin estado y degradación:** un middleware de límite de tasa usa `ratelimit.Limiter` (por IP en rutas públicas y por usuario en rutas autenticadas, con límites configurables por política); si Redis falla, cae a un limitador local y lo registra una vez, sin devolver errores al cliente. |
+| RF-S7 | **HTTPS forzoso (Art. XIV.4):** si `APP_ENV` es `staging` o `production`, la API exige `TLS_CERT_FILE` y `TLS_KEY_FILE`, sirve **solo HTTPS** en el puerto configurado y **recarga el certificado** cuando cambia el archivo, sin reiniciarse; en `development` y `test` puede servir HTTP. No hay puerto HTTP en staging ni en producción. |
+| RF-S8 | **Artefactos de despliegue** (`deploy/`): `docker-compose.yml` con `api`, `mongo` (`rs0`) y `redis`; solo la API publica puerto (8443 en staging, 443 en producción) y monta de solo lectura el certificado de Let's Encrypt; `scripts/deploy.sh <entorno> [--rollback]` construye la imagen para la arquitectura de la VM (`amd64` o `arm64`), la envía a la VM, la reinicia y espera su `/healthz` por HTTPS. |
 
 | ID | Criterio de aceptación |
 |---|---|
 | CA-S1 | Dado un `.env` válido, cuando ejecuto `check-services`, entonces veo `OK` en ambos servicios y código 0. |
 | CA-S2 | Dado un `CLOUDINARY_API_SECRET` incorrecto, cuando ejecuto `check-services`, entonces Cloudinary muestra `FALLA` sin revelar el valor y el código es ≠ 0. |
-| CA-S3 | Dado el staging desplegado, cuando consulto `https://<staging>/readyz`, entonces recibo 200. |
+| CA-S3 | Dado el staging desplegado, cuando consulto `https://<host>:8443/readyz` sin `-k`, entonces el certificado es válido y recibo 200. |
+| CA-S4 | Dado el staging, cuando intento conectar por HTTP al puerto de la API, entonces no hay respuesta HTTP en claro (solo TLS). Y dado un certificado renovado en disco, cuando pasa el tiempo de recarga, entonces la API sirve el nuevo sin reiniciar. |
+| CA-S5 | Dado Redis detenido, cuando pido un endpoint público, entonces responde con normalidad y `/readyz` informa `redis: "degradado"` con 200. |
+| CA-S6 | Dado un límite de N peticiones, cuando se reciben más de N de la misma IP, entonces se aplica el límite en Redis (429 en el formato de error del Art. IV). |

@@ -152,6 +152,10 @@ Archivos: `internal/config/{cloudinary.go, cloudinary_test.go}` · `cmd/admin/{m
 | P-S1 | `config.Load()` llama a `loadCloudinary(getenv)`; futuras specs agregan su `loadX` en su propio archivo y **una línea** en `Load()` | XII |
 | P-S2 | `Cloudinary` expone `CloudName`, `APIKey`, `APISecret`, `BaseFolder`; el secreto es un tipo `Secret` con `String() = "***"` | VI |
 | P-S3 | Ping a Cloudinary con `net/http`, `http.NewRequestWithContext`, autenticación básica y timeout de 5 s; `cmd/admin` usa subcomandos con `os.Args` (sin librería) | VIII |
-| P-S4 | Staging: el `Dockerfile` (T019) se despliega en Render por MCP (`devops-mcp`); variables definidas con `update_environment_variables`, nunca en el repositorio | VI, XIII |
+| P-S4 | Staging: el `Dockerfile` (T019) se construye localmente y se envía a la VM de Azure con `scripts/deploy.sh` (`devops-mcp`); las variables viven solo en el `.env` de la VM, nunca en el repositorio | VI, XIII |
+| P-S5 | Redis detrás de puertos (`ratelimit.Limiter`, `cache.Cache`); implementaciones Redis y en memoria; el middleware de límite de tasa degrada al limitador local si Redis falla | III, XIV |
+| P-S6 | `deploy/docker-compose.yml` parametrizado por entorno (`-p vaiven-<entorno>`): `api`, `mongo` y `redis`; solo la API publica puerto y monta el certificado (`/etc/letsencrypt/live/<host>` de solo lectura); Mongo y Redis nunca publican puertos; límites de memoria y `GOMEMLIMIT` | XIII, XIV |
+| P-S7 | `deploy.sh` compila con `GOOS=linux GOARCH=<arquitectura de la VM>`, envía la imagen por `docker save \| ssh … docker load`, reinicia la API y espera `/healthz`; con `--rollback` vuelve a la imagen etiquetada anterior | XIII.5 |
+| P-S8 | Servidor HTTPS: `http.Server` con `TLSConfig.GetCertificate` que relee el par de archivos cuando cambia su fecha de modificación (comprobación cada ≤ 1 min); sin dependencias nuevas | VIII, XIV.4 |
 
-Variables nuevas (se suman a las anteriores): `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` (secreto), `CLOUDINARY_BASE_FOLDER` (opcional). Pruebas: unitarias de `config` (válido, faltantes, `test`), `ping` con `httptest`, `check-services` con dobles.
+Variables nuevas (se suman a las anteriores): `REDIS_URL`, `TLS_CERT_FILE`, `TLS_KEY_FILE` (obligatorias en `staging` y `production`), `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` (secreto), `CLOUDINARY_BASE_FOLDER` (opcional). Pruebas: unitarias de `config` (válido, faltantes, `test`), `ping` con `httptest`, `check-services` con dobles.
