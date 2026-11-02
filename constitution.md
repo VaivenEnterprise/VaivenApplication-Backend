@@ -1,6 +1,8 @@
 # Constitución del Backend — VAIVÉN
 
-> **Versión 1.4.0** · Ratificada el 2026-10-26 · Enmendada el 2026-10-28 (Cloudinary para imágenes; Art. XII trabajo en paralelo), el 2026-10-29 (Art. VII), y el 2026-11-01 (repositorios separados; **MINOR:** se elimina todo lo de repositorio y pipeline —incluida la spec 016—, se agrega el Art. XIII de servicios y despliegue por MCP y se reordena el roadmap) · Proyecto: `vaiven-backend/` (Go + MongoDB)
+> **Versión 1.5.0** · Ratificada el 2026-10-26 · Enmendada el 2026-10-28 (Cloudinary para imágenes; Art. XII trabajo en paralelo), el 2026-10-29 (Art. VII), y el 2026-11-01 (repositorios separados; **MINOR:** se elimina todo lo de repositorio y pipeline —incluida la spec 016—, se agrega el Art. XIII de servicios y despliegue por MCP y se reordena el roadmap) · Proyecto: `vaiven-backend/` (Go + MongoDB)
+>
+> **Enmienda 1.5.0 (2026-11-02, MINOR):** se agrega el Art. XV (repositorio y pull requests en GitHub, con MCP de GitHub); se reemplaza la declaración de «sin repositorio».
 >
 > Esta es la máxima autoridad técnica del backend. Si `AGENTS.md`, `memoria.md`, `spec.md`, `plan.md`, `tasks.md`, un agente o una skill la contradicen, **gana la constitución** y el otro archivo debe corregirse.
 > La constitución del móvil (`../vaiven-frontend/constitution.md`) comparte los Artículos IV y V; ambas deben mantenerse idénticas en esos puntos.
@@ -72,7 +74,7 @@ El backend es una **API REST en Go** con persistencia en **MongoDB**. Es la úni
 1. Toda tarea con lógica incluye pruebas. Mínimo **80 %** de cobertura en `domain` y `usecase`.
 2. Pruebas unitarias sin infraestructura; pruebas de integración con MongoDB real (testcontainers) para repositorios e índices.
 3. `gofmt`, `go vet` y `golangci-lint` deben pasar sin advertencias antes de dar una tarea por hecha.
-4. Las pruebas se ejecutan **en local** con `make test`. El proyecto no define todavía repositorio, ramas ni pipeline automatizado: se integrarán aparte. Antes de cada despliegue (Art. XIII) la verificación la hace el agente `devops-mcp`.
+4. Las pruebas se ejecutan **en local** con `make test`. El repositorio y las PR siguen el Art. XV; no hay pipeline automatizado. Antes de cada despliegue (Art. XIII) la verificación la hace el agente `devops-mcp`.
 
 ### Art. VIII — Simplicidad y dependencias mínimas
 1. Se prefiere la biblioteca estándar. Una dependencia nueva exige justificación en `plan.md` y un registro en `memoria.md`.
@@ -199,3 +201,12 @@ vaiven-backend/             # raíz del repositorio
 - [ ] `gofmt`, `go vet`, `golangci-lint` y `go test ./...` sin fallos.
 - [ ] `api/openapi.yaml` actualizado si cambió el contrato.
 - [ ] `memoria.md` actualizado si hubo decisión, dependencia nueva o aprendizaje relevante.
+
+### Art. XV — Repositorio y pull requests en GitHub (enmienda 1.5.0)
+1. El código vive en un repositorio de GitHub (`vaiven-backend`). La rama `main` está protegida: no se empuja directo ni se fuerzan pushes; todo cambio entra por pull request.
+2. Una rama por spec (`spec/NNN-nombre`) y una PR por spec, que se abre cuando su tarea de cierre pasa. Otra persona la revisa y la fusiona; la spec siguiente puede partir de la rama anterior mientras tanto.
+3. La PR cita la spec y las tareas cerradas, el resultado de la verificación (sin secretos) y el veredicto de `revisor-constitucion`. Commits y títulos en español, en imperativo, con el número de spec.
+4. Nunca se suben secretos (`.env`, claves, tokens, `*.pem`, cadenas de conexión); `.gitignore` los excluye. Si uno se sube por error, se rota de inmediato.
+5. El MCP de GitHub se declara **únicamente en `opencode.json`** y solo lo usa el agente `gestor-repo`: crea ramas, hace commits y abre PR. **Nunca** fusiona, cierra, borra ni cambia la configuración del repositorio. Las acciones de escritura piden aprobación.
+6. **Trabajo humano mínimo:** la persona crea el repositorio, protege `main`, crea un token de acceso con permisos mínimos limitado a este repositorio (`GITHUB_PERSONAL_ACCESS_TOKEN` como variable del sistema), y revisa y fusiona las PR. El resto lo hace `gestor-repo` desde OpenCode.
+7. No hay pipeline automatizado (CI) definido: las verificaciones son locales y el despliegue lo hace `devops-mcp` o `probador-expo` según el proyecto.

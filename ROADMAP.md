@@ -158,7 +158,7 @@ Nunca se recorta: cuenta, publicar, buscar, solicitar/reservar, entrega y devolu
 
 1. **Un dueño por spec.** Solo esa persona edita su `tasks.md` y su código.
 2. **Contrato primero.** Día 1 de cada spec: el backend publica `api/paths/<modulo>.yaml`; el móvil empieza a la par.
-3. **Repositorio y revisión:** el flujo de ramas, revisión y pipeline **no está definido todavía**; se integrará de cero. Mientras tanto no se hacen commits ni se crean ramas desde los agentes.
+3. **Repositorio y revisión:** una rama y una PR por spec, `main` protegida, por el MCP de GitHub (`@gestor-repo`); una persona revisa y fusiona. Sin pipeline automatizado. Los commits, ramas y PR solo los hace `@gestor-repo`, con aprobación.
 4. **Sincronía diaria** de 15 min: qué se integró, qué bloquea, qué contrato cambia.
 5. **Un cambio de contrato** se avisa en el grupo y se actualiza en ambos lados el mismo día.
 6. **`memoria.md` solo-anexar** con tu etiqueta; conflictos: conservar ambas líneas.
@@ -203,7 +203,7 @@ El PDF dice que importes y plazos se fijan en las políticas del servicio. Estos
 
 ## 10. Antes de arrancar (2 de nov) (lo prepara quien administra el repositorio)
 
-- [ ] **Repositorio, ramas, revisión y pipeline:** pendiente; se definirá e integrará de cero (fuera de este SDD por ahora).
+- [ ] **Repositorios en GitHub (Art. XV backend y móvil, Art. XIII landing):** la persona crea los tres repositorios, protege `main` y crea el token `GITHUB_PERSONAL_ACCESS_TOKEN` (permisos mínimos, un token por repositorio o uno limitado a los tres); `@gestor-repo` hace ramas, commits y PR por el MCP de GitHub; una persona revisa y fusiona. Sin pipeline automatizado (CI) por ahora.
 - [ ] **Lo único manual (Art. XIII.2 backend):** registrarse en Azure y en Cloudinary (y en Render y Expo para landing y móvil), `az login` en la máquina de quien despliega, `CLOUDINARY_URL` y `RENDER_API_KEY` (solo para la landing) como variables de entorno del sistema; reiniciar OpenCode después de definirlas. Expo se autentica con `opencode mcp auth expo`.
 - [ ] Cuenta **gratuita de Azure creada con el correo de la cuenta principal del proyecto** (la de Google Play; requisito del curso): pide tarjeta y teléfono pero **no cobra mientras no se actualice a pago por uso**; el crédito de 200 USD dura **30 días desde el alta**, así que se crea justo antes de la spec 001. Alerta de presupuesto desde el primer día. Si la oferta se rechaza porque la persona ya la usó, otra persona del equipo hace la verificación. La región y la talla gratuita las elige `devops-mcp` revisando disponibilidad (`az vm list-skus`); la VM, MongoDB, Redis y el certificado HTTPS los crea la spec 001 por OpenCode.
 - [ ] Cuenta de **Cloudinary** (nombre de nube, API key, API secret); carpeta base `vaiven/`.
@@ -272,6 +272,6 @@ Incluye la tarea final de cierre de cada spec («Despliegue» en backend, «Veri
 | 013 | 9 | 11 |
 | 014 | 9 | 8 |
 | 015 | 11 | 8 |
-| **Total** | **190** | **182** |
+| **Total** | **191** | **183** |
 
-Landing: L001 (11 tareas) y L002 (11 tareas), ver `specs/` del repositorio `vaiven-landing-page`. **Total general: 394 tareas.**
+Landing: L001 (12 tareas) y L002 (11 tareas), ver `specs/` del repositorio `vaiven-landing-page`. **Total general: 397 tareas.**

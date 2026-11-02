@@ -33,7 +33,7 @@ Staging en el puerto 8443 y producción en el 443 (proyectos de Compose separado
 1. Inicia sesión con `az login` y define `CLOUDINARY_URL`; reinicia OpenCode y comprueba con `opencode mcp list` que `azure` y los dos MCP de Cloudinary estén conectados.
 2. Spec **001**: `@devops-mcp` elige región y talla gratuitas, crea la VM, la red y el stack base (MongoDB y Redis) y emite el certificado HTTPS.
 3. Desde la **002**: se implementan las tareas con `@dev-go`; la última tarea de cada spec es «Despliegue» (`@devops-mcp` ejecuta `scripts/deploy.sh staging` y verifica). **La spec siguiente no empieza hasta que esa tarea pase.**
-4. El despliegue no depende del repositorio (la imagen viaja por SSH). Repositorio, ramas, revisión y pipeline: **no están definidos**; se integrarán de cero.
+4. El despliegue no depende del repositorio (la imagen viaja por SSH). Repositorio en GitHub: una rama y una PR por spec con `main` protegida, por el MCP de GitHub y `@gestor-repo` (Art. XV); sin pipeline automatizado.
 
 ## Cómo se usa con OpenCode
 

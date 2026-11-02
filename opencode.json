@@ -35,6 +35,12 @@
     },
     "revisor-constitucion": {
       "model": "opencode/big-pickle"
+    },
+    "gestor-repo": {
+      "model": "opencode/nemotron-3-lightning-free",
+      "tools": {
+        "github_*": true
+      }
     }
   },
   "permission": {
@@ -49,7 +55,8 @@
     },
     "cloudinary-assets_*": "deny",
     "cloudinary-config_*": "deny",
-    "azure_*": "deny"
+    "azure_*": "deny",
+    "github_*": "deny"
   },
   "mcp": {
     "azure": {
@@ -94,11 +101,20 @@
         "CLOUDINARY_URL": "{env:CLOUDINARY_URL}"
       },
       "enabled": true
+    },
+    "github": {
+      "type": "remote",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": {
+        "Authorization": "Bearer {env:GITHUB_PERSONAL_ACCESS_TOKEN}"
+      },
+      "enabled": true
     }
   },
   "tools": {
     "azure_*": false,
     "cloudinary-assets_*": false,
-    "cloudinary-config_*": false
+    "cloudinary-config_*": false,
+    "github_*": false
   }
 }

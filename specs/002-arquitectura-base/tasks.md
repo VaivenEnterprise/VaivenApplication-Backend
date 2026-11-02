@@ -222,7 +222,7 @@
 
 - [ ] **T031** Despliegue de la spec en Azure (staging)
   - Archivos: `docs/servicios.md` (anexar la URL de staging), `memoria.md` (solo anexar)
-  - Agente: `devops-mcp` · Depende de: T019, T020, T023, T029, T030, 001-T009
+  - Agente: `devops-mcp` · Depende de: T019, T020, T023, T029, T030, 001-T010
   - Aceptación: `make fmt lint test` en verde; `.env` de staging completo en la VM (nunca en el repo); `scripts/deploy.sh staging` termina bien; `/healthz`, `/readyz` y `/api/v1/meta` devuelven 200 en `https://<host>:8443` **sin `-k`** (CA-S3); no hay respuesta HTTP en claro (CA-S4); el límite de tasa responde 429 al pasarse (CA-S6); con Redis detenido la API responde y `/readyz` marca `degradado` (CA-S5); registros sin secretos ni datos personales; URL anotada para el móvil. **La spec 003 no empieza hasta que esta tarea pase.**
   - Refs: RF-S4 · Art. XIII.5
 

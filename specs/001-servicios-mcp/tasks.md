@@ -52,11 +52,17 @@
   - Aceptación: lista de servicios, región, talla, variables (sin valores reales), cómo se obtuvo y rota cada credencial, cómo recuperar el acceso SSH y riesgos conocidos (memoria justa, crédito de 30 días, secretos y contexto del modelo)
   - Refs: RF-07, RNF-01
 
-- [ ] **T009** Revisión de conformidad
+- [ ] **T009** Repositorio en GitHub y MCP de GitHub (**persona** + `gestor-repo`)
+  - Archivos: `.gitignore`, `memoria.md` (solo anexar)
+  - Agente: — (la persona crea el repositorio, protege `main` y crea el token) + `gestor-repo` · Depende de: T001
+  - Aceptación: repositorio `vaiven-backend` creado en GitHub con `main` protegida (PR obligatoria, sin push directo ni force-push); `GITHUB_PERSONAL_ACCESS_TOKEN` (permisos mínimos, limitado a este repositorio) definido como variable del sistema y OpenCode reiniciado; `opencode mcp list` muestra `github` conectado; un agente de desarrollo rechaza una herramienta de GitHub y `gestor-repo` la ejecuta; `.gitignore` excluye `.env`, `*.pem` y claves; `gestor-repo` abre una PR de prueba sin secretos y una persona la revisa y la fusiona
+  - Refs: Art. XV
+
+- [ ] **T010** Revisión de conformidad
   - Archivos: ninguno (solo informe)
-  - Agente: `revisor-constitucion` · Depende de: T008
+  - Agente: `revisor-constitucion` · Depende de: T008, T009
   - Aceptación: veredicto **CONFORME**; búsqueda de cadenas sospechosas sin hallazgos (CA-07); hito H0 (infraestructura) marcado
   - Refs: DoD
 
-| Total | 9 tareas |
+| Total | 10 tareas |
 |---|---|

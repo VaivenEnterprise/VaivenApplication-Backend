@@ -47,6 +47,7 @@ Subagentes propios (`.opencode/agents/`):
 | `dev-go` | Implementa tareas en Go siguiendo Clean Architecture | Sí |
 | `modelador-mongo` | Diseña colecciones, índices, repositorios y validación de esquema | Sí (`adapter/mongo`) |
 | `qa-go` | Escribe y ejecuta pruebas, mide cobertura | Solo `*_test.go` |
+| `gestor-repo` | Crea ramas, commits y PR en GitHub por MCP; único agente con permiso para el MCP de GitHub; nunca fusiona ni borra | No |
 | `devops-mcp` | Aprovisiona Azure y despliega cada spec en staging con el **MCP de Azure**, `az` y los MCP de Cloudinary; único agente con permiso para ellos | No (solo `memoria.md` y docs) |
 | `revisor-constitucion` | Verifica conformidad con la constitución | No |
 
@@ -107,3 +108,6 @@ Si `make` no está disponible en Windows, usar Git Bash o WSL, o ejecutar el com
 ## 9. Alcance
 
 Specs `001` a `015` en `specs/`, en el orden y con los dueños de `ROADMAP.md`. Las tareas aún **no se ejecutan** hasta la fecha de arranque del calendario y la aprobación de cada spec.
+
+## Repositorio y PR (Art. XV)
+- Una rama por spec (`spec/NNN-nombre`) y una PR por spec; `main` protegida. Solo `@gestor-repo` usa el MCP de GitHub (token `GITHUB_PERSONAL_ACCESS_TOKEN`); nunca fusiona ni borra: una persona revisa y fusiona. Nunca se suben secretos.
