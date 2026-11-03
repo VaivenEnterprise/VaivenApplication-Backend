@@ -28,7 +28,7 @@
   - Aceptación: con `learn=true` se anota qué cubre el MCP de Azure; antes de crear nada se revisa con `az vm list-skus … --size Standard_B --all` qué regiones y tallas (B2ats_v2 → B1s → B2pts_v2) no tienen `Restrictions` (y, si es «Azure for Students», las regiones permitidas); el agente genera la llave SSH dedicada (`ssh-keygen`, la privada nunca se imprime), crea `rg-vaiven` y la VM con **`compute_vm_create`** (talla gratuita pasada explícitamente, Ubuntu 24.04 LTS, llave pública, **sin zonas de disponibilidad**, disco de SO Premium de hasta 64 GB; la talla por defecto del MCP, `Standard_DS1_v2`, **no** es gratuita); lo que el MCP no cubra —IP pública estándar estática con nombre DNS y reglas del NSG (80, 443 y 8443 abiertos; 22 solo desde la IP pública detectada con `curl`)— lo hace con `az`; cada creación con aprobación; se anotan región, talla y nombre DNS (sin secretos); alerta de presupuesto creada; el único cargo esperado es la IP pública
   - Refs: RF-00, RF-03 · RNF-02
 
-- [ ] **T005** Preparar y verificar la VM
+- [x] **T005** Preparar y verificar la VM
   - Archivos: `memoria.md` (solo anexar)
   - Agente: `devops-mcp` · Depende de: T004
   - Aceptación: `deploy/bootstrap.sh` copiado y ejecutado por SSH; luego `docker --version`, `docker compose version`, swap de 2 GB activo, memoria y disco libres anotados; desde fuera, los puertos 27017 y 6379 no responden (CA-03)

@@ -120,13 +120,22 @@ if ! dpkg -l | grep -q unattended-upgrades; then
 fi
 
 # -----------------------------------------------------------------------------
-# 7. Resumen verificable ------------------------------------------------------
+# 7. certbot (certificado de Let's Encrypt, ver deploy/base/tls.md) -------------
+# -----------------------------------------------------------------------------
+# El paquete de Ubuntu instala y activa el temporizador certbot.timer (renovación).
+if ! command -v certbot &>/dev/null; then
+    apt-get install -y certbot
+fi
+
+# -----------------------------------------------------------------------------
+# 8. Resumen verificable ------------------------------------------------------
 # -----------------------------------------------------------------------------
 echo "========================================="
 echo "Bootstrap completado — resumen verificable"
 echo "========================================="
 echo "Docker version: $(docker --version 2>/dev/null || echo 'N/A')"
 echo "Docker compose version: $(docker compose version 2>/dev/null || echo 'N/A')"
+echo "certbot: $(certbot --version 2>&1 || echo 'N/A')"
 echo "Swap: $(swapon --show 2>/dev/null || echo 'N/A')"
 echo "Memoria total: $(free -h 2>/dev/null || echo 'N/A')"
 echo "Disk /: $(df -h / 2>/dev/null || echo 'N/A')"
