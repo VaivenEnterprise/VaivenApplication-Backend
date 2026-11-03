@@ -1,0 +1,2 @@
+# Los scripts de shell se ejecutan en Linux (VM de Azure): siempre con finales de linea LF.
+*.sh text eol=lf

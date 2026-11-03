@@ -126,3 +126,5 @@ _(Los agentes agregan aquí hallazgos útiles y breves, uno por línea, con fech
 - [BE-B] 2026-11-03 — 001/T002: causa raíz del bloqueo anterior: el servicio en segundo plano de OpenCode (`opencode serve --service`) conserva el entorno con el que arrancó; definir `CLOUDINARY_URL` con `setx` y reabrir la ventana **no** basta, hace falta `opencode service restart` (reiniciar el servicio, no solo el cliente) para que los MCP reciban `{env:CLOUDINARY_URL}`. Síntoma inequívoco: `Parameter 'cloud_name' must be a string or number` en todas las herramientas de `cloudinary-assets` y `cloudinary-config`.
 
 - [BE-B] 2026-11-03 — 001/T002: `opencode.json` migrado a la forma V2 de MCP (`mcp.servers`, sin `enabled`, `oauth: false` en `github`) según la documentación V2; `github` seguirá en `failed` hasta que exista `GITHUB_PERSONAL_ACCESS_TOKEN` (T009). Sin cambios en `permission` ni en `tools`.
+
+- [BE-B] 2026-11-03 — 001/T003: archivos creados (bootstrap.sh, docker-compose.yml, tls.md), keyFile generado en la VM (uid 999, /opt/vaiven/secrets/mongo-keyfile) y límites: mongo 400 MiB con caché WiredTiger 0.25 GB, redis 128 MiB dentro de 192 MiB.
