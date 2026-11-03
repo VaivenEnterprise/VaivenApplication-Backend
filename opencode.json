@@ -59,56 +59,55 @@
     "github_*": "deny"
   },
   "mcp": {
-    "azure": {
-      "type": "local",
-      "command": [
-        "npx",
-        "-y",
-        "@azure/mcp@latest",
-        "server",
-        "start"
-      ],
-      "enabled": true
-    },
-    "cloudinary-assets": {
-      "type": "local",
-      "command": [
-        "npx",
-        "-y",
-        "--package",
-        "@cloudinary/asset-management-mcp",
-        "--",
-        "mcp",
-        "start"
-      ],
-      "environment": {
-        "CLOUDINARY_URL": "{env:CLOUDINARY_URL}"
+    "servers": {
+      "azure": {
+        "type": "local",
+        "command": [
+          "npx",
+          "-y",
+          "@azure/mcp@latest",
+          "server",
+          "start"
+        ]
       },
-      "enabled": true
-    },
-    "cloudinary-config": {
-      "type": "local",
-      "command": [
-        "npx",
-        "-y",
-        "--package",
-        "@cloudinary/environment-config-mcp",
-        "--",
-        "mcp",
-        "start"
-      ],
-      "environment": {
-        "CLOUDINARY_URL": "{env:CLOUDINARY_URL}"
+      "cloudinary-assets": {
+        "type": "local",
+        "command": [
+          "npx",
+          "-y",
+          "--package",
+          "@cloudinary/asset-management-mcp",
+          "--",
+          "mcp",
+          "start"
+        ],
+        "environment": {
+          "CLOUDINARY_URL": "{env:CLOUDINARY_URL}"
+        }
       },
-      "enabled": true
-    },
-    "github": {
-      "type": "remote",
-      "url": "https://api.githubcopilot.com/mcp/",
-      "headers": {
-        "Authorization": "Bearer {env:GITHUB_PERSONAL_ACCESS_TOKEN}"
+      "cloudinary-config": {
+        "type": "local",
+        "command": [
+          "npx",
+          "-y",
+          "--package",
+          "@cloudinary/environment-config-mcp",
+          "--",
+          "mcp",
+          "start"
+        ],
+        "environment": {
+          "CLOUDINARY_URL": "{env:CLOUDINARY_URL}"
+        }
       },
-      "enabled": true
+      "github": {
+        "type": "remote",
+        "url": "https://api.githubcopilot.com/mcp/",
+        "oauth": false,
+        "headers": {
+          "Authorization": "Bearer {env:GITHUB_PERSONAL_ACCESS_TOKEN}"
+        }
+      }
     }
   },
   "tools": {
