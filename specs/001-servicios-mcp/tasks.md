@@ -22,7 +22,7 @@
   - Aceptación: `bootstrap.sh` (idempotente) instala Docker, el plugin de Compose y `certbot`, crea 2 GB de swap, el usuario `deploy` y `/opt/vaiven`, y activa actualizaciones de seguridad; el Compose define `mongo` (replica set `rs0`, autenticación, volumen, sin puerto publicado) y `redis` (contraseña, `maxmemory`, sin puerto publicado) con límites de memoria; `tls.md` documenta la emisión y renovación con `certbot` y la comprobación; ningún secreto escrito (todo por `.env`)
   - Refs: RF-03, RF-04, RF-05 · P-03…P-06
 
-- [ ] **T004** Azure: región y talla, VM por MCP; IP estática y reglas
+- [x] **T004** Azure: región y talla, VM por MCP; IP estática y reglas
   - Archivos: `memoria.md` (solo anexar)
   - Agente: `devops-mcp` · Depende de: T001, T003
   - Aceptación: con `learn=true` se anota qué cubre el MCP de Azure; antes de crear nada se revisa con `az vm list-skus … --size Standard_B --all` qué regiones y tallas (B2ats_v2 → B1s → B2pts_v2) no tienen `Restrictions` (y, si es «Azure for Students», las regiones permitidas); el agente genera la llave SSH dedicada (`ssh-keygen`, la privada nunca se imprime), crea `rg-vaiven` y la VM con **`compute_vm_create`** (talla gratuita pasada explícitamente, Ubuntu 24.04 LTS, llave pública, **sin zonas de disponibilidad**, disco de SO Premium de hasta 64 GB; la talla por defecto del MCP, `Standard_DS1_v2`, **no** es gratuita); lo que el MCP no cubra —IP pública estándar estática con nombre DNS y reglas del NSG (80, 443 y 8443 abiertos; 22 solo desde la IP pública detectada con `curl`)— lo hace con `az`; cada creación con aprobación; se anotan región, talla y nombre DNS (sin secretos); alerta de presupuesto creada; el único cargo esperado es la IP pública
