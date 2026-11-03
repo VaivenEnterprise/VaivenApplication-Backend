@@ -8,3 +8,6 @@
 - [ ] Revision humana y fusion a develop; promocion por PR a main.
 - [ ] Administrador: habilitar escritura del segundo revisor si corresponde y actualizar CODEOWNERS.
 - [ ] Administrador: activar ruleset y ajustes de seguridad; verificar que un PR con controles fallidos no pueda fusionarse.
+
+- [ ] T009: exigir tipo/SCRUM-NN-SPEC-NN-TNNN en ramas de trabajo, actualizar guia y probar nombres validos e invalidos. Rama provisional autorizada por el responsable: chore/SCRUM-01-SPEC-01-T001; los numeros son ejemplos y no identificadores verificados en Jira.
+

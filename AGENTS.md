@@ -110,4 +110,5 @@ Si `make` no está disponible en Windows, usar Git Bash o WSL, o ejecutar el com
 Specs `001` a `015` en `specs/`, en el orden y con los dueños de `ROADMAP.md`. Las tareas aún **no se ejecutan** hasta la fecha de arranque del calendario y la aprobación de cada spec.
 
 ## Repositorio y PR (Art. XV)
-- Una rama por spec (`spec/NNN-nombre`) y una PR por spec; `main` protegida. Solo `@gestor-repo` usa el MCP de GitHub (token `GITHUB_PERSONAL_ACCESS_TOKEN`); nunca fusiona ni borra: una persona revisa y fusiona. Nunca se suben secretos.
+- Una rama y PR por tarea (`tipo/SCRUM-NN-SPEC-NN-TNNN`); `main` protegida. Solo `@gestor-repo` usa el MCP de GitHub (token `GITHUB_PERSONAL_ACCESS_TOKEN`); nunca fusiona ni borra: una persona revisa y fusiona. Nunca se suben secretos.
+
