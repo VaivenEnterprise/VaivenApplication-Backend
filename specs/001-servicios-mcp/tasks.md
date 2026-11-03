@@ -10,7 +10,7 @@
   - Aceptación: la cuenta Microsoft se crea con el correo de la cuenta principal del proyecto y el alta de Azure la hace un integrante del equipo que **no haya usado antes la oferta gratuita** (responsable: por definir; debe seguir en el equipo hasta el final); la suscripción queda a nombre de la cuenta del proyecto y `az login` se hace con esa cuenta, no con la personal. Cuenta de Azure creada con el correo de la cuenta principal del proyecto y cuenta de Cloudinary creada, `az login` hecho y `az account show` apunta a la suscripción gratuita; `CLOUDINARY_URL` definida en el sistema (únicos pasos manuales, anotados en `memoria.md`); `opencode mcp list` muestra `azure`, `cloudinary-assets` y `cloudinary-config` conectados (CA-01); `dev-go` rechaza una herramienta MCP y `devops-mcp` la ejecuta (CA-02)
   - Refs: RF-01, RF-02 · Art. XIII
 
-- [ ] **T002** [P] Cloudinary: verificar la nube y crear la carpeta base
+- [x] **T002** [P] Cloudinary: verificar la nube y crear la carpeta base
   - Archivos: `memoria.md` (solo anexar)
   - Agente: `devops-mcp` · Depende de: T001
   - Aceptación: por MCP se confirma que la nube responde y se crea `vaiven/staging` (CA-06); el *API secret* no se imprime en ninguna salida
