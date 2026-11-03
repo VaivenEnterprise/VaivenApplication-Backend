@@ -16,7 +16,7 @@
   - Aceptación: por MCP se confirma que la nube responde y se crea `vaiven/staging` (CA-06); el *API secret* no se imprime en ninguna salida
   - Refs: RF-06
 
-- [ ] **T003** Archivos de infraestructura: `bootstrap.sh` y stack base
+- [x] **T003** Archivos de infraestructura: `bootstrap.sh` y stack base
   - Archivos: `deploy/bootstrap.sh`, `deploy/base/docker-compose.yml`, `deploy/base/tls.md`
   - Agente: `dev-go` · Depende de: T001
   - Aceptación: `bootstrap.sh` (idempotente) instala Docker, el plugin de Compose y `certbot`, crea 2 GB de swap, el usuario `deploy` y `/opt/vaiven`, y activa actualizaciones de seguridad; el Compose define `mongo` (replica set `rs0`, autenticación, volumen, sin puerto publicado) y `redis` (contraseña, `maxmemory`, sin puerto publicado) con límites de memoria; `tls.md` documenta la emisión y renovación con `certbot` y la comprobación; ningún secreto escrito (todo por `.env`)
