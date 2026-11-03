@@ -2,42 +2,52 @@
 
 > **Nota (2026-11-01):** este plan se escribió cuando VAIVÉN era un monorepo. Ahora son tres repositorios: `backend/` → `vaiven-backend`, `mobile/` → `vaiven-frontend`, `landing/` → `vaiven-landing-page`. Donde el texto diga una de esas carpetas, léase el repositorio correspondiente.
 
-> **Nota (2026-11-01, segunda reorganización):** (1) se eliminó todo lo relativo a repositorio, ramas, PR y pipeline CI/CD (y con ello la antigua spec 016 de pruebas/DevSecOps): esa parte se integrará de cero; (2) el trabajo va **por OpenCode y servidores MCP**: la spec **001 es «Servicios por MCP»** (MongoDB Atlas, Cloudinary, Render) y la arquitectura base pasa a ser la **002**; (3) **cada spec termina desplegada**: backend y landing en Render por MCP (tarea final «Despliegue») y la app móvil verificada **en local con Expo Go** contra staging (tarea final «Verificación en Expo Go»); la spec siguiente no empieza hasta que esa tarea pase. La app móvil no se despliega salvo la publicación en Google Play (spec 013).
+> **Nota (2026-11-01, segunda reorganización):** (1) se eliminó todo lo relativo a repositorio, ramas, PR y pipeline CI/CD (y con ello la antigua spec 016 de pruebas/DevSecOps): esa parte se integrará de cero; (2) el trabajo va **por OpenCode y servidores MCP**: la spec **001 es la de servicios/infraestructura por MCP** (el 2026-11-02 el backend pasó a Azure, ver la nota siguiente) y la arquitectura base pasa a ser la **002**; (3) **cada spec termina desplegada**: backend en Azure y landing en Render (tarea final «Despliegue») y la app móvil verificada **en local con Expo Go** contra staging (tarea final «Verificación en Expo Go»); la spec siguiente no empieza hasta que esa tarea pase. La app móvil no se despliega salvo la publicación en Google Play (spec 013).
+
+> **Nota (2026-11-02, Azure):** lo **obligatorio** es usar **Azure** (o AWS; se eligió Azure) y **Redis**. El backend (staging y producción) corre en **una VM gratuita de Azure** con Docker Compose: la API en Go (una réplica) con **MongoDB** (replica set de un nodo) y **Redis** (límite de tasa y caché). **HTTPS es forzoso** y lo sirve la propia API con un certificado de Let's Encrypt emitido por `certbot`; **no hay nginx ni balanceador** (decisión del 2 de nov: la VM tiene ~1 GiB de RAM y la app publicada exige HTTPS, no balanceo). Atlas y Render dejan de usarse para el backend; **siguen igual** Cloudinary y la landing en Render. **Principio de trabajo (indicado por el profesor):** la persona solo se registra y hace configuración mínima; **todo lo demás lo ejecuta OpenCode con los MCP** (Azure, Cloudinary, Render, Expo), y `az`/SSH solo para lo que un MCP no cubra. El despliegue no depende del repositorio: la imagen se construye en la máquina de quien despliega y viaja a la VM por SSH. **Costos:** una sola excepción aceptada, la IP pública estándar (≈ 3–4 USD/mes). Constitución del backend v1.4.0 (Art. XIII reescrito y Art. XIV nuevo).
 
 > Plan maestro: backend y móvil specs `001` a `013`, y el proyecto `landing/` (L001–L002). Si este archivo contradice una constitución, gana la constitución.
-> Última actualización: 2026-11-01 · Constituciones backend v1.3.0, móvil v1.2.0, landing v1.1.0 · Decisiones de producto confirmadas (§8)
+> Última actualización: 2026-11-02 · Constituciones backend v1.4.0, móvil v1.2.1, landing v1.1.0 · Decisiones de producto confirmadas (§8)
 
 ## 1. Fechas
 
+> **Calendario vigente (fijado el 2 de nov, día de arranque del desarrollo).** Sustituye al plan original del 28 de oct. El desarrollo empieza **hoy, lunes 2 de noviembre**. Todo depende del día 1 de la prueba cerrada: cada día que se retrase el primer AAB mueve todo lo demás un día.
+
 | Hito | Fecha |
 |---|---|
-| Arranque del desarrollo | **Jueves 29 de octubre** |
-| **Código congelado de la 1.0 (sin IA)** | **Domingo 15 de noviembre** |
-| **Solicitud de acceso a producción en Google Play** (día 14 de la prueba cerrada = 14 nov) | **Domingo 15 de noviembre** |
-| Revisión de Google (la controla Google; suele tardar ~7 días o más). Mientras tanto: correcciones, sin funcionalidad nueva en 1.0, y desarrollo de la IA (spec 014) | 16 – 22+ de noviembre |
-| **Primera versión pública sin IA (1.0) en Google Play (producción)** | Meta: **viernes 20 de noviembre** solo si Google responde en ≤ 5 días; **estimada 22 – 25 de nov** |
-| IA (spec 014) y ML (spec 015): desarrollo 16–24 nov; v1.1 a la prueba cerrada el 25 nov y a producción 26–28 nov, cuando la 1.0 ya esté aprobada | 16 – 28 de noviembre |
-| Documentación final, demostración y colchón | 29 nov – 30 nov |
-| **ENTREGA OFICIAL: todos los specs completos (001–014 y landing)** | **1 – 4 de diciembre** |
+| **Arranque del desarrollo** (spec 001) | **Lunes 2 de noviembre** |
+| H0 Base: 001 (Azure y servicios) y 002 (arquitectura base, primer despliegue) | 5 nov |
+| Landing legal publicada (L001: privacidad, términos y eliminación de cuenta; las URL que pide la ficha de Play) | 5 nov |
+| Backend de producción mínimo (backend 013, fase 1) | 6 – 8 nov |
+| Testers reunidos (≥ 15 personas) y ficha con textos preliminares | antes del 9 nov |
+| **Primer AAB** (registro e inicio de sesión: 001–003) a la prueba cerrada → **día 1 de 14** | **Lunes 9 de noviembre** |
+| Specs 004–011, una por una con su cierre (Despliegue / Expo Go); cada hito sube una actualización a la prueba cerrada | 5 – 19 nov |
+| 012 (integración, endurecimiento y AAB final 1.0, sin IA) y backend 013 fase 2 | 19 – 22 nov |
+| **Día 14 de la prueba cerrada** | **Domingo 22 de noviembre** |
+| **Código congelado de la 1.0 (22 nov) y solicitud de acceso a producción** | **Lunes 23 de noviembre** |
+| Revisión de Google (la controla Google; suele tardar ~7 días o más). Mientras tanto: correcciones, sin funcionalidad nueva en la 1.0, y desarrollo de la IA y el ML (specs 014 y 015) | 23 nov – 1 dic |
+| **Publicación de la 1.0 en Google Play (producción)** | **estimada 30 nov – 7 dic** (no antes del 28 nov aunque Google responda en 5 días) |
+| IA y ML (v1.1) a la prueba cerrada, detrás de interruptores | ~2 dic |
+| Documentación final, demostración y colchón | 1 – 3 dic |
+| **ENTREGA OFICIAL: todos los specs completos (001–015 y landing)** | **1 – 4 de diciembre** |
 
-> El calendario incluye fines de semana (1–2 y 8–9 de nov). Es ajustado; la **línea de corte** (§6) dice qué se recorta primero si hay retraso.
+> **Riesgo alto:** la 1.0 podría no estar aún en producción el 4 de dic (la revisión de Google no la controla el equipo). En ese caso se entrega con la prueba cerrada, el APK de demostración y el staging funcionando (ver línea de corte, §6). El calendario incluye fines de semana (7–8, 14–15 y 21–22 de nov); es ajustado.
 
 ### Ruta a Google Play (la fecha límite depende de esto)
 
-Según las guías consultadas el 28 de oct (ver §11), una cuenta **personal** de Google Play creada después de nov-2023 debe correr una **prueba cerrada con ≥ 12 testers inscritos 14 días seguidos** antes de poder pedir producción; después Google revisa la solicitud (puede tardar ~7 días o más). **Decisión del 28 de oct (actualizada):** la cuenta se compra el **29–30 de oct** para que la prueba cerrada empiece el **1 de nov** (día 1) y termine el **14 de nov** (día 14); la solicitud de producción es el **15 de nov**. **Cada día que se retrase la compra o el primer AAB mueve la publicación un día.** El plan completo (sin IA primero, IA después) se explica en §3.
+Según las guías consultadas (ver §11), una cuenta **personal** de Google Play creada después de nov-2023 debe correr una **prueba cerrada con ≥ 12 testers inscritos 14 días seguidos** antes de poder pedir producción; después Google revisa la solicitud (puede tardar ~7 días o más). La cuenta ya está comprada (pago único de $25 USD, confirmado el 2 de nov). **Cada día que se retrase la verificación de la cuenta, la lista de testers o el primer AAB mueve la publicación un día.**
 
 | Fecha | Qué ocurre | Quién |
 |---|---|---|
-| **29–30 oct** | **Comprar la cuenta de desarrollador de Google Play** (pago único de $25 USD) e iniciar el mismo día la verificación de identidad y teléfono | Administrador del repositorio |
-| 29–31 oct | Reunir **15–20 testers** (cuentas de Google/Gmail) que acepten quedarse inscritos hasta ~el 25 de nov | Administrador |
-| 30 oct–1 nov | Landing L001 publicada: política de privacidad, términos y eliminación de cuenta (las URL que pide la ficha) | MO-B |
-| 31 oct–1 nov | Backend de producción creado (backend 013 fase 1) y primer **AAB** (specs 001–003: registro e inicio de sesión) subido a la **prueba cerrada**; ficha con textos preliminares | MO-B / BE-B / Administrador |
-| **1 nov** | Testers aceptan la invitación → **día 1 de 14** (si la cuenta o el AAB se retrasan, el día 1 se mueve igual) | Administrador |
-| 2–14 nov | Cada hito (H1–H4) se sube como actualización a la prueba cerrada; los testers no se salen. Día 14 = **14 nov** | MO-B |
-| **15 nov** | Código congelado, AAB final (1.0, sin IA) y **solicitud de acceso a producción** (≥ 12 testers · 14 días) | Todos |
-| 16–22+ nov | Revisión de Google; publicación de la 1.0 cuando apruebe | Administrador |
+| 2 – 3 nov | Confirmar la verificación de identidad de la cuenta de Google Play y reunir **15–20 testers** (cuentas de Google/Gmail) que acepten quedarse inscritos hasta ~el 30 de nov | Administrador |
+| 2 – 5 nov | Landing L001 publicada (privacidad, términos y eliminación de cuenta) | MO-B |
+| 6 – 8 nov | Backend de producción creado (backend 013 fase 1); ficha con textos preliminares y declaraciones de Play Console | BE-B / MO-B / Administrador |
+| **9 nov** | Primer **AAB** (001–003) en la prueba cerrada; testers aceptan la invitación → **día 1 de 14** (si algo se retrasa, el día 1 se mueve igual) | Administrador / MO-B |
+| 10 – 22 nov | Cada hito (H1–H5) se sube como actualización a la prueba cerrada; los testers no se salen. Día 14 = **22 nov** | MO-B |
+| **23 nov** | Código congelado, AAB final (1.0, sin IA) y **solicitud de acceso a producción** (≥ 12 testers · 14 días) | Todos |
+| 24 nov – 7 dic | Revisión de Google; publicación de la 1.0 cuando apruebe | Administrador |
 
-> **Riesgo alto:** los tiempos de verificación de la cuenta y de revisión los controla Google. Si algo se retrasa, la publicación se mueve con ellos; la meta del 20 de nov solo se cumple si todo sale a tiempo y Google responde rápido. Si la cuenta ya existe y fue creada antes del 13-nov-2023, este bloque no aplica.
+> Si la cuenta ya existía antes del 13-nov-2023, este bloque no aplica; no es el caso.
 
 ## 2. Equipo y reparto
 
@@ -52,7 +62,7 @@ Cada persona trabaja con su propio OpenCode. Las parejas comparten spec de punta
 
 El **administrador del repositorio** (quien paga y administra la cuenta de Google Play) es responsable de la cuenta, los testers y las respuestas de Google; MO-B prepara los artefactos (AAB, ficha, landing) y BE-B el backend de producción (backend 013).
 
-Spec **002** (arquitectura base) se reparte por tareas, ver §5; la **001** (servicios por MCP) la hacen BE-B y MO-B. Spec **012** es de todos. La landing es pequeña y estática: si MO-B está saturado, puede hacerla el administrador.
+Spec **002** (arquitectura base) se reparte por tareas, ver §5; la **001** (infraestructura en Azure y servicios) la hacen BE-B y MO-B. Spec **012** es de todos. La landing es pequeña y estática: si MO-B está saturado, puede hacerla el administrador.
 
 ## 3. Specs y calendario
 
@@ -60,49 +70,49 @@ Prioridad: **P0** = sin esto no hay app · **P1** = esperado · **P2** = recorta
 
 | Spec | Nombre | Qué entrega | Dueñas | Prio. | Depende de | Ventana |
 |---|---|---|---|---|---|---|
-| 001 | **Servicios por MCP** | Atlas, Cloudinary y Render aprovisionados y verificados por MCP desde OpenCode (móvil: Expo Go + MCP de Expo) | BE-B / MO-B | P0 | — | 29 oct |
-| 002 | Arquitectura base | Esqueleto de backend y app; primer despliegue a staging (backend) y primera verificación en Expo Go (móvil) | repartida | P0 | 001 | 29–31 oct |
-| 003 | Cuenta y autenticación | Registro, login, sesión, perfil, baja; concha de navegación | BE-A / MO-A | P0 | 002 | 31 oct–2 nov |
-| 004 | Imágenes | Firmas de subida, selector y subida de fotos | BE-B / MO-B | P0 | 001, 003 (auth) | 31 oct–2 nov |
-| 005 | Objetos | Publicar, editar, pausar, precio sugerido | BE-A / MO-A | P0 | 003, 004 | 3–5 nov |
-| 006 | Búsqueda | Texto, categoría, zona, modalidad, fechas | BE-B / MO-B | P0 | 005 | 3–5 nov |
-| 007 | Solicitudes y reservas | Cotización, solicitud, aceptar/rechazar, reserva, cancelar | BE-A / MO-A | P0 | 005 | 5–8 nov |
-| 008 | Chat privado | Mensajes de texto por reserva | BE-B / MO-B | P1 | 007 | 5–8 nov |
-| 009 | Entrega, devolución y pagos | Evidencia, QR, confirmaciones, pago registrado, retrasos | BE-A / MO-A | P0 | 004, 007 | 8–11 nov |
-| 010 | Calificaciones e incidencias | Reputación, reportes con seguimiento manual, sanciones | BE-B / MO-B | P1 | 009 (parcial) | 8–11 nov |
-| 011 | Notificaciones y moderación | Avisos en app y push (P2), filtro de contenido y reportes (**P1: exigidos por la política de contenido de usuarios de Google Play**) | BE-B / MO-B | P1 | 007–010 | 10–12 nov |
-| 012 | Integración y entrega | Pruebas de punta a punta, endurecimiento, documentación, AAB final | todos | P0 | todas | 12–15 nov |
-| 013 | Publicación en Google Play (móvil) y producción (backend) | Ficha, cumplimiento, prueba cerrada, producción; backend de producción | MO-B / BE-B + administrador | P0 | 002 (inicio), 012 (cierre) | 30 oct–20 nov |
-| 014 | **IA (v1.1, después de la 1.0)** | Sugerir título y categoría a partir de una foto, siempre con revisión de quien publica (proveedor gratuito; interruptor `AI_ENABLED`) | BE-A / MO-A (+ MO-B cumplimiento) | P1 | 004, 005, 011, 013 | 16–24 nov |
-| 015 | **ML: recomendaciones (v1.1)** | «Recomendado para ti»: recomendador híbrido propio (colaborativo objeto-objeto + contenido), evaluado con Hit@10/Recall@10/MRR contra popularidad; interruptor `RECO_ENABLED` | BE-B / MO-B | P1 | 005, 006, 007, 013 | 16–24 nov |
-| L001 | Landing: base y páginas legales | Sitio estático, privacidad, términos, eliminación de cuenta, publicación gratuita | MO-B | P0 | — | 30 oct–1 nov |
-| L002 | Landing: página principal | Información de la app, cómo funciona, FAQ, botón a Google Play | MO-B | P1 | L001 | 2–9 nov |
+| 001 | **Infraestructura en Azure y servicios** | VM de Azure (talla gratuita elegida por región disponible) con MongoDB, Redis y certificado HTTPS; Cloudinary; todo por MCP de Azure + `az` desde OpenCode (móvil: Expo Go + MCP de Expo) | BE-B / MO-B | P0 | — | 2–3 nov |
+| 002 | Arquitectura base | Esqueleto de backend y app; primer despliegue a staging (backend) y primera verificación en Expo Go (móvil) | repartida | P0 | 001 | 3–5 nov |
+| 003 | Cuenta y autenticación | Registro, login, sesión, perfil, baja; concha de navegación | BE-A / MO-A | P0 | 002 | 5–7 nov |
+| 004 | Imágenes | Firmas de subida, selector y subida de fotos | BE-B / MO-B | P0 | 001, 003 (auth) | 5–7 nov |
+| 005 | Objetos | Publicar, editar, pausar, precio sugerido | BE-A / MO-A | P0 | 003, 004 | 8–10 nov |
+| 006 | Búsqueda | Texto, categoría, zona, modalidad, fechas | BE-B / MO-B | P0 | 005 | 8–10 nov |
+| 007 | Solicitudes y reservas | Cotización, solicitud, aceptar/rechazar, reserva, cancelar | BE-A / MO-A | P0 | 005 | 10–13 nov |
+| 008 | Chat privado | Mensajes de texto por reserva | BE-B / MO-B | P1 | 007 | 10–13 nov |
+| 009 | Entrega, devolución y pagos | Evidencia, QR, confirmaciones, pago registrado, retrasos | BE-A / MO-A | P0 | 004, 007 | 13–17 nov |
+| 010 | Calificaciones e incidencias | Reputación, reportes con seguimiento manual, sanciones | BE-B / MO-B | P1 | 009 (parcial) | 13–17 nov |
+| 011 | Notificaciones y moderación | Avisos en app y push (P2), filtro de contenido y reportes (**P1: exigidos por la política de contenido de usuarios de Google Play**) | BE-B / MO-B | P1 | 007–010 | 17–19 nov |
+| 012 | Integración y entrega | Pruebas de punta a punta, endurecimiento, documentación, AAB final | todos | P0 | todas | 19–22 nov |
+| 013 | Publicación en Google Play (móvil) y producción (backend) | Ficha, cumplimiento, prueba cerrada, producción; backend de producción | MO-B / BE-B + administrador | P0 | 002 (inicio), 012 (cierre) | 2 nov–7 dic |
+| 014 | **IA (v1.1, después de la 1.0)** | Sugerir título y categoría a partir de una foto, siempre con revisión de quien publica (proveedor gratuito; interruptor `AI_ENABLED`) | BE-A / MO-A (+ MO-B cumplimiento) | P1 | 004, 005, 011, 013 | 23 nov–1 dic |
+| 015 | **ML: recomendaciones (v1.1)** | «Recomendado para ti»: recomendador híbrido propio (colaborativo objeto-objeto + contenido), evaluado con Hit@10/Recall@10/MRR contra popularidad; interruptor `RECO_ENABLED` | BE-B / MO-B | P1 | 005, 006, 007, 013 | 23 nov–1 dic |
+| L001 | Landing: base y páginas legales | Sitio estático, privacidad, términos, eliminación de cuenta, publicación gratuita | MO-B | P0 | — | 2–5 nov |
+| L002 | Landing: página principal | Información de la app, cómo funciona, FAQ, botón a Google Play | MO-B | P1 | L001 | 9–16 nov |
 
-**Regla de cierre (todas las specs desde la 002):** una spec está terminada solo cuando su última tarea pasa. Backend y landing: «Despliegue» (`@devops-mcp` despliega en Render y verifica los endpoints o páginas de la spec). Móvil: «Verificación en Expo Go» (`@probador-expo` recorre los criterios de aceptación contra el staging ya desplegado). Backend 013 y móvil 013 (producción y Google Play) siguen su propio proceso. La spec siguiente no empieza hasta que la anterior esté cerrada.
+**Regla de cierre (todas las specs desde la 002):** una spec está terminada solo cuando su última tarea pasa. Backend: «Despliegue» (`@devops-mcp` ejecuta `scripts/deploy.sh staging` en la VM de Azure y verifica los endpoints por HTTPS). Landing: «Despliegue» en Render (static site). Móvil: «Verificación en Expo Go» (`@probador-expo` recorre los criterios de aceptación contra el staging ya desplegado). Backend 013 y móvil 013 (producción y Google Play) siguen su propio proceso. La spec siguiente no empieza hasta que la anterior esté cerrada.
 
 Las dependencias "parciales" se resuelven con **puertos vacíos** (§4) y contratos publicados el primer día de cada spec.
 
 **Estrategia en dos versiones (decisión del 28 de oct).** El cuello de botella no es el desarrollo sino los 14 días de la prueba cerrada de Google Play. Por eso:
-1. **1.0 (sin IA):** núcleo completo; sube desde el 1 nov al canal de prueba cerrada y se pide a producción el 15 nov.
-2. **v1.1 (con IA y ML, specs 014 y 015):** se desarrolla del 16 al 24 nov (mientras Google revisa la 1.0), **detrás de un interruptor** (`AI_ENABLED`) y sin tocar el AAB que se revisa; BE-A y MO-A la construyen la 014; BE-B y MO-B construyen la 015 (recomendaciones con ML); MO-B actualiza privacidad y «Seguridad de datos» de Play y BE-A revisa la lectura de reservas de la 015. Se sube como actualización el 25 nov y a producción cuando la 1.0 esté aprobada. Alcance, proveedor gratuito de IA y fecha exacta están pendientes (el PDF solo dice «sugerir título y categoría a partir de una fotografía, con revisión de quien publica», y que se concretará para la entrega académica).
+1. **1.0 (sin IA):** núcleo completo; sube desde el 9 nov al canal de prueba cerrada y se pide a producción el 23 nov.
+2. **v1.1 (con IA y ML, specs 014 y 015):** se desarrolla del 23 nov al 1 dic (mientras Google revisa la 1.0), **detrás de un interruptor** (`AI_ENABLED`) y sin tocar el AAB que se revisa; BE-A y MO-A la construyen la 014; BE-B y MO-B construyen la 015 (recomendaciones con ML); MO-B actualiza privacidad y «Seguridad de datos» de Play y BE-A revisa la lectura de reservas de la 015. Se sube como actualización a la prueba cerrada hacia el 2 dic y a producción solo cuando la 1.0 esté aprobada (probablemente después de la entrega). Alcance, proveedor gratuito de IA y fecha exacta están pendientes (el PDF solo dice «sugerir título y categoría a partir de una fotografía, con revisión de quien publica», y que se concretará para la entrega académica).
 
-**Fecha oficial de entrega (28 de oct): 1 al 4 de diciembre, con todos los specs completos.** Terminar *todo* en la primera semana de noviembre no era posible (~340 tareas para 4 personas con modelos gratuitos y 14 días de prueba cerrada); con la entrega oficial en diciembre, la 1.0 y la v1.1 caben con colchón de cerca de una semana. Si hay retraso se aplica la línea de corte (§6).
+**Fecha oficial de entrega: 1 al 4 de diciembre, con todos los specs completos.** Terminar *todo* en la primera semana de noviembre no era posible (~340 tareas para 4 personas con modelos gratuitos y 14 días de prueba cerrada); con la entrega oficial en diciembre, la 1.0 y la v1.1 caben con colchón de cerca de una semana. Si hay retraso se aplica la línea de corte (§6).
 
 ### Hitos
 
 | Hito | Fecha de cierre | Debe estar cerrado (desplegado en staging / verificado en Expo Go) |
 |---|---|---|
-| H0 Base | 30 oct | 001 (servicios por MCP) + 002 (arquitectura base) |
-| H-Legal Landing legal | 1 nov | L001: privacidad, términos y eliminación de cuenta publicados (requisito para la ficha de Play) |
-| H-Play Prueba cerrada | 1 nov | Primer AAB en la prueba cerrada con ≥ 12 testers (día 1 de 14); la cuenta se compra el 29–30 oct |
-| H1 Cuenta e imágenes | 2 nov | 003, 004: una persona puede registrarse y subir una foto |
-| H2 Catálogo | 5 nov | 005, 006: publicar y encontrar un objeto |
-| H3 Transacción | 8 nov | 007, 008: solicitar, aceptar y conversar |
-| H4 Operación | 11 nov | 009, 010: entrega/devolución con QR, calificar, reportar |
-| H5 Cierre | 15 nov | 011, 012, 013: avisos, reportes, endurecimiento, AAB final en la prueba cerrada |
-| H-Prod Solicitud | 15 nov | Solicitud de acceso a producción enviada (día 14 cumplido el 14 nov) |
-| H6 Publicación 1.0 | 20 nov (meta) · 22–25 nov (estimada) | App pública sin IA en Google Play (producción); depende de Google |
-| H7 IA y ML v1.1 | 25–28 nov | Specs 014 y 015: sugerencias con IA y recomendaciones con ML en la prueba cerrada (25 nov) y en producción (26–28 nov) |
+| H0 Base | 5 nov | 001 (infraestructura en Azure y servicios) + 002 (arquitectura base, primer despliegue) |
+| H-Legal Landing legal | 5 nov | L001: privacidad, términos y eliminación de cuenta publicados (requisito para la ficha de Play) |
+| H-Play Prueba cerrada | 9 nov | Primer AAB en la prueba cerrada con ≥ 12 testers (día 1 de 14); la cuenta ya está comprada |
+| H1 Cuenta e imágenes | 7 nov | 003, 004: una persona puede registrarse y subir una foto |
+| H2 Catálogo | 10 nov | 005, 006: publicar y encontrar un objeto |
+| H3 Transacción | 13 nov | 007, 008: solicitar, aceptar y conversar |
+| H4 Operación | 17 nov | 009, 010: entrega/devolución con QR, calificar, reportar |
+| H5 Cierre | 22 nov | 011, 012, 013: avisos, reportes, endurecimiento, AAB final en la prueba cerrada |
+| H-Prod Solicitud | 23 nov | Solicitud de acceso a producción enviada (día 14 cumplido el 22 nov) |
+| H6 Publicación 1.0 | 30 nov – 7 dic (estimada) | App pública sin IA en Google Play (producción); depende de Google |
+| H7 IA y ML v1.1 | ~2 dic | Specs 014 y 015: sugerencias con IA y recomendaciones con ML en la prueba cerrada (~2 dic); a producción solo si la 1.0 ya está aprobada |
 | **H8 Entrega oficial** | **1–4 dic** | Todos los specs completos, documentación y demostración |
 
 ## 4. Piezas compartidas (se crean una vez y no se reimplementan)
@@ -126,7 +136,7 @@ Las dependencias "parciales" se resuelven con **puertos vacíos** (§4) y contra
 | Persona | Tareas |
 |---|---|
 | BE-A | T001, T005, T006, T007, T009, T010, T011, T012, T013, T015, T022 |
-| BE-B | T002, T003, T004, T008, T014, T016, T017, T018, T019, T020, T021, T023, T024–T027 (servicios y staging del backend) |
+| BE-B | T002, T003, T004, T008, T014, T016, T017, T018, T019, T020, T021, T023, T024–T031 (servicios, Redis, HTTPS y despliegue en Azure) |
 | MO-A | T001, T002, T005, T010, T011, T012, T013, T016, T017, T018, T022 |
 | MO-B | T003, T004, T006, T007, T008, T009, T014, T015, T019, T020, T021, T023, T024–T029 (servicios y Expo Go de la app) |
 
@@ -136,11 +146,11 @@ T001 de cada proyecto la hace primero la persona A; el resto espera a que esté 
 
 | Si al final de… | y no está integrado… | Se recorta |
 |---|---|---|
-| 8 nov (H3) | 007 | 011 push y avisos; 010 solo calificaciones (**no** se recortan el filtro de contenido ni los reportes) |
-| 24 nov | 014 o 015 sin integrar | Queda apagada (`AI_ENABLED=false` / `RECO_ENABLED=false`) y se entrega como demostración en staging; la 1.0 ya está publicada |
-| 11 nov (H4) | 009 | Pagos registrados y retrasos (queda evidencia + QR); incidencias |
-| 12 nov | 011 push | Notificaciones push (queda lista de avisos dentro de la app) |
-| 13 nov | 012 | Documentación extendida y accesibilidad fina; **nunca** el recorrido de punta a punta |
+| 13 nov (H3) | 007 | 011 push y avisos; 010 solo calificaciones (**no** se recortan el filtro de contenido ni los reportes) |
+| 1 dic | 014 o 015 sin integrar | Queda apagada (`AI_ENABLED=false` / `RECO_ENABLED=false`) y se entrega como demostración en staging |
+| 17 nov (H4) | 009 | Pagos registrados y retrasos (queda evidencia + QR); incidencias |
+| 19 nov | 011 push | Notificaciones push (queda lista de avisos dentro de la app) |
+| 20 nov | 012 | Documentación extendida y accesibilidad fina; **nunca** el recorrido de punta a punta |
 
 Nunca se recorta: cuenta, publicar, buscar, solicitar/reservar, entrega y devolución con QR, calificar, **reportar contenido y filtro de contenido** (requisito de Google Play para apps con contenido de usuarios), eliminar cuenta (dentro y fuera de la app), política de privacidad y la ruta a Google Play (§1).
 
@@ -148,13 +158,13 @@ Nunca se recorta: cuenta, publicar, buscar, solicitar/reservar, entrega y devolu
 
 1. **Un dueño por spec.** Solo esa persona edita su `tasks.md` y su código.
 2. **Contrato primero.** Día 1 de cada spec: el backend publica `api/paths/<modulo>.yaml`; el móvil empieza a la par.
-3. **Repositorio y revisión:** el flujo de ramas, revisión y pipeline **no está definido todavía**; se integrará de cero. Mientras tanto no se hacen commits ni se crean ramas desde los agentes.
+3. **Repositorio y revisión:** una rama y una PR por spec, `main` protegida, por el MCP de GitHub (`@gestor-repo`); una persona revisa y fusiona. Sin pipeline automatizado. Los commits, ramas y PR solo los hace `@gestor-repo`, con aprobación.
 4. **Sincronía diaria** de 15 min: qué se integró, qué bloquea, qué contrato cambia.
 5. **Un cambio de contrato** se avisa en el grupo y se actualiza en ambos lados el mismo día.
 6. **`memoria.md` solo-anexar** con tu etiqueta; conflictos: conservar ambas líneas.
 7. **Al terminar cada spec:** `@revisor-constitucion`, la tarea de cierre (Despliegue / Verificación en Expo Go) y marcar el hito.
-8. **Desde el 5 de nov**, cada noche una persona ejecuta el recorrido de punta a punta (spec 012) y reporta fallos.
-9. **MCP:** solo `@devops-mcp` (backend, landing) y `@probador-expo` (móvil) usan los MCP; sus claves son variables de entorno del sistema, nunca archivos. Los demás agentes piden el trabajo a ellos.
+8. **Desde el 10 de nov**, cada noche una persona ejecuta el recorrido de punta a punta (spec 012) y reporta fallos.
+9. **MCP:** solo `@devops-mcp` (backend: MCP de Azure con escritura y aprobación por llamada, `az`/SSH solo para lo que el MCP no cubra, y MCP de Cloudinary; landing: Render) y `@probador-expo` (móvil) usan los MCP; las claves son variables de entorno o la sesión de `az`, nunca archivos. Los demás agentes piden el trabajo a ellos.
 10. **Modelos gratuitos:** tareas de 1–3 archivos; si un agente falla dos veces, se para, se reescribe la tarea más pequeña y se reintenta.
 
 ## 8. Políticas de producto (confirmadas el 28 de oct por el responsable del producto, con los cambios marcados)
@@ -191,15 +201,15 @@ El PDF dice que importes y plazos se fijan en las políticas del servicio. Estos
 - Apelaciones, escalamiento y etapas extra de incidencias.
 - Tiempo real con WebSockets (el chat usa consulta periódica + push).
 
-## 10. Antes del 29 de octubre (lo prepara quien administra el repositorio)
+## 10. Antes de arrancar (2 de nov) (lo prepara quien administra el repositorio)
 
-- [ ] **Repositorio, ramas, revisión y pipeline:** pendiente; se definirá e integrará de cero (fuera de este SDD por ahora).
-- [ ] Claves para los MCP como variables de entorno del sistema: `MDB_MCP_API_CLIENT_ID` y `MDB_MCP_API_CLIENT_SECRET` (cuenta de servicio de Atlas), `CLOUDINARY_URL`, `RENDER_API_KEY`; reiniciar OpenCode después de definirlas. Expo se autentica con `opencode mcp auth expo`.
-- [ ] Cuenta de **MongoDB Atlas** con una cuenta de servicio (API); el clúster gratuito M0, el usuario y la red los crea la spec 001 por MCP.
+- [ ] **Repositorios en GitHub (Art. XV backend y móvil, Art. XIII landing):** la persona crea los tres repositorios, protege `main` y crea el token `GITHUB_PERSONAL_ACCESS_TOKEN` (permisos mínimos, un token por repositorio o uno limitado a los tres); `@gestor-repo` hace ramas, commits y PR por el MCP de GitHub; una persona revisa y fusiona. Sin pipeline automatizado (CI) por ahora.
+- [ ] **Lo único manual (Art. XIII.2 backend):** registrarse en Azure y en Cloudinary (y en Render y Expo para landing y móvil), `az login` en la máquina de quien despliega, `CLOUDINARY_URL` y `RENDER_API_KEY` (solo para la landing) como variables de entorno del sistema; reiniciar OpenCode después de definirlas. Expo se autentica con `opencode mcp auth expo`.
+- [ ] Cuenta **gratuita de Azure creada con el correo de la cuenta principal del proyecto** (la de Google Play; requisito del curso): pide tarjeta y teléfono pero **no cobra mientras no se actualice a pago por uso**; el crédito de 200 USD dura **30 días desde el alta**, así que se crea justo antes de la spec 001. Alerta de presupuesto desde el primer día. Si la oferta se rechaza porque la persona ya la usó, otra persona del equipo hace la verificación. La región y la talla gratuita las elige `devops-mcp` revisando disponibilidad (`az vm list-skus`); la VM, MongoDB, Redis y el certificado HTTPS los crea la spec 001 por OpenCode.
 - [ ] Cuenta de **Cloudinary** (nombre de nube, API key, API secret); carpeta base `vaiven/`.
 - [ ] Cuenta de **Expo** para las 2 personas de móvil (MCP de Expo en la spec móvil 001; EAS solo para la spec 013).
-- [x] Hosting gratuito: **Render** (decidido), por MCP: `vaiven-staging` (spec backend 002), `vaiven-prod` (013) y el static site `vaiven-landing` (L001). El origen que Render consume (repositorio o imagen) queda **por definir** al integrar el repositorio.
-- [ ] Cuenta de desarrollador de **Google Play** pagada y verificada **el 29–30 de oct**, y lista de 15–20 testers antes del 1 nov (ruta en §1). **Es lo único que cuesta dinero.**
+- [x] Hosting: **Azure** (VM gratuita con Docker Compose) para el backend, `staging` en el puerto 8443 (spec 001/002) y `production` en el 443 (spec 013); la **landing** sigue en **Render** (static site `vaiven-landing`, spec L001). El origen de Render queda por definir al integrar el repositorio, pero **solo afecta a la landing**.
+- [x] Cuenta de desarrollador de **Google Play** pagada y con licencia (confirmado el 2 de nov); y pendiente: lista de 15–20 testers antes del día 1 de la prueba cerrada (ruta en §1). **Es lo único que cuesta dinero.**
 - [x] Correo de soporte público: `vaivenedeltrabajo@gmail.com` (privacidad, eliminación de cuenta, ARCO y ficha de Play).
 - [x] Responsable de los datos / nombre del desarrollador: Joseph Abrham Yañez Garcia (persona física, cuenta personal).
 - [ ] Secretos compartidos por un canal seguro (nunca en git); cada persona crea su `.env` local.
@@ -214,13 +224,19 @@ El PDF dice que importes y plazos se fijan en las políticas del servicio. Estos
 | Un modelo gratuito deja de estar disponible | Media | Alternos en `memoria.md`; cambiar solo `opencode.json` |
 | Conflictos entre OpenCodes | Media | Dueños, módulos, i18n por funcionalidad, `memoria` solo-anexar |
 | Push remoto no funciona en Expo Go (Android) | Alta | En Expo Go se marca «no verificable»; se prueba con *development build* de EAS en la spec 013 |
-| Render necesita un origen (repositorio o imagen) y aún no existe | Alta | Las tareas «Despliegue» no se pueden cerrar hasta integrar el repositorio; mientras tanto las pruebas locales (`make`/`npm`) sí corren. Definirlo antes de la spec 002 |
+| Memoria justa en la VM gratuita (1 GiB para MongoDB, Redis y la API; luego dos entornos) | Alta | Una sola réplica, sin nginx; límites de memoria por contenedor, `GOMEMLIMIT`, swap de 2 GB (las tallas nuevas no traen disco temporal), `maxmemory` en Redis y caché reducida de Mongo; staging se reduce o se detiene mientras producción esté en uso; si no alcanza, consultar antes de cambiar de talla |
+| Créditos de CPU de la serie B (línea base 20 %; 10 % en B1s): si se agotan, la VM se estrangula | Media | Cargas ligeras, vigilar la métrica de créditos; reportar si hay estrangulamiento |
+| `NotAvailableForSubscription`: la región o la talla no están disponibles para la suscripción | Alta | `devops-mcp` revisa `az vm list-skus` antes de crear y prueba regiones y tallas (B2ats_v2 → B1s → B2pts_v2, ARM64 exige imagen `arm64`); sin zonas de disponibilidad; si es «Azure for Students», solo regiones de la política |
+| La IP pública estándar no es gratuita (≈ 3–4 USD/mes, desde 2025 es obligatoria) | Media (cierta) | Costo aceptado; sale del crédito de 30 días y después de la tarjeta; alerta de presupuesto desde el primer día |
+| Un certificado de Let's Encrypt no se emite o no se renueva | Media | `certbot renew --dry-run` en la spec 001; puerto 80 abierto solo para certbot; la API recarga el certificado sin reiniciarse |
+| El crédito de Azure vence a los 30 días (con la prueba cerrada y la revisión de Google pasando de principios de diciembre) | Alta | Crear la cuenta justo antes de empezar; sin pasar a pago por uso los recursos se desactivan al terminar el crédito; si hay que seguir, una persona decide actualizar (costo: IP pública ≈ 0,12 USD/día) y se borra todo al terminar; alerta de presupuesto |
+| Una sola VM: sin alta disponibilidad | Media | Reinicio automático de contenedores y de la VM, monitor externo, reversión con `--rollback`; se documenta como límite conocido |
+| Render necesita un origen (repositorio) para la landing | Media | La tarea «Despliegue» de la landing no cierra hasta integrar el repositorio; el backend no depende de él |
 | Cambios de contrato a medias | Media | Aviso el mismo día y actualización en ambos lados |
 | Políticas rechazadas | Baja | Una sola constante por proyecto; cambio de 1 archivo |
-| **Prueba cerrada de Google Play (12 testers, 14 días) y revisión de producción** | **Alta** | Cuenta comprada el 29–30 oct: día 1 el 1 nov, día 14 el 14 nov, solicitud el 15 nov y publicación estimada 22–25 nov. Testers confirmados antes del 1 nov; actualizaciones durante la prueba. Cualquier retraso en cuenta, testers o primer AAB mueve la publicación día por día. Fuente: guías de 2026 ([Choicely](https://www.choicely.com/blog/google-play-12-tester-rule)); confirmar en Play Console Help |
-| Verificación de identidad de la cuenta de Google Play tarda | Media | Iniciarla el mismo día de la compra (29–30 oct); cada día de demora mueve la publicación un día |
-| Render gratuito se "duerme" (arranque en frío de ~1 min) | Alta | Monitor gratuito que haga ping cada 10 min; app con estados de carga; documentado en backend 013 |
-| Atlas M0 sin copias de seguridad automáticas | Media | Exportación manual (`mongodump`) antes de cada despliegue grande; documentado |
+| **Prueba cerrada de Google Play (12 testers, 14 días) y revisión de producción** | **Alta** | Cuenta ya comprada: día 1 el 9 nov, día 14 el 22 nov, solicitud el 23 nov y publicación estimada 30 nov – 7 dic (después de la entrega si Google tarda). Testers confirmados antes del 9 nov; actualizaciones durante la prueba. Cualquier retraso en cuenta, testers o primer AAB mueve la publicación día por día. Fuente: guías de 2026 ([Choicely](https://www.choicely.com/blog/google-play-12-tester-rule)); confirmar en Play Console Help |
+| Verificación de identidad de la cuenta de Google Play tarda | Media | Confirmarla el 2–3 nov; cada día de demora mueve la publicación un día |
+| MongoDB en la VM sin copias de seguridad automáticas | Media | `mongodump` manual cifrado y copiado fuera de la VM antes de cada despliegue grande y cada semana; documentado en backend 013 |
 | Cola/límite de compilaciones gratuitas de EAS | Media | Solo se usan en la spec 013 |
 | Google rechaza la ficha o la app (datos, permisos, contenido de usuarios) | Media | Spec móvil 013 prepara hoja de seguridad de datos, calificación de contenido y justificación de permisos; reportes y filtro no se recortan |
 
@@ -241,8 +257,8 @@ Incluye la tarea final de cierre de cada spec («Despliegue» en backend, «Veri
 
 | Spec | Backend | Móvil |
 |---|---|---|
-| 001 Servicios por MCP | 7 | 4 |
-| 002 Arquitectura base | 27 | 29 |
+| 001 Infraestructura Azure / Servicios MCP | 9 | 4 |
+| 002 Arquitectura base | 31 | 29 |
 | 003 | 14 | 13 |
 | 004 | 11 | 10 |
 | 005 | 10 | 13 |
@@ -256,6 +272,6 @@ Incluye la tarea final de cierre de cada spec («Despliegue» en backend, «Veri
 | 013 | 9 | 11 |
 | 014 | 9 | 8 |
 | 015 | 11 | 8 |
-| **Total** | **184** | **182** |
+| **Total** | **191** | **183** |
 
-Landing: L001 (11 tareas) y L002 (11 tareas), ver `specs/` del repositorio `vaiven-landing-page`. **Total general: 388 tareas.**
+Landing: L001 (12 tareas) y L002 (11 tareas), ver `specs/` del repositorio `vaiven-landing-page`. **Total general: 397 tareas.**

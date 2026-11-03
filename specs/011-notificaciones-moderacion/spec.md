@@ -1,7 +1,7 @@
 # Spec 011 — Notificaciones y moderación (backend)
 
-- **Dueño:** BE-B · **Prioridad:** P1 (solo el push es recortable) · **Ventana:** 10–12 nov · **Depende de:** 007–010
-- **Constitución:** v1.3.0 · **Políticas:** POL-16 · **Estado:** Borrador
+- **Dueño:** BE-B · **Prioridad:** P1 (solo el push es recortable) · **Ventana:** 17–19 nov · **Depende de:** 007–010
+- **Constitución:** v1.4.0 · **Políticas:** POL-16 · **Estado:** Borrador
 
 ## 1. Objetivo y por qué
 Mantener a las personas informadas sobre solicitudes, acuerdos, encuentros, devoluciones e incidencias (en la app y por notificación push), y limitar objetos y contenido prohibido mediante un filtro automático, reportes y revisión humana. Reemplaza los puertos vacíos `notify.Notifier` y `moderation.Checker`.

@@ -47,7 +47,8 @@ Subagentes propios (`.opencode/agents/`):
 | `dev-go` | Implementa tareas en Go siguiendo Clean Architecture | Sí |
 | `modelador-mongo` | Diseña colecciones, índices, repositorios y validación de esquema | Sí (`adapter/mongo`) |
 | `qa-go` | Escribe y ejecuta pruebas, mide cobertura | Solo `*_test.go` |
-| `devops-mcp` | Aprovisiona servicios y despliega cada spec en staging **por MCP**; único agente con permiso para los MCP | No (solo `memoria.md` y docs) |
+| `gestor-repo` | Crea ramas, commits y PR en GitHub por MCP; único agente con permiso para el MCP de GitHub; nunca fusiona ni borra | No |
+| `devops-mcp` | Aprovisiona Azure y despliega cada spec en staging con el **MCP de Azure**, `az` y los MCP de Cloudinary; único agente con permiso para ellos | No (solo `memoria.md` y docs) |
 | `revisor-constitucion` | Verifica conformidad con la constitución | No |
 
 Invocación: `@dev-go implementa la tarea T005 de specs/002-arquitectura-base/tasks.md`.
@@ -60,13 +61,15 @@ Invocación: `@dev-go implementa la tarea T005 de specs/002-arquitectura-base/ta
 | `go-clean-architecture` | Al crear o modificar paquetes de Go |
 | `mongodb-go-patterns` | Al tocar colecciones, índices o repositorios |
 | `api-rest-conventions` | Al crear o modificar endpoints, errores o `openapi.yaml` |
-| `mcp-deploy` | Al aprovisionar servicios o desplegar una spec (solo `devops-mcp`) |
+| `mcp-deploy` | Al aprovisionar Azure o desplegar una spec (solo `devops-mcp`) |
 
-## 5b. MCP y despliegue (Art. XIII)
+## 5b. Azure, MCP y despliegue (Art. XIII y XIV)
 
-- Los MCP (`mongodb`, `cloudinary-assets`, `cloudinary-config`, `render`) están en `opencode.json`; sus credenciales son variables de entorno del sistema (`MDB_MCP_API_CLIENT_ID`, `MDB_MCP_API_CLIENT_SECRET`, `CLOUDINARY_URL`, `RENDER_API_KEY`, `MONGO_URI`), nunca archivos del repositorio.
-- **Solo `devops-mcp` los usa.** Si tu tarea necesita un servicio, pide `@devops-mcp ...`; no intentes llamar herramientas MCP.
-- **Orden de trabajo:** spec 001 (servicios) → 002 (base) → 003 … Cada spec termina con su tarea «Despliegue» (`@devops-mcp` despliega `vaiven-staging` y verifica sus endpoints). No empieces la siguiente spec hasta que esa tarea pase.
+- Infraestructura: una VM de Azure (cuenta gratuita) con Docker Compose: la API (una réplica, **sirve HTTPS forzoso** con certificado de Let's Encrypt), **MongoDB** y **Redis** (obligatorios). No hay nginx. Cloudinary sigue para imágenes. Los MCP (`azure`, `cloudinary-assets`, `cloudinary-config`) están en `opencode.json`; sus credenciales son `az login` y `CLOUDINARY_URL`, nunca archivos del repositorio.
+- **Trabajo humano mínimo:** la persona solo se registra (Azure, Cloudinary), hace `az login`, define `CLOUDINARY_URL` y aprueba acciones. **Todo lo demás lo hace `devops-mcp` desde OpenCode**, primero con los MCP y, si no cubren algo, con `az` o SSH.
+- **Solo `devops-mcp` usa los MCP, `az` y SSH a la VM.** Si tu tarea necesita infraestructura, pide `@devops-mcp ...`.
+- La API debe ser **sin estado** (Art. XIV): nada compartido en memoria; límite de tasa y caché en Redis (obligatorio) por los puertos `ratelimit.Limiter` y `cache.Cache`; Redis nunca es fuente de verdad.
+- **Orden de trabajo:** spec 001 (Azure y servicios) → 002 (base) → 003 … Cada spec termina con su tarea «Despliegue» (`@devops-mcp` ejecuta `scripts/deploy.sh staging` y verifica por HTTPS). No empieces la siguiente spec hasta que pase.
 
 ## 6. Comandos
 
@@ -105,3 +108,6 @@ Si `make` no está disponible en Windows, usar Git Bash o WSL, o ejecutar el com
 ## 9. Alcance
 
 Specs `001` a `015` en `specs/`, en el orden y con los dueños de `ROADMAP.md`. Las tareas aún **no se ejecutan** hasta la fecha de arranque del calendario y la aprobación de cada spec.
+
+## Repositorio y PR (Art. XV)
+- Una rama por spec (`spec/NNN-nombre`) y una PR por spec; `main` protegida. Solo `@gestor-repo` usa el MCP de GitHub (token `GITHUB_PERSONAL_ACCESS_TOKEN`); nunca fusiona ni borra: una persona revisa y fusiona. Nunca se suben secretos.

@@ -1,7 +1,7 @@
 # Spec 007 — Solicitudes, precio y reservas (backend)
 
-- **Dueño:** BE-A · **Prioridad:** P0 · **Ventana:** 5–8 nov · **Depende de:** 005
-- **Constitución:** v1.3.0 · **Políticas:** POL-01, 02, 03, 05, 09, 17 · **Estado:** Borrador
+- **Dueño:** BE-A · **Prioridad:** P0 · **Ventana:** 10–13 nov · **Depende de:** 005
+- **Constitución:** v1.4.0 · **Políticas:** POL-01, 02, 03, 05, 09, 17 · **Estado:** Borrador
 
 ## 1. Objetivo y por qué
 Convertir el interés en un acuerdo claro: la persona ve el importe y las condiciones **antes** de solicitar; el propietario acepta o rechaza; al aceptar se **reserva** el periodo sin cruces. La solicitud conserva lo que se mostró aunque el objeto cambie después.

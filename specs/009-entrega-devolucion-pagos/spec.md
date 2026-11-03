@@ -1,7 +1,7 @@
 # Spec 009 — Entrega, devolución y pagos registrados (backend)
 
-- **Dueño:** BE-A · **Prioridad:** P0 · **Ventana:** 8–11 nov · **Depende de:** 004, 007
-- **Constitución:** v1.3.0 · **Políticas:** POL-05, 06, 07, 08, 13 · **Estado:** Borrador
+- **Dueño:** BE-A · **Prioridad:** P0 · **Ventana:** 13–17 nov · **Depende de:** 004, 007
+- **Constitución:** v1.4.0 · **Políticas:** POL-05, 06, 07, 08, 13 · **Estado:** Borrador
 
 ## 1. Objetivo y por qué
 Documentar el momento más delicado: la entrega y la devolución **presenciales**, con estado del objeto, fotografías y confirmación de ambas partes mediante QR, y registrar el pago acordado. El QR confirma una etapa; **no** confirma el pago, la identidad ni el estado por sí solo.

@@ -27,10 +27,10 @@ README.md (actualizar)
 ## 3. Orden de trabajo (4 días)
 | Día | Foco |
 |---|---|
-| 12 nov | E2E del flujo principal (RF-01), `indexes`, límites y cabeceras |
-| 13 nov | `seed`, rendimiento y `explain`, OpenAPI local |
-| 14 nov | Despliegue final en staging, `seed`, revisión de seguridad |
-| 15 nov | Documentación, `demo.md`, revisión de conformidad, congelar código |
+| 19 nov | E2E del flujo principal (RF-01), `indexes`, límites y cabeceras |
+| 20 nov | `seed`, rendimiento y `explain`, OpenAPI local |
+| 21 nov | Despliegue final en staging, `seed`, revisión de seguridad |
+| 22 nov | Documentación, `demo.md`, revisión de conformidad, congelar código |
 
 ## 4. Pruebas
 La propia E2E; pruebas unitarias de middleware nuevo; `seed` probado dos veces; `indexes` probado con una colección sin índice.

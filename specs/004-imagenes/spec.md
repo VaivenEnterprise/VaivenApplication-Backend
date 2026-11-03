@@ -1,7 +1,7 @@
 # Spec 004 — Imágenes con Cloudinary (backend)
 
-- **Dueño:** BE-B · **Prioridad:** P0 · **Ventana:** 31 oct–2 nov · **Depende de:** 001, 002, 003 (identidad)
-- **Constitución:** v1.3.0 (Art. II.4, VI.7) · **Políticas:** POL-13 · **Estado:** Borrador
+- **Dueño:** BE-B · **Prioridad:** P0 · **Ventana:** 5–7 nov · **Depende de:** 001, 002, 003 (identidad)
+- **Constitución:** v1.4.0 (Art. II.4, VI.7) · **Políticas:** POL-13 · **Estado:** Borrador
 
 ## 1. Objetivo y por qué
 Dar a toda la plataforma una manera segura y gratuita de recibir fotos (objetos y evidencias): la app sube directamente a Cloudinary con una **firma de un solo uso** del backend y después entrega solo una referencia. El backend valida que la imagen es de quien la envía y de qué tipo es, y sabe entregarla pública o con URL firmada de corta duración (evidencias privadas).

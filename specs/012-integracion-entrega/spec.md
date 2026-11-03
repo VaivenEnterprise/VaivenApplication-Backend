@@ -1,7 +1,7 @@
 # Spec 012 — Integración, endurecimiento y entrega (backend)
 
-- **Dueño:** todo el equipo (BE-A lidera integración; BE-B lidera despliegue) · **Prioridad:** P0 · **Ventana:** 12–15 nov · **Depende de:** 001–011
-- **Constitución:** v1.3.0 · **Estado:** Borrador
+- **Dueño:** todo el equipo (BE-A lidera integración; BE-B lidera despliegue) · **Prioridad:** P0 · **Ventana:** 19–22 nov · **Depende de:** 001–011
+- **Constitución:** v1.4.0 · **Estado:** Borrador
 
 ## 1. Objetivo y por qué
 Convertir el conjunto de módulos en un backend **entregable**: recorrido de punta a punta automatizado, datos de demostración, endurecimiento básico de seguridad y rendimiento, despliegue verificado y documentación para la presentación. No agrega funcionalidad.
@@ -15,7 +15,7 @@ Convertir el conjunto de módulos en un backend **entregable**: recorrido de pun
 | RF-04 | Límite global por IP (120 peticiones/min) además de los de auth, chat e imágenes; cabeceras de seguridad (`X-Content-Type-Options`, `Cache-Control: no-store` en respuestas autenticadas); tamaño máximo de cuerpo revisado. |
 | RF-05 | Revisión de seguridad documentada: ninguna ruta de datos sensibles sin autenticación, `RequireRole` en `/admin/*`, ningún secreto en logs, CORS acotado, evidencia solo con URL firmada. |
 | RF-06 | `api/openapi.yaml` (con todos los `paths/*.yaml`) valida sin errores con `npx @redocly/cli lint` en local. |
-| RF-07 | Staging actualizado con la versión final, conectado a Atlas y Cloudinary, con `check-services`, `indexes` y `seed` ejecutados. |
+| RF-07 | Staging actualizado con la versión final, conectado a MongoDB y Redis de la VM de Azure y a Cloudinary, con `check-services`, `indexes` y `seed` ejecutados. |
 | RF-08 | Rendimiento: `GET /items` y `GET /bookings` con p95 < 500 ms con los datos de `seed` ×100; sin consultas sin índice (revisar con `explain` las 10 consultas más frecuentes). |
 | RF-09 | Documentación: `README` final, `docs/api.md` (resumen de endpoints por módulo), `docs/despliegue.md`, `docs/politicas.md` (POL-xx vigentes) y `docs/demo.md` (guion de demostración con las cuentas del seed). |
 | RF-10 | `docs/validacion.md`: plan breve de validación con personas usuarias (qué observar: objetos publicados, solicitudes aceptadas, devoluciones, tiempos de respuesta e incidencias), sin presentar expectativas como resultados comprobados. |
