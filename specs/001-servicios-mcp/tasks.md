@@ -4,7 +4,7 @@
 - **Lo único humano (Art. XIII.2):** registrarse en Azure y Cloudinary, `az login`, definir `CLOUDINARY_URL` y aprobar las acciones. Todo lo demás lo hace `devops-mcp` desde OpenCode (primero MCP; `az` y SSH para lo que el MCP no cubra).
 - Esta spec no tiene tarea «Despliegue»: todavía no hay API que desplegar (Art. XIII.5 aplica desde la 002).
 
-- [ ] **T001** Conexión de los MCP y sesión de `az` (**la hace una persona** con `devops-mcp`)
+- [x] **T001** Conexión de los MCP y sesión de `az` (**la hace una persona** con `devops-mcp`)
   - Archivos: `memoria.md` (solo anexar)
   - Agente: — (manual) y `devops-mcp` · Depende de: —
   - Aceptación: la cuenta Microsoft se crea con el correo de la cuenta principal del proyecto y el alta de Azure la hace un integrante del equipo que **no haya usado antes la oferta gratuita** (responsable: por definir; debe seguir en el equipo hasta el final); la suscripción queda a nombre de la cuenta del proyecto y `az login` se hace con esa cuenta, no con la personal. Cuenta de Azure creada con el correo de la cuenta principal del proyecto y cuenta de Cloudinary creada, `az login` hecho y `az account show` apunta a la suscripción gratuita; `CLOUDINARY_URL` definida en el sistema (únicos pasos manuales, anotados en `memoria.md`); `opencode mcp list` muestra `azure`, `cloudinary-assets` y `cloudinary-config` conectados (CA-01); `dev-go` rechaza una herramienta MCP y `devops-mcp` la ejecuta (CA-02)

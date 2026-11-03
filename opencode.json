@@ -1,32 +1,32 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "model": "opencode/big-pickle",
-  "small_model": "opencode/ling-flash-free",
+  "small_model": "opencode/glm-5.3-flash-free",
   "instructions": [
     "constitution.md",
     "memoria.md"
   ],
   "agent": {
     "plan": {
-      "model": "opencode/nemotron-3-ultra-free"
+      "model": "opencode/nemotron-3.5-super-vl-free"
     },
     "build": {
-      "model": "opencode/nemotron-3-lightning-free"
+      "model": "opencode/nemotron-3.5-lightning-free"
     },
     "spec-writer": {
-      "model": "opencode/nemotron-3-ultra-free"
+      "model": "opencode/nemotron-3.5-super-vl-free"
     },
     "modelador-mongo": {
-      "model": "opencode/nemotron-3-ultra-free"
+      "model": "opencode/nemotron-3.5-super-vl-free"
     },
     "dev-go": {
-      "model": "opencode/nemotron-3-lightning-free"
+      "model": "opencode/nemotron-3.5-lightning-free"
     },
     "qa-go": {
-      "model": "opencode/ling-flash-free"
+      "model": "opencode/glm-5.3-flash-free"
     },
     "devops-mcp": {
-      "model": "opencode/nemotron-3-ultra-free",
+      "model": "opencode/nemotron-3.5-super-vl-free",
       "tools": {
         "azure_*": true,
         "cloudinary-assets_*": true,
@@ -37,7 +37,7 @@
       "model": "opencode/big-pickle"
     },
     "gestor-repo": {
-      "model": "opencode/nemotron-3-lightning-free",
+      "model": "opencode/nemotron-3.5-lightning-free",
       "tools": {
         "github_*": true
       }
