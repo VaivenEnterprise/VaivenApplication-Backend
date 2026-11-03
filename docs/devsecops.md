@@ -4,8 +4,8 @@ Solicitud del responsable: integrar CI, seguridad y validacion de ramas y PRs en
 
 ## Ramas y revisores
 
-- Cambios en tipo/descripcion (feat, fix, chore, ci, docs, refactor, test, perf, security o release) hacia develop.
-- Publicaciones de develop hacia main; urgencias en hotfix/descripcion hacia main y despues sincronizacion de main hacia develop.
+- Cambios en tipo/SCRUM-01-SPEC-01-T001 (feat, feature, fix, bugfix, hotfix, chore, ci, docs, refactor, test, perf, security, release, build o revert) hacia develop.
+- Publicaciones de develop hacia main; urgencias en hotfix/SCRUM-01-SPEC-01-T001 hacia main y despues sincronizacion de main hacia develop.
 - Titulos Conventional Commits; completar Resumen, Validación y Seguridad en el PR.
 - Revisores solicitados: @JesusTrz y @JosephYanez27. JesusTrz tiene escritura; JosephYanez27 solo lectura al preparar esta configuracion y su aprobacion aun no cuenta como obligatoria. Un administrador debe concederle escritura antes de agregarlo a CODEOWNERS.
 - Una aprobacion de un code owner distinto al autor, aprobacion del ultimo cambio, conversaciones resueltas y rama actualizada. Cambios nuevos invalidan aprobaciones anteriores.
@@ -37,3 +37,10 @@ Backend y landing conservan el despliegue por MCP a Render; movil conserva Expo 
 Para volver a una version anterior: PR de revert, mismos controles y despliegue por MCP del commit aprobado. No usar force push. No hay credenciales nuevas ni un workflow con acceso a produccion.
 
 CodeQL exporta SARIF y el workflow bloquea hallazgos con security-severity >= 7 o nivel error. No basta con que la carga de resultados termine correctamente.
+
+## Nombres de ramas con trazabilidad
+
+Formato obligatorio para ramas de trabajo: `tipo/SCRUM-NN-SPEC-NN-TNNN`. SCRUM y SPEC requieren al menos dos digitos; la tarea al menos tres; se admiten numeros mayores. Ejemplo: `chore/SCRUM-01-SPEC-01-T001`. No se permiten sufijos ni segmentos adicionales. La validacion comprueba el formato, no la existencia del ticket en Jira.
+
+Se conservan las promociones develop -> main, la sincronizacion main -> develop y las ramas automaticas dependabot/* solo para PRs del bot autentico hacia develop. La regla se ejecuta en Policy; para bloquear la fusion se debe exigir Required checks en la proteccion de ramas. No impide crear una rama en GitHub.
+

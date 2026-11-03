@@ -5,13 +5,13 @@ import {pathToFileURL} from 'node:url';
 export function validatePR(pr) {
   const errors = [];
   const head = pr.head.ref, base = pr.base.ref;
-  const branch = /^(feat|feature|fix|bugfix|hotfix|chore|ci|docs|refactor|test|perf|security|release)\/[a-z0-9]+(?:[._/-][a-z0-9]+)*$/;
+  const branch = /^(feat|feature|fix|bugfix|hotfix|chore|ci|docs|refactor|test|perf|security|release|build|revert)\/SCRUM-\d{2,}-SPEC-\d{2,}-T\d{3,}$/;
   if (!['main','develop'].includes(base)) errors.push('El destino debe ser develop o main.');
   const bot = pr.user?.login === 'dependabot[bot]' && head.startsWith('dependabot/');
-  if (base === 'main' && head !== 'develop' && !/^hotfix\/[a-z0-9]+(?:[._/-][a-z0-9]+)*$/.test(head))
-    errors.push('main solo recibe PRs de develop o hotfix/<descripcion>.');
+  if (base === 'main' && head !== 'develop' && !(head.startsWith('hotfix/') && branch.test(head)))
+    errors.push('main solo recibe develop o hotfix/SCRUM-01-SPEC-01-T001.');
   if (base === 'develop' && head !== 'main' && !branch.test(head) && !bot)
-    errors.push('Usa tipo/descripcion-en-minusculas para la rama.');
+    errors.push('Usa tipo/SCRUM-01-SPEC-01-T001: tipo en minusculas, SCRUM/SPEC/T en mayusculas y todos los numeros.');
   if (!/^(feat|fix|chore|ci|docs|refactor|test|perf|security|build|revert)(\([a-zA-Z0-9._/-]+\))?!?: \S.+$/.test(pr.title))
     errors.push('El titulo debe seguir Conventional Commits, por ejemplo ci: validar PRs.');
   if (!bot) for (const heading of ['Resumen','Validación','Seguridad']) {
@@ -41,3 +41,4 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (errors.length) { errors.forEach(e => console.error(e)); process.exitCode = 1; }
   else console.log('Politicas de archivos, ramas y PR: OK');
 }
+
