@@ -103,6 +103,19 @@ usermod -aG docker deploy 2>/dev/null || true
 # -----------------------------------------------------------------------------
 mkdir -p -m 700 /opt/vaiven/secrets
 
+# keyFile de MongoDB (lo monta deploy/base/docker-compose.yml). Debe existir ANTES
+# del primer `docker compose up`: si falta, Docker crea una carpeta con ese nombre
+# y mongod se niega a arrancar. El contenido nunca se imprime.
+KEYFILE=/opt/vaiven/secrets/mongo-keyfile
+if [ -d "$KEYFILE" ]; then
+    rmdir "$KEYFILE"   # carpeta vacía dejada por Docker; rmdir falla si no está vacía
+fi
+if [ ! -f "$KEYFILE" ]; then
+    (umask 077; openssl rand -base64 756 > "$KEYFILE")
+fi
+chown 999:999 "$KEYFILE"   # uid/gid de mongodb en la imagen oficial mongo:7
+chmod 400 "$KEYFILE"
+
 # -----------------------------------------------------------------------------
 # 6. Actualizaciones de seguridad automáticas -----------------------------------
 # -----------------------------------------------------------------------------
@@ -142,4 +155,5 @@ echo "Disk /: $(df -h / 2>/dev/null || echo 'N/A')"
 echo "Usuario deploy: $(id deploy 2>/dev/null || echo 'N/A')"
 echo "Directorio /opt/vaiven: $(ls -ld /opt/vaiven 2>/dev/null || echo 'N/A')"
 echo "Directorio /opt/vaiven/secrets: $(ls -ld /opt/vaiven/secrets 2>/dev/null || echo 'N/A')"
+echo "keyFile de MongoDB: $(stat -c '%F %u:%g %a' "$KEYFILE" 2>/dev/null || echo 'N/A')"
 echo "========================================="
