@@ -1,0 +1,111 @@
+# =============================================================================
+# deploy/base/docker-compose.yml — Stack base: MongoDB + Redis (sin puertos)
+# Para VM Azure de ~1 GiB RAM + 2 GiB swap. Límites conservadores para dejar
+# espacio al contenedor de la API (spec 002).
+# =============================================================================
+
+# Red interna de Compose. Cada servicio la referencia por name.
+# Cómo se arranca (en la VM, con el .env real):
+#   docker compose --env-file /opt/vaiven/.env -f deploy/base/docker-compose.yml up -d
+# Se inicializa el replica set una sola vez (T006), dentro del contenedor y autenticado como root:
+#   docker compose --env-file /opt/vaiven/.env -f deploy/base/docker-compose.yml exec mongo mongosh -u root -p --authenticationDatabase admin --eval 'rs.initiate({_id:"rs0",members:[{_id:0,host:"mongo:27017"}]})'
+# -p sin valor pide la contraseña por teclado (no queda en historial); se usa "mongo:27017" y no "localhost" porque la API se conecta por la red de Compose.
+networks:
+  vaiven-net:
+    driver: bridge
+
+services:
+
+  # -------------------------------------------------------------------------
+  # MongoDB — replica set un nodo con autenticación vía keyFile
+  # -------------------------------------------------------------------------
+  mongo:
+    image: mongo:7
+    # Nombre de usuario y contraseña raíz tomados del .env de la VM.
+    # El password se lee de la variable MONGO_ROOT_PASSWORD (únicamente en la VM,
+    # permisos 600). Si no está definida, el contenedor falla al arrancar.
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?falta MONGO_ROOT_PASSWORD}
+    # keyFile montado solo‑lectura desde la VM. Nunca se incluye en el repo.
+    # Generar en la VM:
+    #   $ openssl rand -base64 756 > /opt/vaiven/secrets/mongo-keyfile
+    #   $ chmod 400 /opt/vaiven/secrets/mongo-keyfile
+    #   $ chown 999:999 /opt/vaiven/secrets/mongo-keyfile
+    volumes:
+      - /opt/vaiven/secrets/mongo-keyfile:/etc/mongo/keyfile:ro
+      - vaiven-mongo-data:/data/db
+    # Límites de memoria / CPU para VM de ~1 GiB + 2 GiB swap:
+    #   - 400 MiB de RAM máximo para el contenedor MongoDB.
+    #   - 0.5 CPU cores.
+    #   - deja ~600 MiB + swap para Redis y la API Go.
+    deploy:
+      resources:
+        limits:
+          memory: 400M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+    # Healthcheck: mongo está vivo (usando mongosh --quiet).
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Sin `ports:` — Mongo nunca publica puertos (Art. XIV).
+    # Comando de arranque con keyFile y parámetros solicitados.
+    # Se incluye 'mongod' como primer elemento al sustituir el CMD por defecto de la imagen.
+    command:
+      - mongod
+      - --replSet
+      - rs0
+      - --bind_ip_all
+      - --keyFile
+      - /etc/mongo/keyfile
+      - --wiredTigerCacheSizeGB
+      - "0.25"
+    # Red interna de Compose
+    networks:
+      - vaiven-net
+
+  # -------------------------------------------------------------------------
+  # Redis 7 — límite de memoria + política allkeys-lru
+  # -------------------------------------------------------------------------
+  redis:
+    image: redis:7
+    # Contraseña desde .env: REDIS_PASSWORD. No se escribe en claro en YAML.
+    # Usamos un comando wrapper para enmascarar la contraseña (patrón $$ para shell).
+    command:
+      - sh
+      - -c
+      - exec redis-server --requirepass "$$REDIS_PASSWORD" --maxmemory 128mb --maxmemory-policy allkeys-lru
+    # Política de memoria: allkeys-lru (elimina claves menos recientes cuando
+    # se alcanza el límite) para no rechazar peticiones por falta de memoria.
+    # El límite del contenedor (192M) es mayor que maxmemory (128mb) para
+    # dejar margen de maniobra al sistema operativo.
+    env_file:
+      - /opt/vaiven/.env
+    # Healthcheck: redis responde PONG (autenticado con la contraseña).
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Sin `ports:` — Redis nunca publica puertos (Art. XIV).
+    # Red interna de Compose
+    networks:
+      - vaiven-net
+    deploy:
+      resources:
+        limits:
+          memory: 192M
+          cpus: '0.3'
+        reservations:
+          memory: 128M
+
+# Volúmenes nombrados (fuera de los servicios, al nivel top-level)
+volumes:
+  vaiven-mongo-data:
+    # Driver: local, tamaño conservador para la VM gratuita
+    # Se crea automáticamente al primer `docker compose up -d`
+    driver: local

@@ -119,3 +119,5 @@ _(Los agentes agregan aquí hallazgos útiles y breves, uno por línea, con fech
 - [BE-B] 2026-11-02 — Modelos de opencode.json actualizados porque los anteriores ya no existen en Zen: nemotron-3-ultra-free → nemotron-3.5-super-vl-free (plan, spec-writer, modelador-mongo, devops-mcp); nemotron-3-lightning-free → nemotron-3.5-lightning-free (build, dev-go, gestor-repo); ling-flash-free → glm-5.3-flash-free (qa-go, small_model). Verificado con `opencode models`.
 
 - [BE-B] 2026-11-02 — 001/T001: CA-02 verificado (dev-go sin acceso a azure_* y su intento con `az` rechazado; devops-mcp ejecutó azure_subscription_list por MCP). T001 cerrada. Aprendizaje: con nemotron-3.5-super-vl-free, devops-mcp probó herramientas IoT irrelevantes en bucle (rechazadas); antes de crear recursos (T004) dar nombres exactos de herramientas y revisar el modelo de devops-mcp.
+
+- [BE-B] 2026-11-03 — 001/T003: archivos creados (bootstrap.sh, docker-compose.yml, tls.md), keyFile generado en la VM (uid 999, /opt/vaiven/secrets/mongo-keyfile) y límites: mongo 400 MiB con caché WiredTiger 0.25 GB, redis 128 MiB dentro de 192 MiB.
