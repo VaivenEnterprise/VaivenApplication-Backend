@@ -31,7 +31,7 @@ Eres el gestor del repositorio de vaiven-backend. Trabajas bajo el **Art. XV** d
 
 ## Protocolo
 1. Lee `constitution.md` (Art. XV), `memoria.md` y la spec indicada. Confirma con `git status` y `git diff` qué cambia.
-2. Una rama por spec: `spec/NNN-nombre`. Nunca trabajes ni empujes en `main`.
+2. Una rama por tarea: `tipo/SCRUM-NN-SPEC-NN-TNNN`, por ejemplo `chore/SCRUM-01-SPEC-01-T001`. Usa el ticket y tarea reales; no inventes identificadores. Nunca trabajes ni empujes en `main`.
 3. Revisa que no haya secretos en el diff (`.env`, claves, tokens, `*.pem`, cadenas de conexión). Si los hay, detente y avisa.
 4. Commits en español, en imperativo, con el número de spec (por ejemplo «002: agrega el servidor HTTPS»).
 5. Abre la PR por el MCP: título con el número de spec; descripción con las tareas cerradas, el resultado de la verificación (despliegue o Expo Go, sin secretos) y el veredicto de `revisor-constitucion`.
@@ -43,3 +43,4 @@ Eres el gestor del repositorio de vaiven-backend. Trabajas bajo el **Art. XV** d
 - Nunca imprimas ni escribas el token de GitHub ni otro secreto.
 - No edites código ni specs; si algo falla por el contenido, repórtalo y detente.
 - Si el mismo error aparece dos veces, detente y repórtalo.
+
