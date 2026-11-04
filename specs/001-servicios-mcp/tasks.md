@@ -46,6 +46,7 @@
   - Aceptación: `certbot --standalone` emite el certificado para el nombre DNS de la IP (puerto 80 abierto); `certbot renew --dry-run` termina bien y el temporizador de renovación está activo; una prueba temporal (`openssl s_server` en el puerto 8443, que luego se detiene) se valida desde fuera con `curl` sin `-k` y con `openssl s_client` (CA-05); las rutas de los archivos quedan anotadas para el Compose de la spec 002; la clave privada nunca se imprime
   - Refs: RF-05 · P-06 · Art. XIV.4
   - **Pendiente (2026-11-04):** todo cumplido salvo `certbot renew --dry-run`, que falla porque el entorno de pruebas de Let's Encrypt (`acme-staging-v02`) está en mantenimiento programado (letsencrypt.status.io). Cerrar en cuanto vuelva: `sudo certbot renew --dry-run` en la VM
+  - **Requisitos de la renovación verificados (2026-11-04, solo lectura):** `renewal/<DNS>.conf` con `authenticator = standalone` y servidor de producción; `certbot.timer` activo y habilitado (próxima ejecución 2026-11-04 11:48 UTC); puerto 80 libre en la VM y abierto en el NSG; la VM llega al servidor de producción de Let's Encrypt (200) y no al de pruebas (000). Alternativa al dry-run, si el equipo la aprueba: `sudo certbot renew --cert-name <DNS> --force-renewal` (renovación real contra producción; 2.º certificado de los 5 por semana permitidos)
 
 - [x] **T008** `docs/servicios.md` y `.env.example`
   - Archivos: `docs/servicios.md`, `.env.example`
