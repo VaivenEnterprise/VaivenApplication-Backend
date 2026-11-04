@@ -21,6 +21,8 @@ services:
   # -------------------------------------------------------------------------
   mongo:
     image: mongo:7
+    # Reinicio automático si el proceso cae o la VM se reinicia (Art. XIV).
+    restart: unless-stopped
     # Nombre de usuario y contraseña raíz tomados del .env de la VM.
     # El password se lee de la variable MONGO_ROOT_PASSWORD (únicamente en la VM,
     # permisos 600). Si no está definida, el contenedor falla al arrancar.
@@ -73,6 +75,7 @@ services:
   # -------------------------------------------------------------------------
   redis:
     image: redis:7
+    restart: unless-stopped
     # Contraseña desde .env: REDIS_PASSWORD. No se escribe en claro en YAML.
     # Usamos un comando wrapper para enmascarar la contraseña (patrón $$ para shell).
     command:

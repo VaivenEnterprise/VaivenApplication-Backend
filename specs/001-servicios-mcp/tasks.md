@@ -34,7 +34,7 @@
   - Aceptación: `deploy/bootstrap.sh` copiado y ejecutado por SSH; luego `docker --version`, `docker compose version`, swap de 2 GB activo, memoria y disco libres anotados; desde fuera, los puertos 27017 y 6379 no responden (CA-03)
   - Refs: RF-03
 
-- [ ] **T006** Levantar MongoDB y Redis del stack base
+- [x] **T006** Levantar MongoDB y Redis del stack base
   - Archivos: `memoria.md` (solo anexar)
   - Agente: `devops-mcp` · Depende de: T005
   - Aceptación: se anota el consumo de memoria de Mongo y Redis (`docker stats`) y los créditos de CPU de la VM; `.env` de la VM generado en la propia VM con contraseñas fuertes (permisos 600, nunca en el repo ni en la conversación); `rs.status()` con el nodo en `PRIMARY`; usuario de aplicación con permisos solo sobre la base `vaiven_staging`; `redis-cli ping` = `PONG` autenticado (CA-04)
