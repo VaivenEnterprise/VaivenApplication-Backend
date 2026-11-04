@@ -73,14 +73,17 @@ Una vez emitido el certificado, se verifica que la API sirva HTTPS correctamente
 ### a) Servidor temporal en el puerto 8443 (staging)
 
 ```bash
-# En la VM, un openssl s_server temporal (se detiene después)
-sudo openssl s_server -accept 8443 \
-  -cert /etc/letsencrypt/live/$AZURE_HOST/fullchain.pem \
-  -key  /etc/letsencrypt/live/$AZURE_HOST/privkey.pem \
-  -www &
+# En la VM, un openssl s_server temporal que se detiene solo a los 60 s
+sudo setsid nohup timeout 60 openssl s_server -quiet -accept 8443 \
+  -cert       /etc/letsencrypt/live/$AZURE_HOST/cert.pem \
+  -cert_chain /etc/letsencrypt/live/$AZURE_HOST/chain.pem \
+  -key        /etc/letsencrypt/live/$AZURE_HOST/privkey.pem \
+  -www </dev/null >/dev/null 2>&1 &
 ```
 
 El servidor temporal responde una página de estado de OpenSSL. Necesita `sudo` porque `privkey.pem` solo lo puede leer root.
+
+> **Ojo:** `s_server -cert fullchain.pem` solo envía el **primer** certificado del archivo, sin la intermedia; `openssl s_client` da entonces `Verify return code: 21`, aunque `curl` en Windows pase (descarga la intermedia por su cuenta). Por eso la prueba usa `cert.pem` + `-cert_chain chain.pem`. La API en Go sí envía la cadena completa al cargar `fullchain.pem`. `setsid nohup … </dev/null` evita que la sesión SSH quede abierta mientras corre.
 
 La validación desde otra máquina:
 
