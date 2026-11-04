@@ -9,6 +9,13 @@
 *.pfx
 *.jks
 *.keystore
+# Llaves SSH privadas sin extensión (las públicas .pub sí pueden versionarse)
+id_rsa
+id_ecdsa
+id_ed25519
+vaiven_azure
+# Notas locales de Obsidian
+.obsidian/
 .aws/
 secrets.local/
 credentials.json
