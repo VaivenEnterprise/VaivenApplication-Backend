@@ -5,7 +5,7 @@ Solicitud del responsable: integrar CI, seguridad y validacion de ramas y PRs en
 ## Ramas y revisores
 
 - Cambios en tipo/SCRUM-01-SPEC-01-T001 (feat, feature, fix, bugfix, hotfix, chore, ci, docs, refactor, test, perf, security, release, build o revert) hacia develop.
-- Publicaciones de develop hacia main; urgencias en hotfix/SCRUM-01-SPEC-01-T001 hacia main y despues sincronizacion de main hacia develop.
+- Publicaciones de develop hacia main, directas o mediante una rama intermedia release/SCRUM-01-SPEC-01-T001 creada desde develop; urgencias en hotfix/SCRUM-01-SPEC-01-T001 hacia main. Despues de un release o hotfix, sincronizacion de main hacia develop.
 - Titulos Conventional Commits; completar Resumen, Validación y Seguridad en el PR.
 - Revisores solicitados: @JesusTrz y @JosephYanez27. JesusTrz tiene escritura; JosephYanez27 solo lectura al preparar esta configuracion y su aprobacion aun no cuenta como obligatoria. Un administrador debe concederle escritura antes de agregarlo a CODEOWNERS.
 - Una aprobacion de un code owner distinto al autor, aprobacion del ultimo cambio, conversaciones resueltas y rama actualizada. Cambios nuevos invalidan aprobaciones anteriores.

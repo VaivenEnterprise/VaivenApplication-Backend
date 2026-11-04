@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import {validatePR,validateFiles} from './policy.mjs';
 const pr = (head='ci/SCRUM-01-SPEC-017-T001', base='develop') => ({head:{ref:head},base:{ref:base},title:'ci: configurar validaciones',body:'## Resumen\nAgrega controles de CI.\n## Validación\nPruebas de politicas correctas.\n## Seguridad\nSin secretos ni permisos nuevos.',user:{login:'developer'}});
 test('acepta contribuciones, promociones y sincronizacion', () => {
-  for (const [head,base] of [['feat/SCRUM-01-SPEC-01-T001','develop'],['develop','main'],['hotfix/SCRUM-01-SPEC-01-T001','main'],['main','develop']]) assert.deepEqual(validatePR(pr(head,base)),[]);
+  for (const [head,base] of [['feat/SCRUM-01-SPEC-01-T001','develop'],['develop','main'],['hotfix/SCRUM-01-SPEC-01-T001','main'],['release/SCRUM-01-SPEC-01-T011','main'],['main','develop']]) assert.deepEqual(validatePR(pr(head,base)),[]);
 });
 test('bloquea saltarse develop y nombres no conformes', () => {
-  for (const [head,base] of [['feat/SCRUM-01-SPEC-01-T001','main'],['hotfix/INVALID','main'],['arbitrary','develop'],['feat/login','other']]) assert.ok(validatePR(pr(head,base)).length);
+  for (const [head,base] of [['feat/SCRUM-01-SPEC-01-T001','main'],['hotfix/INVALID','main'],['release/v1','main'],['release/SCRUM-01-SPEC-01','main'],['arbitrary','develop'],['feat/login','other']]) assert.ok(validatePR(pr(head,base)).length);
 });
 test('no ejecuta titulos y exige evidencia escrita', () => {
   const item=pr(); item.title='$(touch injected)'; assert.ok(validatePR(item).length);
