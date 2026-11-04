@@ -66,6 +66,7 @@
   - Aceptación: veredicto **CONFORME**; búsqueda de cadenas sospechosas sin hallazgos (CA-07); hito H0 (infraestructura) marcado
   - Refs: DoD
   - **Revisión del 2026-11-04: NO CONFORME (pendientes, sin hallazgos de seguridad).** CA-07 sin hallazgos (solo la suma SHA-256 pública de gitleaks en la CI); ningún archivo sensible versionado; Mongo y Redis sin puertos publicados; secretos solo en la VM; presupuesto `vaiven-5usd` creado. Bloquean el CONFORME: el dry-run de T007, el token de T009 y que el equipo acepte las desviaciones de los Art. X y XIII.4 (T005–T008 hechas con Claude Code porque OpenCode agotó su cupo gratuito). Hito H0 sin marcar
+  - **Correcciones de la revisión (2026-11-04):** `az`, `ssh` y `scp` en deny para dev-go, modelador-mongo y qa-go (Art. XIII.4); `deploy/base/init-env.sh` y el procedimiento «Reconstruir desde cero» en `docs/servicios.md` (antes, el `.env` de la VM y su enlace no estaban en el repositorio); VM comprobada igual a `develop` (mismo compose, contenedores healthy, keyFile 400, certbot.timer activo). Propuesta de enmienda 1.6.0 en `docs/enmienda-1.6.0-propuesta.md` para las contradicciones de los Art. VII.4, XV.2 y XV.7, pendiente de aprobación
 
 | Total | 10 tareas |
 |---|---|
