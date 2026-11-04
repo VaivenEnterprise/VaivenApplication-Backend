@@ -46,7 +46,7 @@
   - Aceptación: `certbot --standalone` emite el certificado para el nombre DNS de la IP (puerto 80 abierto); `certbot renew --dry-run` termina bien y el temporizador de renovación está activo; una prueba temporal (`openssl s_server` en el puerto 8443, que luego se detiene) se valida desde fuera con `curl` sin `-k` y con `openssl s_client` (CA-05); las rutas de los archivos quedan anotadas para el Compose de la spec 002; la clave privada nunca se imprime
   - Refs: RF-05 · P-06 · Art. XIV.4
 
-- [ ] **T008** `docs/servicios.md` y `.env.example`
+- [x] **T008** `docs/servicios.md` y `.env.example`
   - Archivos: `docs/servicios.md`, `.env.example`
   - Agente: `spec-writer` · Depende de: T002, T007
   - Aceptación: lista de servicios, región, talla, variables (sin valores reales), cómo se obtuvo y rota cada credencial, cómo recuperar el acceso SSH y riesgos conocidos (memoria justa, crédito de 30 días, secretos y contexto del modelo)
