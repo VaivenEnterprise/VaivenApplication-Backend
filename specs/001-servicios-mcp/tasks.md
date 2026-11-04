@@ -58,7 +58,7 @@
   - Agente: — (la persona crea el repositorio, protege `main` y crea el token) + `gestor-repo` · Depende de: T001
   - Aceptación: repositorio `vaiven-backend` creado en GitHub con `main` protegida (PR obligatoria, sin push directo ni force-push); `GITHUB_PERSONAL_ACCESS_TOKEN` (permisos mínimos, limitado a este repositorio) definido como variable del sistema y OpenCode reiniciado; `opencode mcp list` muestra `github` conectado; un agente de desarrollo rechaza una herramienta de GitHub y `gestor-repo` la ejecuta; `.gitignore` excluye `.env`, `*.pem` y claves; `gestor-repo` abre una PR de prueba sin secretos y una persona la revisa y la fusiona
   - Refs: Art. XV
-  - **Pendiente (2026-11-04):** cumplido el repositorio con `main` y `develop` protegidas y el `.gitignore`. Falta la parte humana: crear `GITHUB_PERSONAL_ACCESS_TOKEN` (fine-grained, solo este repositorio, Contents y Pull requests en lectura/escritura) con `setx`, reiniciar OpenCode y después probar `github` en `opencode mcp list`, el rechazo de `dev-go` y la PR de prueba de `gestor-repo`
+  - **Avance (2026-11-04):** `main` y `develop` protegidas; `.gitignore` cumple; `GITHUB_PERSONAL_ACCESS_TOKEN` creado (fine-grained) y `opencode mcp list` muestra `github` connected; en `opencode.json` solo `gestor-repo` tiene `github_*` (global: tools false y permission deny). **Falta:** (1) limitar el token solo a este repositorio (hoy ve también Landing-Page y Mobile; Art. XV.6); (2) ejecutar con OpenCode el rechazo de `dev-go` y la PR de prueba de `gestor-repo`, bloqueados porque la cuenta de OpenCode agotó el cupo gratuito de todos los modelos
 
 - [ ] **T010** Revisión de conformidad
   - Archivos: ninguno (solo informe)
