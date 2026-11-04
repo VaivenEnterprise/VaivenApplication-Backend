@@ -27,7 +27,7 @@ Son los únicos pasos manuales; todo lo demás lo hace `devops-mcp` desde OpenCo
 5. Aprobar las acciones que OpenCode pida.
 
 Pasos manuales adicionales, justificados:
-- Crear el **presupuesto de 5 USD** en el portal (Cost Management → Budgets, avisos al 80 % y al 100 %), porque `az consumption budget` falla (API obsoleta). Pendiente.
+- Presupuesto **`vaiven-5usd`** (5 USD al mes, avisos al 80 % y al 100 % al rol Propietario): creado el 2026-11-04 con `az rest` contra `Microsoft.Consumption/budgets` (api-version 2023-05-01), porque `az consumption budget` falla (API obsoleta). No hizo falta el portal.
 - Crear el token `GITHUB_PERSONAL_ACCESS_TOKEN` para el MCP de GitHub (T009, Art. XV.6).
 
 ## 3. Variables y credenciales
