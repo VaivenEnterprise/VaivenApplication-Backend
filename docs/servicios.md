@@ -27,7 +27,7 @@ Son los únicos pasos manuales; todo lo demás lo hace `devops-mcp` desde OpenCo
 5. Aprobar las acciones que OpenCode pida.
 
 Pasos manuales adicionales, justificados:
-- Crear el **presupuesto de 5 USD** en el portal (Cost Management → Budgets, avisos al 80 % y al 100 %), porque `az consumption budget` falla (API obsoleta). Pendiente.
+- Presupuesto **`vaiven-5usd`** (5 USD al mes, avisos al 80 % y al 100 % al rol Propietario): creado el 2026-11-04 con `az rest` contra `Microsoft.Consumption/budgets` (api-version 2023-05-01), porque `az consumption budget` falla (API obsoleta). No hizo falta el portal.
 - Crear el token `GITHUB_PERSONAL_ACCESS_TOKEN` para el MCP de GitHub (T009, Art. XV.6).
 
 ## 3. Variables y credenciales
@@ -48,8 +48,25 @@ Las contraseñas se pasan a los comandos como variables de entorno dentro de la 
 
 - **Llave perdida:** generar una nueva con `ssh-keygen -t rsa -b 4096 -f ~/.ssh/vaiven_azure` y cargarla con `az vm user update -g rg-vaiven -n vm-vaiven -u azureuser --ssh-key-value ~/.ssh/vaiven_azure.pub`.
 - **IP de la administradora cambiada:** obtener la IP con `curl -s https://api.ipify.org` y actualizar la regla del puerto 22 con `az network nsg rule update -g rg-vaiven --nsg-name vm-vaivenNSG -n Allow-SSH-Admin --source-address-prefixes <IP>/32` (con aprobación). Nunca abrir el 22 a Internet.
+- **Comprobar sin SSH:** `az vm run-command invoke -g rg-vaiven -n vm-vaiven --command-id RunShellScript --scripts @script.sh` ejecuta un script como root por la API de Azure, sin abrir el NSG. Útil cuando la IP cambia seguido. Pasa el script como archivo (`@`): en Windows, los `|` escritos en línea los interpreta la terminal local.
 
-## 5. Riesgos conocidos
+## 5. Reconstruir el stack base desde cero
+
+Orden para una VM nueva (o para comprobar que el repositorio basta). Todo en la VM; ningún valor secreto se imprime.
+
+1. `sudo bash deploy/bootstrap.sh` — Docker, Compose, certbot, swap, usuario `deploy`, `/opt/vaiven` y el keyFile de MongoDB. Idempotente.
+2. `sudo bash deploy/base/init-env.sh` — crea `/opt/vaiven/base/.env` (600) con contraseñas aleatorias y el enlace `/opt/vaiven/.env` que lee redis. No sobrescribe un `.env` existente.
+3. Copiar `deploy/base/docker-compose.yml` a `/opt/vaiven/base/` y ejecutar `cd /opt/vaiven/base && sudo docker compose up -d`; esperar a que mongo y redis estén *healthy*.
+4. Replica set (una vez): cargar las variables con `set -a; . ./.env; set +a` y ejecutar
+   `docker compose exec -T -e MP="$MONGO_ROOT_PASSWORD" mongo mongosh --quiet --norc --eval 'db.getSiblingDB("admin").auth("root", process.env.MP); rs.initiate({_id:"rs0",members:[{_id:0,host:"mongo:27017"}]})' </dev/null`.
+5. Usuario de aplicación: en la misma sesión,
+   `docker compose exec -T -e MP="$MONGO_ROOT_PASSWORD" -e AP="$MONGO_APP_PASSWORD" mongo mongosh --quiet --norc --eval 'db.getSiblingDB("admin").auth("root", process.env.MP); db.getSiblingDB("vaiven_staging").createUser({user:"vaiven_app", pwd: process.env.AP, roles:[{role:"readWrite", db:"vaiven_staging"}]})' </dev/null`.
+6. Certificado: seguir `deploy/base/tls.md` (`certbot certonly --standalone`).
+7. Comprobar: `rs.status()` en PRIMARY, `redis-cli -a "$REDIS_PASSWORD" ping` = PONG y los puertos 27017 y 6379 cerrados desde fuera.
+
+Las contraseñas se pasan por variables de entorno (`process.env`), no en la línea de comandos. `</dev/null` evita que `docker compose exec -T` consuma la entrada de un script.
+
+## 6. Riesgos conocidos
 
 | Riesgo | Mitigación |
 |---|---|
