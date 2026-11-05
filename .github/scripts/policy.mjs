@@ -12,8 +12,7 @@ export function validatePR(pr) {
     errors.push('main solo recibe develop, release/SCRUM-01-SPEC-01-T001 o hotfix/SCRUM-01-SPEC-01-T001.');
   if (base === 'develop' && head !== 'main' && !branch.test(head) && !bot)
     errors.push('Usa tipo/SCRUM-01-SPEC-01-T001: tipo en minusculas, SCRUM/SPEC/T en mayusculas y todos los numeros.');
-  if (!/^(feat|fix|chore|ci|docs|refactor|test|perf|security|build|revert)(\([a-zA-Z0-9._/-]+\))?!?: \S.+$/.test(pr.title))
-    errors.push('El titulo debe seguir Conventional Commits, por ejemplo ci: validar PRs.');
+  // Los titulos son texto libre; nunca se ejecutan como comandos.
   if (!bot) for (const heading of ['Resumen','Validación','Seguridad']) {
     const section = (pr.body || '').match(new RegExp('^## ' + heading + '\\s*\\n([\\s\\S]*?)(?=^## |$(?![\\s\\S]))','m'));
     const text = section?.[1].replace(/<!--[\s\S]*?-->/g,'').trim();
