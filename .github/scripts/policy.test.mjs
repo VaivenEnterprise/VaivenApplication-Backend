@@ -8,9 +8,12 @@ test('acepta contribuciones, promociones y sincronizacion', () => {
 test('bloquea saltarse develop y nombres no conformes', () => {
   for (const [head,base] of [['feat/SCRUM-01-SPEC-01-T001','main'],['hotfix/INVALID','main'],['release/v1','main'],['release/SCRUM-01-SPEC-01','main'],['arbitrary','develop'],['feat/login','other']]) assert.ok(validatePR(pr(head,base)).length);
 });
-test('no ejecuta titulos y exige evidencia escrita', () => {
-  const item=pr(); item.title='$(touch injected)'; assert.ok(validatePR(item).length);
-  item.title='fix: validar sesion'; item.body='## Resumen\n<!-- pendiente -->\n## Validación\n\n## Seguridad\n'; assert.ok(validatePR(item).length);
+test('acepta titulos libres y conserva las validaciones de rama y evidencia', () => {
+  for (const title of ['MCP Cloudinary', 'Inicializar módulo Go — tarea 1', 'feature(SPEC-02): estructura', '$(touch injected)']) {
+    const item=pr(); item.title=title; assert.deepEqual(validatePR(item),[]);
+    item.head.ref='rama-invalida'; assert.ok(validatePR(item).length);
+  }
+  const item=pr(); item.title='MCP Cloudinary'; item.body='## Resumen\n<!-- pendiente -->\n## Validación\n\n## Seguridad\n'; assert.ok(validatePR(item).length);
 });
 test('excepcion Dependabot requiere su identidad y destino seguro', () => {
   const item=pr('dependabot/npm_and_yarn/dep-1'); item.user.login='dependabot[bot]'; item.body=''; assert.deepEqual(validatePR(item),[]);
