@@ -29,7 +29,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
-      - run: node --test .github/scripts/policy.test.mjs
+      - run: node --test .github/scripts/policy.test.mjs .github/scripts/project.test.mjs
       - run: node .github/scripts/policy.mjs
 
   quality:
@@ -38,6 +38,7 @@ jobs:
     timeout-minutes: 20
     outputs:
       ready: ${{ steps.project.outputs.ready }}
+      mode: ${{ steps.project.outputs.mode }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -45,13 +46,22 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
-      - id: project
-        run: node .github/scripts/project.mjs Backend
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        if: steps.project.outputs.ready == 'true'
+        if: hashFiles('go.mod') != ''
         with:
           go-version-file: go.mod
           cache: false
+      - id: project
+        run: node .github/scripts/project.mjs Backend
+      - name: Validate Go module without code
+        if: steps.project.outputs.mode == 'module'
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod download
+          go mod verify
+          go mod tidy -diff
+          echo 'Modulo Go validado: go mod download, verify y tidy -diff sin cambios (go.sum no es obligatorio sin dependencias).' | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Format, vet, tests, integration and build
         if: steps.project.outputs.ready == 'true'
         shell: bash
@@ -143,14 +153,24 @@ jobs:
           SECRETS: ${{ needs.secrets.result }}
           SAST: ${{ needs.sast.result }}
           READY: ${{ needs.quality.outputs.ready }}
+          MODE: ${{ needs.quality.outputs.mode }}
         shell: bash
         run: |
           set -euo pipefail
           test "$POLICY" = success
           test "$QUALITY" = success
           test "$SECRETS" = success
-          if [ "$READY" = true ]; then
-            test "$SAST" = success
-          else
-            test "$SAST" = skipped
-          fi
+          case "$MODE" in
+            full)
+              test "$READY" = true
+              test "$SAST" = success
+              ;;
+            module|docs)
+              test "$READY" = false
+              test "$SAST" = skipped
+              ;;
+            *)
+              echo "Modo de Quality no reconocido: '$MODE'" >&2
+              exit 1
+              ;;
+          esac
