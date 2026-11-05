@@ -17,7 +17,7 @@ docs/servicios.md
 ## 2. Decisiones
 | # | Decisión | Art. |
 |---|---|---|
-| P-01 | **Azure:** MCP local oficial `@azure/mcp` (`npx -y @azure/mcp@latest server start`), con la sesión de `az login`, **con escritura** y aprobación en cada llamada. Se usa primero (`compute_vm_create`, `compute_vm_get`…); la CLI `az` cubre lo que el MCP no (NSG, IP estática y DNS) y SSH lo que ocurre dentro de la VM | XIII.2 |
+| P-01 | **Azure:** MCP local oficial `@azure/mcp` (`npx -y @azure/mcp@3.0.0 server start`; versión fijada el 2026-11-05 porque `@latest` pasó a la beta 4.0.0 y consultar npm en cada arranque superaba el tiempo de espera de OpenCode), con la sesión de `az login`, **con escritura** y aprobación en cada llamada. Se usa primero (`compute_vm_create`, `compute_vm_get`…); la CLI `az` cubre lo que el MCP no (NSG, IP estática y DNS) y SSH lo que ocurre dentro de la VM | XIII.2 |
 | P-02 | **Cloudinary:** MCP locales oficiales `@cloudinary/asset-management-mcp` y `@cloudinary/environment-config-mcp`, con `CLOUDINARY_URL` | XIII |
 | P-03 | **VM única** de la capa gratuita con Docker Compose; red: 80 (solo certbot), 443 y 8443 (API) abiertos; SSH limitado a la IP de la administradora | XIII, XIV |
 | P-04 | **MongoDB** en contenedor como replica set `rs0` de un nodo (transacciones, Art. II.2), con autenticación y volumen con nombre; sin puerto publicado | II, VI |
