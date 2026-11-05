@@ -7,7 +7,7 @@
 
 ## Fase 0 — Preparación
 
-- [ ] **T001** Inicializar módulo y estructura de carpetas
+- [x] **T001** Inicializar módulo y estructura de carpetas
   - Archivos: `go.mod`, `.gitignore`, `.editorconfig`, carpetas vacías con `.gitkeep` según plan §2
   - Agente: `dev-go`
   - Depende de: —
