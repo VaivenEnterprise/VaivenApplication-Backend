@@ -14,7 +14,7 @@
   - Aceptación: `go mod tidy` sin error; `go build ./...` pasa (aún sin paquetes ejecutables); `.gitignore` excluye `.env`, `bin/`, `coverage.out`
   - Refs: plan §2 · Art. VI, VIII
 
-- [ ] **T002** [P] Makefile con objetivos estándar
+- [x] **T002** [P] Makefile con objetivos estándar
   - Archivos: `Makefile`
   - Agente: `dev-go`
   - Depende de: T001
