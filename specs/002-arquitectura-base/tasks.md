@@ -162,14 +162,14 @@
   - Aceptación: explica requisitos, cómo levantar MongoDB y la API, variables de entorno, comandos `make`, equivalentes sin `make` para Windows, y cómo ejecutar pruebas unitarias e integración; un compañero puede seguirlo sin ayuda (CA-01)
   - Refs: H-01
 
-- [ ] **T022** Actualizar memoria y verificar criterios de aceptación
+- [x] **T022** Actualizar memoria y verificar criterios de aceptación
   - Archivos: `memoria.md`
   - Agente: `spec-writer`
   - Depende de: T016, T017, T018, T020, T021
   - Aceptación: estado de la spec 002 actualizado; dependencias reales registradas; CA-01…CA-10 comprobados y anotados
   - Refs: Art. XI
 
-- [ ] **T023** Revisión de conformidad con la constitución
+- [x] **T023** Revisión de conformidad con la constitución
   - Archivos: ninguno (solo informe)
   - Agente: `revisor-constitucion`
   - Depende de: T022
