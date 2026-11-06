@@ -155,7 +155,7 @@
 
 ## Fase 4 — Cierre
 
-- [ ] **T021** README del backend
+- [x] **T021** README del backend
   - Archivos: `README.md`
   - Agente: `spec-writer`
   - Depende de: T015, T019
