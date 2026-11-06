@@ -65,7 +65,7 @@
   - Aceptación: `Connect(ctx, uri, timeout)` conecta y hace *ping*; `Ping(ctx)` con timeout de 2 s; URI inválida o sin servidor → error envuelto con `%w`; prueba unitaria de validación de parámetros (la de conexión real va en T015)
   - Refs: plan §4.5 · RF-03 · Art. II
 
-- [ ] **T009** Respuestas HTTP y mapeo de errores
+- [x] **T009** Respuestas HTTP y mapeo de errores
   - Archivos: `internal/adapter/http/respond/respond.go`, `internal/adapter/http/respond/respond_test.go`
   - Agente: `dev-go`
   - Depende de: T006
