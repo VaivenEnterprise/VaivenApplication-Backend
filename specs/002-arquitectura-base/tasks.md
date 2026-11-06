@@ -118,7 +118,7 @@
 
 ## Fase 3 — Calidad y contrato
 
-- [ ] **T016** Pruebas de integración con MongoDB real
+- [x] **T016** Pruebas de integración con MongoDB real
   - Archivos: `internal/platform/mongodb/client_integration_test.go`, `internal/adapter/mongo/indexes_integration_test.go`, `internal/adapter/http/readyz_integration_test.go` (todas con `//go:build integration`)
   - Agente: `qa-go`
   - Depende de: T008, T012, T014
