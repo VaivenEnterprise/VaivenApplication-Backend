@@ -83,3 +83,32 @@ test('SPEC y tarea conservan formato y limites aunque SCRUM sea opcional', () =>
   ]) assert.ok(validatePR(pr(head,base)).length,head+' -> '+base);
 });
 test('release sin SCRUM conserva promocion a main', () => { assert.deepEqual(validatePR(pr('release/SPEC-02-T001','main')),[]); });
+
+test('permite fases con SCRUM opcional hacia develop o su spec', () => {
+  for (const [head,base] of [
+    ['feat/SPEC-02-Fase-3','develop'],
+    ['feat/SPEC-02-Fase-3','spec/SPEC-02'],
+    ['docs/SCRUM-15-SPEC-002-Fase-12','spec/SPEC-02'],
+    ['fix/SPEC-02-Fase-0','spec/SCRUM-01-SPEC-02']
+  ]) assert.deepEqual(validatePR(pr(head,base)),[],head+' -> '+base);
+});
+test('fases conservan formato y no saltan la integracion', () => {
+  for (const [head,base] of [
+    ['feat/SPEC-02-fase-3','develop'],
+    ['feat/SPEC-2-Fase-3','develop'],
+    ['feat/SPEC-02-Fase-','develop'],
+    ['feat/SPEC-02-Fase-3-extra','develop'],
+    ['feat/SPEC-02-Fase-3-T001','develop'],
+    ['feat/SPEC-02-Fase-3','spec/SPEC-03'],
+    ['feat/SPEC-02-Fase-3','main'],
+    ['hotfix/SPEC-02-Fase-3','main'],
+    ['release/SPEC-02-Fase-3','main'],
+    ['spec/SPEC-02-Fase-3','develop'],
+    ['feat/SPEC-02-T001','feat/SPEC-02-Fase-3']
+  ]) assert.ok(validatePR(pr(head,base)).length,head+' -> '+base);
+});
+test('fases requieren evidencia y aceptan titulos libres', () => {
+  const item=pr('feat/SPEC-02-Fase-3'); item.title='Implementar tercera fase';
+  assert.deepEqual(validatePR(item),[]);
+  item.body=''; assert.ok(validatePR(item).length);
+});

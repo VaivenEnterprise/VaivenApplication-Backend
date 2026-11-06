@@ -112,3 +112,5 @@ Specs `001` a `015` en `specs/`, en el orden y con los dueños de `ROADMAP.md`. 
 ## Repositorio y PR (Art. XV)
 - Una rama de integracion por spec (`spec/SPEC-NN`), creada desde `develop`: implementar sus tareas ahi o en ramas `tipo/SPEC-NN-TNNN` con PR hacia la misma SPEC. Al completar la spec, PR hacia `develop`; publicar con PR `develop` -> `main`. Se conserva tarea -> `develop`. El segmento `SCRUM-NN-` es opcional tras la barra en ambos formatos; los nombres anteriores siguen siendo validos. Titulos de PR libres; completar Resumen, Validación y Seguridad. Solo `@gestor-repo` usa el MCP de GitHub; nunca fusiona ni borra: una persona revisa y fusiona. Nunca se suben secretos.
 
+
+- Tambien se admiten ramas por fase `tipo/SPEC-NN-Fase-N` (ejemplo: `feat/SPEC-02-Fase-3`, con SCRUM opcional), creadas desde la spec y con PR hacia esa misma SPEC o hacia develop. Implementar sus tareas una por una. No enviar fases directamente a main. Ver `docs/devsecops.md`.
