@@ -146,7 +146,7 @@
   - Aceptación: build multi‑etapa; binario estático; imagen final `distroless`, usuario no root; `docker build .` termina sin errores
   - Refs: plan P-09 · Art. VI
 
-- [ ] **T020** [P] Verificación local de calidad
+- [x] **T020** [P] Verificación local de calidad
   - Archivos: `go.mod`, `.golangci.yml` (ya previsto), `Makefile` (ajustes mínimos)
   - Agente: `dev-go`
   - Depende de: T002, T004

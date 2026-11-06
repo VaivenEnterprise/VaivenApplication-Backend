@@ -2,3 +2,5 @@
 *.sh text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
+# Go exige LF para gofmt; en Windows (core.autocrlf=true) evita falsos avisos de formato.
+*.go text eol=lf
