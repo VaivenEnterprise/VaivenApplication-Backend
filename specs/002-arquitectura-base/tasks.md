@@ -37,7 +37,7 @@
 
 ## Fase 1 — Fundamentos
 
-- [ ] **T005** Paquete de configuración
+- [x] **T005** Paquete de configuración
   - Archivos: `internal/config/config.go`, `internal/config/config_test.go`
   - Agente: `dev-go`
   - Depende de: T001
