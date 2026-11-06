@@ -132,7 +132,7 @@
   - Aceptación: falla si `internal/domain` o `internal/usecase` dependen (directa o transitivamente) de `net/http`, `go-chi`, `mongo-driver` o `bson`; pasa en el estado actual
   - Refs: RNF-07 · Art. III
 
-- [ ] **T018** [P] Contrato OpenAPI
+- [x] **T018** [P] Contrato OpenAPI
   - Archivos: `api/openapi.yaml`
   - Agente: `spec-writer`
   - Depende de: T013
