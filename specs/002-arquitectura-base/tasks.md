@@ -1,7 +1,7 @@
 # Tareas 002 — Arquitectura base del backend
 
 - **Spec:** `spec.md` · **Plan:** `plan.md`
-- **Estado:** Redactadas, **sin ejecutar**. No empezar hasta que la persona apruebe spec y plan.
+- **Estado:** en curso. Spec y plan aprobados el 2026-11-05; T001 y T002 hechas antes de la aprobación (ver `memoria.md`).
 - Leyenda: `[P]` = puede hacerse en paralelo con otras `[P]` de la misma fase (no comparten archivos). Una tarea = un cambio pequeño y verificable.
 - Agentes: `dev-go`, `modelador-mongo`, `qa-go`, `spec-writer`, `revisor-constitucion`.
 
