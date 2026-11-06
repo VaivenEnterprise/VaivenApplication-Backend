@@ -6,12 +6,21 @@ export function validatePR(pr) {
   const errors = [];
   const head = pr.head.ref, base = pr.base.ref;
   const branch = /^(feat|feature|fix|bugfix|hotfix|chore|ci|docs|refactor|test|perf|security|release|build|revert)\/SCRUM-\d{2,}-SPEC-\d{2,}-T\d{3,}$/;
-  if (!['main','develop'].includes(base)) errors.push('El destino debe ser develop o main.');
+  const spec = /^spec\/SCRUM-\d{2,}-SPEC-(\d{2,})$/;
+  const targetSpec = base.match(spec);
+  if (!['main','develop'].includes(base) && !targetSpec)
+    errors.push('El destino debe ser develop, main o spec/SCRUM-01-SPEC-02.');
   const bot = pr.user?.login === 'dependabot[bot]' && head.startsWith('dependabot/');
   if (base === 'main' && head !== 'develop' && !(/^(hotfix|release)\//.test(head) && branch.test(head)))
     errors.push('main solo recibe develop, release/SCRUM-01-SPEC-01-T001 o hotfix/SCRUM-01-SPEC-01-T001.');
-  if (base === 'develop' && head !== 'main' && !branch.test(head) && !bot)
-    errors.push('Usa tipo/SCRUM-01-SPEC-01-T001: tipo en minusculas, SCRUM/SPEC/T en mayusculas y todos los numeros.');
+  if (base === 'develop' && head !== 'main' && !branch.test(head) && !spec.test(head) && !bot)
+    errors.push('Usa spec/SCRUM-01-SPEC-01 o tipo/SCRUM-01-SPEC-01-T001: tipo en minusculas, SCRUM/SPEC/T en mayusculas y todos los numeros.');
+  if (targetSpec && head !== 'develop') {
+    const taskSpec = branch.test(head) && head.match(/-SPEC-(\d+)-T\d+$/);
+    // Los tickets SCRUM pueden diferir entre tareas; SPEC identifica la integracion.
+    if (!taskSpec || BigInt(taskSpec[1]) !== BigInt(targetSpec[1]))
+      errors.push('La rama de spec solo recibe tareas de la misma SPEC o sincronizacion desde develop.');
+  }
   // Los titulos son texto libre; nunca se ejecutan como comandos.
   if (!bot) for (const heading of ['Resumen','Validación','Seguridad']) {
     const section = (pr.body || '').match(new RegExp('^## ' + heading + '\\s*\\n([\\s\\S]*?)(?=^## |$(?![\\s\\S]))','m'));

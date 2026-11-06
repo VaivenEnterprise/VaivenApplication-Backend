@@ -32,3 +32,31 @@ test('exige trazabilidad completa y mayusculas exactas', () => {
   assert.ok(validatePR(pr('hotfix/login','main')).length);
 });
 
+
+test('permite specs completas, tareas de la misma spec y sincronizacion', () => {
+  for (const [head,base] of [
+    ['spec/SCRUM-01-SPEC-02','develop'],
+    ['feat/SCRUM-02-SPEC-02-T001','spec/SCRUM-01-SPEC-02'],
+    ['docs/SCRUM-03-SPEC-002-T002','spec/SCRUM-01-SPEC-02'],
+    ['develop','spec/SCRUM-01-SPEC-02']
+  ]) assert.deepEqual(validatePR(pr(head,base)),[],head+' -> '+base);
+});
+test('rechaza specs mal nombradas, cruces de spec y saltos a main', () => {
+  for (const [head,base] of [
+    ['spec/SCRUM-01-SPEC-02','main'],
+    ['spec/SCRUM-1-SPEC-02','develop'],
+    ['spec/SCRUM-01-SPEC-2','develop'],
+    ['spec/SCRUM-01-SPEC-02-T001','develop'],
+    ['spec/SCRUM-01-SPEC-02-extra','develop'],
+    ['feat/SCRUM-01-SPEC-03-T001','spec/SCRUM-01-SPEC-02'],
+    ['arbitrary','spec/SCRUM-01-SPEC-02'],
+    ['main','spec/SCRUM-01-SPEC-02'],
+    ['spec/SCRUM-01-SPEC-03','spec/SCRUM-01-SPEC-02'],
+    ['feat/SCRUM-01-SPEC-02-T001','spec/invalid']
+  ]) assert.ok(validatePR(pr(head,base)).length,head+' -> '+base);
+});
+test('las specs conservan evidencia requerida y no admiten excepcion del bot', () => {
+  const item=pr('spec/SCRUM-01-SPEC-02'); item.body=''; assert.ok(validatePR(item).length);
+  const bot=pr('dependabot/npm_and_yarn/dep-1','spec/SCRUM-01-SPEC-02');
+  bot.user.login='dependabot[bot]'; bot.body=''; assert.ok(validatePR(bot).length);
+});
