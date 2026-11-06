@@ -210,3 +210,22 @@ func TestRequestIDContext(t *testing.T) {
 		t.Errorf("RequestID = %q, want abc", got)
 	}
 }
+
+func TestFailure(t *testing.T) {
+	rec := httptest.NewRecorder()
+	Failure(rec, requestWithID("req-5"), http.StatusServiceUnavailable, CodeServiceUnavailable, "No disponible.")
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want 503", rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != wantContentType {
+		t.Errorf("Content-Type = %q, want %q", ct, wantContentType)
+	}
+	body := decodeError(t, rec)
+	if body["code"] != "service_unavailable" || body["message"] != "No disponible." || body["requestId"] != "req-5" {
+		t.Errorf("body = %v", body)
+	}
+	if _, ok := body["details"]; ok {
+		t.Error("details no debe aparecer")
+	}
+}

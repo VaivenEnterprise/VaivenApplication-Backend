@@ -2,7 +2,10 @@ module github.com/VaivenEnterprise/VaivenApplication-Backend
 
 go 1.26
 
-require go.mongodb.org/mongo-driver/v2 v2.9.3
+require (
+	github.com/go-chi/chi/v5 v5.5.0
+	go.mongodb.org/mongo-driver/v2 v2.9.3
+)
 
 require (
 	github.com/klauspost/compress v1.20.2 // indirect
