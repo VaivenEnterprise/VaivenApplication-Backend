@@ -72,14 +72,14 @@
   - Aceptación: `JSON` y `Error` según plan §4.2; `domain.Error` → 400/401/403/404/409; cualquier otro error → 500 `internal_error` con mensaje genérico; el envoltorio incluye `requestId` del contexto; pruebas de tabla por código
   - Refs: RF-08, RF-10 · Art. IV
 
-- [ ] **T010** Middleware `RequestID` y `Logging`
+- [x] **T010** Middleware `RequestID` y `Logging`
   - Archivos: `internal/adapter/http/middleware/requestid.go`, `logging.go`, `requestid_test.go`, `logging_test.go`
   - Agente: `dev-go`
   - Depende de: T007, T009
   - Aceptación: reutiliza `X-Request-Id` válido (≤ 64 caracteres alfanuméricos y `-`), si no genera 32 hex; lo guarda en el contexto y lo devuelve en la respuesta; el log incluye método, ruta, estado, duración y `requestId`, **sin** cuerpo ni encabezados sensibles
   - Refs: RF-07, RF-11 · Art. VI, IX
 
-- [ ] **T011** Middleware `Recover` y `CORS`
+- [x] **T011** Middleware `Recover` y `CORS`
   - Archivos: `internal/adapter/http/middleware/recover.go`, `cors.go`, `recover_test.go`, `cors_test.go`
   - Agente: `dev-go`
   - Depende de: T009, T010
