@@ -178,7 +178,7 @@
 
 ## Fase 5 — Servicios, Redis, HTTPS y despliegue (Art. XIII y XIV)
 
-- [ ] **T024** Config modular: Cloudinary, Redis y TLS
+- [x] **T024** Config modular: Cloudinary, Redis y TLS
   - Archivos: `internal/config/cloudinary.go`, `internal/config/redis.go`, `internal/config/tls.go`, `internal/config/config_services_test.go`, `internal/config/config.go`, `.env.example`
   - Agente: `dev-go` · Depende de: T005, 001-T008
   - Aceptación: `Load()` incluye `Cloudinary`, `Redis` (`REDIS_URL`) y `TLS` (`TLS_CERT_FILE`, `TLS_KEY_FILE`, obligatorios solo con `APP_ENV=staging|production`); faltantes listados todos juntos; `APP_ENV=test` y `development` no los exigen; los secretos imprimen `***`; pruebas de tabla; cobertura ≥ 80 %
