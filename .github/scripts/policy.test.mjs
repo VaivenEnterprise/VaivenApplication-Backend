@@ -27,7 +27,7 @@ test('bloquea credenciales y permite ejemplos sin valores reales', () => {
 
 test('exige trazabilidad completa y mayusculas exactas', () => {
   for (const head of ['chore/SCRUM-01-SPEC-01-T001','feat/SCRUM-123-SPEC-017-T1000','hotfix/SCRUM-22-SPEC-003-T009']) assert.deepEqual(validatePR(pr(head)),[]);
-  for (const head of ['chore/descripcion','spec/017-devsecops','chore/SCRUM-01-SPEC-01','chore/SCRUM-01-T001','chore/SPEC-01-T001','chore/scrum-01-spec-01-t001','Chore/SCRUM-01-SPEC-01-T001','chore/SCRUM-1-SPEC-01-T001','chore/SCRUM-01-SPEC-1-T001','chore/SCRUM-01-SPEC-01-T01','chore/SCRUM-01-SPEC-01-T001-extra','chore/SCRUM-01-SPEC-01-T001/extra']) assert.ok(validatePR(pr(head)).length,head);
+  for (const head of ['chore/descripcion','spec/017-devsecops','chore/SCRUM-01-SPEC-01','chore/SCRUM-01-T001','chore/scrum-01-spec-01-t001','Chore/SCRUM-01-SPEC-01-T001','chore/SCRUM-1-SPEC-01-T001','chore/SCRUM-01-SPEC-1-T001','chore/SCRUM-01-SPEC-01-T01','chore/SCRUM-01-SPEC-01-T001-extra','chore/SCRUM-01-SPEC-01-T001/extra']) assert.ok(validatePR(pr(head)).length,head);
   assert.ok(validatePR(pr('chore/SCRUM-01-SPEC-01-T001','main')).length);
   assert.ok(validatePR(pr('hotfix/login','main')).length);
 });
@@ -60,3 +60,26 @@ test('las specs conservan evidencia requerida y no admiten excepcion del bot', (
   const bot=pr('dependabot/npm_and_yarn/dep-1','spec/SCRUM-01-SPEC-02');
   bot.user.login='dependabot[bot]'; bot.body=''; assert.ok(validatePR(bot).length);
 });
+
+test('SCRUM es opcional para specs, tareas y urgencias', () => {
+  for (const [head,base] of [
+    ['spec/SPEC-02','develop'],
+    ['feat/SPEC-02-T001','develop'],
+    ['feat/SPEC-02-T001','spec/SPEC-02'],
+    ['feat/SCRUM-15-SPEC-02-T001','spec/SPEC-02'],
+    ['fix/SPEC-002-T002','spec/SCRUM-01-SPEC-02'],
+    ['develop','spec/SPEC-02'],
+    ['hotfix/SPEC-02-T001','main']
+  ]) assert.deepEqual(validatePR(pr(head,base)),[],head+' -> '+base);
+});
+test('SPEC y tarea conservan formato y limites aunque SCRUM sea opcional', () => {
+  for (const [head,base] of [
+    ['spec/SPEC-2','develop'],['spec/SPEC-02-T001','develop'],
+    ['feat/SPEC-02','develop'],['feat/SPEC-02-T01','develop'],
+    ['feat/SCRUM-1-SPEC-02-T001','develop'],
+    ['spec/SCRUM-1-SPEC-02','develop'],['spec/spec-02','develop'],
+    ['feat/SPEC-03-T001','spec/SPEC-02'],
+    ['spec/SPEC-02','main'],['feat/SPEC-02-T001','main']
+  ]) assert.ok(validatePR(pr(head,base)).length,head+' -> '+base);
+});
+test('release sin SCRUM conserva promocion a main', () => { assert.deepEqual(validatePR(pr('release/SPEC-02-T001','main')),[]); });
