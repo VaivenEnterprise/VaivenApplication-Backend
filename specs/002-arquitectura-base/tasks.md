@@ -51,7 +51,7 @@
   - Aceptación: tipo `Error` con `Unwrap`; constructores para los 5 códigos de dominio; `errors.As` funciona; el paquete solo importa stdlib
   - Refs: plan §4.2 · Art. III, IV
 
-- [ ] **T007** [P] Logger estructurado
+- [x] **T007** [P] Logger estructurado
   - Archivos: `internal/platform/logger/logger.go`, `internal/platform/logger/logger_test.go`
   - Agente: `dev-go`
   - Depende de: T001
