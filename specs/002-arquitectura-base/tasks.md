@@ -58,7 +58,7 @@
   - Aceptación: `New(level, env)` devuelve `*slog.Logger` JSON en `production` y texto en otro caso; nivel inválido → error; prueba verifica el formato de salida
   - Refs: plan P-04 · Art. IX
 
-- [ ] **T008** Cliente de MongoDB
+- [x] **T008** Cliente de MongoDB
   - Archivos: `internal/platform/mongodb/client.go`, `internal/platform/mongodb/client_test.go`
   - Agente: `modelador-mongo`
   - Depende de: T005
