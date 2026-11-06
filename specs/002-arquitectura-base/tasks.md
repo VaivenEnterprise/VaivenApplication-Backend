@@ -125,7 +125,7 @@
   - Aceptación: con Docker, `go test -tags integration ./...` pasa; cubre conexión+ping, `EnsureAll` dos veces sin error y un solo índice, `/readyz` 200 con Mongo activo y 503 tras detener el contenedor
   - Refs: plan §6 · CA-03, CA-04, CA-09 · Art. VII
 
-- [ ] **T017** [P] Prueba de arquitectura
+- [x] **T017** [P] Prueba de arquitectura
   - Archivos: `internal/architecture_test.go`
   - Agente: `qa-go`
   - Depende de: T006
