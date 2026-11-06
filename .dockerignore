@@ -1,0 +1,19 @@
+# El Dockerfile solo copia go.mod, go.sum, cmd/ e internal/. Esto evita además
+# que secretos o archivos pesados entren en el contexto de construcción (Art. VI).
+.git
+.github
+.opencode
+.obsidian
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+bin/
+coverage.out
+coverage.html
+docs/
+specs/
+deploy/
+scripts/
+**/*_test.go
