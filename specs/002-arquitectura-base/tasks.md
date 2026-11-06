@@ -102,14 +102,14 @@
   - Aceptación: monta middleware en el orden de plan §4.3 y las rutas de plan §4.4; 404 y 405 con envoltorio de error; límite de cuerpo 1 MiB; prueba de las 3 rutas + 404 + 405
   - Refs: RF-09 · Art. IV
 
-- [ ] **T014** Registro de índices
+- [x] **T014** Registro de índices
   - Archivos: `internal/adapter/mongo/indexes.go`, `internal/adapter/mongo/indexes_test.go`
   - Agente: `modelador-mongo`
   - Depende de: T008
   - Aceptación: interfaz `IndexEnsurer`; `EnsureAll(ctx, ...IndexEnsurer)` ejecuta todos, acumula errores y es idempotente; prueba unitaria con ensurers falsos (la prueba con Mongo real va en T015)
   - Refs: plan P-06 · RF-13 · Art. II
 
-- [ ] **T015** `main` con cableado y cierre ordenado
+- [x] **T015** `main` con cableado y cierre ordenado
   - Archivos: `cmd/api/main.go`, `internal/usecase/doc.go`
   - Agente: `dev-go`
   - Depende de: T005, T007, T008, T013, T014
