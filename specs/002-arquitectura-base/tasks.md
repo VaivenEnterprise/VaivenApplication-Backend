@@ -88,14 +88,14 @@
 
 ## Fase 2 — Núcleo HTTP
 
-- [ ] **T012** Handlers de infraestructura
+- [x] **T012** Handlers de infraestructura
   - Archivos: `internal/adapter/http/handler/health.go`, `meta.go`, `health_test.go`
   - Agente: `dev-go`
   - Depende de: T009
   - Aceptación: `Healthz`, `Readyz(pinger)` y `Meta(info)`; `Readyz` devuelve 503 `service_unavailable` si el *pinger* falla; `Meta` entrega `serverTime` en UTC formato RFC 3339; pruebas con `httptest` y *pinger* falso
   - Refs: plan §4.4 · RF-04, RF-05, RF-06
 
-- [ ] **T013** Router
+- [x] **T013** Router
   - Archivos: `internal/adapter/http/router.go`, `internal/adapter/http/router_test.go`
   - Agente: `dev-go`
   - Depende de: T010, T011, T012

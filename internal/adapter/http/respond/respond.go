@@ -20,6 +20,10 @@ const (
 	// codeInternal es el código de cualquier fallo que no es de dominio.
 	codeInternal = "internal_error"
 
+	// CodeServiceUnavailable (503) lo usan los handlers cuando una dependencia
+	// no responde, por ejemplo MongoDB en /readyz.
+	CodeServiceUnavailable = "service_unavailable"
+
 	// messageInternal es el mensaje genérico de internal_error: nunca expone
 	// la causa (Art. VI, RF-10).
 	messageInternal = "Ocurrió un error inesperado. Intenta de nuevo."
@@ -110,6 +114,17 @@ func Error(w http.ResponseWriter, r *http.Request, err error) {
 	}
 
 	write(w, status, errorEnvelope{Error: body})
+}
+
+// Failure escribe un error HTTP que no es de dominio (503, 429, 404/405 del
+// router…) con el mismo envoltorio único que Error. message debe estar en
+// español y no incluir detalles internos.
+func Failure(w http.ResponseWriter, r *http.Request, status int, code, message string) {
+	write(w, status, errorEnvelope{Error: errorBody{
+		Code:      code,
+		Message:   message,
+		RequestID: RequestID(r.Context()),
+	}})
 }
 
 // write codifica v y lo escribe; v siempre es un tipo propio de este paquete,
