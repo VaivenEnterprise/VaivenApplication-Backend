@@ -21,7 +21,7 @@
   - Aceptación: existen `run`, `up`, `down`, `test`, `lint`, `fmt`, `build`; `make build` inyecta `APP_VERSION` con `-ldflags`; `make test` ejecuta `go test ./... -race -cover`
   - Refs: AGENTS.md §6
 
-- [ ] **T003** [P] Entorno local de MongoDB (replica set) y plantilla de entorno
+- [x] **T003** [P] Entorno local de MongoDB (replica set) y plantilla de entorno
   - Archivos: `docker-compose.yml`, `.env.example`
   - Agente: `modelador-mongo`
   - Depende de: T001

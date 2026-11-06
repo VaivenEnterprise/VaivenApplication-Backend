@@ -1,0 +1,34 @@
+# =============================================================================
+# docker-compose.yml — MongoDB para DESARROLLO LOCAL (spec 002, T003; plan §4.5)
+# Lo usan `make up` / `make down`. NO es el stack de la VM: ese vive en
+# deploy/base/docker-compose.yml (con autenticación, keyFile y Redis).
+# Sin autenticación: solo para la máquina de cada persona, nunca en un servidor.
+# =============================================================================
+name: vaiven-local
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-local-data:/data/db
+    # Inicia el replica set la primera vez. El miembro es localhost:27017 para
+    # que la API que corre en el host (`make run`) pueda conectarse con
+    # MONGO_URI=mongodb://localhost:27017/?replicaSet=rs0.
+    healthcheck:
+      test:
+        - CMD
+        - mongosh
+        - --quiet
+        - --eval
+        - "try { rs.status().ok } catch (e) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'localhost:27017'}]}).ok }"
+      interval: 5s
+      timeout: 10s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  mongo-local-data:
