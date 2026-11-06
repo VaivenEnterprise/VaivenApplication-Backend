@@ -1,0 +1,48 @@
+# =============================================================================
+# .golangci.yml — Análisis estático del backend (spec 002, T004; Art. VII.3)
+# Formato v2: la CI usa golangci-lint v2.15.0 (.github/workflows/ci.yml).
+# Local: `make lint` (golangci-lint run).
+# =============================================================================
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  # «standard» ya trae errcheck, govet, ineffassign, staticcheck y unused.
+  default: standard
+  enable:
+    - revive # estilo y nombres idiomáticos de Go
+    - gosec # seguridad (Art. VI)
+  settings:
+    revive:
+      rules:
+        - name: exported
+        - name: package-comments
+        - name: var-naming
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: errorf
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: indent-error-flow
+        - name: unused-parameter
+        - name: unreachable-code
+  exclusions:
+    presets:
+      - std-error-handling
+    rules:
+      # En pruebas se permiten rutas y valores fijos que gosec marcaría.
+      - path: _test\.go
+        linters:
+          - gosec
+
+formatters:
+  enable:
+    - gofmt
+  settings:
+    gofmt:
+      simplify: true # equivale a `gofmt -s` (make fmt)

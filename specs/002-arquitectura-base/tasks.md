@@ -28,7 +28,7 @@
   - Aceptación: `docker compose up -d` deja MongoDB 7 con replica set `rs0` en estado PRIMARY; `.env.example` lista todas las variables de plan §4.1 **sin secretos**
   - Refs: plan §4.1, §4.5 · Art. II, VI
 
-- [ ] **T004** [P] Configuración de lint
+- [x] **T004** [P] Configuración de lint
   - Archivos: `.golangci.yml`
   - Agente: `dev-go`
   - Depende de: T001
