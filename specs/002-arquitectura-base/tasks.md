@@ -44,7 +44,7 @@
   - Aceptación: `Load()` aplica defaults de plan §4.1; falla con error que lista **todas** las variables inválidas/faltantes; pruebas de tabla cubren válido, faltante `MONGO_URI`, duración inválida, `LOG_LEVEL` inválido; cobertura ≥ 80 %
   - Refs: plan §4.1 · RF-01 · Art. VI
 
-- [ ] **T006** [P] Errores de dominio
+- [x] **T006** [P] Errores de dominio
   - Archivos: `internal/domain/errors.go`, `internal/domain/errors_test.go`
   - Agente: `dev-go`
   - Depende de: T001
