@@ -2,7 +2,7 @@
 
 - **Spec:** `spec.md` (mismo directorio)
 - **Constitución:** v1.0.0
-- **Estado:** Borrador, pendiente de aprobación humana
+- **Estado:** Aprobado por la persona responsable (Joseph Yañez) el 2026-11-05
 
 ## 1. Enfoque
 
