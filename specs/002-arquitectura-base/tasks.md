@@ -139,7 +139,7 @@
   - Aceptación: OpenAPI 3.1 válido; describe `/healthz`, `/readyz`, `/api/v1/meta` y el esquema `Error` con los 8 códigos; ejemplos con `requestId`
   - Refs: RF-15 · Art. IV
 
-- [ ] **T019** [P] Dockerfile
+- [x] **T019** [P] Dockerfile
   - Archivos: `Dockerfile`
   - Agente: `dev-go`
   - Depende de: T015
