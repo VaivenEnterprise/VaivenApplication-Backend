@@ -184,7 +184,7 @@
   - Aceptación: `Load()` incluye `Cloudinary`, `Redis` (`REDIS_URL`) y `TLS` (`TLS_CERT_FILE`, `TLS_KEY_FILE`, obligatorios solo con `APP_ENV=staging|production`); faltantes listados todos juntos; `APP_ENV=test` y `development` no los exigen; los secretos imprimen `***`; pruebas de tabla; cobertura ≥ 80 %
   - Refs: RF-S1, RF-S2, RF-S5, RF-S7 · Art. VI, XII
 
-- [ ] **T025** [P] Cliente de ping a Cloudinary
+- [x] **T025** [P] Cliente de ping a Cloudinary
   - Archivos: `internal/platform/cloudinary/ping.go`, `internal/platform/cloudinary/ping_test.go`
   - Agente: `dev-go` · Depende de: T024
   - Aceptación: `Ping(ctx, cfg)` llama a `/v1_1/<cloud>/ping` con autenticación básica y timeout 5 s; 200 → nil; 401 → error que **no contiene** el secreto; pruebas con `httptest`
