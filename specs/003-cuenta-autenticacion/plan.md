@@ -72,3 +72,13 @@ Unitarias de cada caso de uso con repos falsos; `password` (hash/verify, formato
 | VI | argon2id, sin secretos en logs, límite de intentos |
 | VII | ≥ 80 % en domain/usecase |
 | XII | `modules.go`, puertos vacíos, contrato en `api/paths/` |
+
+## 9. Ajustes durante la implementación (2026-11-06, [BE-B])
+| # | Ajuste | Motivo |
+|---|---|---|
+| A-01 | **P-05 sustituida:** el límite de `register`, `login` y `refresh` usa el middleware `RateLimit` de la spec 002 (Redis con respaldo en memoria) con `KeyPrefix: "auth:"`; no se crea `internal/platform/ratelimit` | Art. XIV.1–2 (constitución 1.5.0) exige API sin estado y límite en Redis; P-05 venía de la v1.4.0 |
+| A-02 | Puertos compartidos `users.Directory` y `users.Admin` en `internal/users/` (implementados por `auth/adapter/mongo.UserRepo`) | T008; los consumen 005–011 sin importar el módulo auth |
+| A-03 | `security.Hasher` calcula como máximo un hash argon2id a la vez (64 MiB cada uno) | La API tiene 160 MiB en la VM (Art. XIV.5) |
+| A-04 | La baja **anonimiza** el correo (`deleted+<id>@vaiven.invalid`) en lugar de conservarlo (P-08) | T008 y RF-08: el correo original debe poder registrarse de nuevo |
+| A-05 | `DELETE /me` con contraseña incorrecta responde **403** `forbidden`, no 401 | Que el móvil no lo confunda con una sesión vencida |
+| A-06 | La prueba de arquitectura cubre `internal/<modulo>/{domain,usecase}` y los puertos compartidos | Art. III y XII.3 |
