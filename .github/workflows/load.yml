@@ -1,0 +1,207 @@
+# Pruebas de carga: estrés y fatiga (soak) con k6 (spec 017, T010).
+#
+# Solo se ejecuta a mano (workflow_dispatch), nunca de forma automática.
+#   - target=local (por defecto): levanta la API dentro del runner con MongoDB
+#     y Redis como servicios del job y la somete a la carga pesada, con
+#     GOMEMLIMIT y GOMAXPROCS parecidos a staging. Falla si el pico de memoria
+#     residente supera el límite del contenedor de staging (160 MiB).
+#   - target=staging: perfiles suaves contra la VM de ~1 GiB. Exige marcar
+#     confirm_staging. Antes y después corre las pruebas de humo.
+# El 429 rate_limited (120 peticiones/min por IP) es esperado y se mide aparte.
+name: Load
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Destino de la carga'
+        type: choice
+        options: [local, staging]
+        default: local
+      profile:
+        description: 'Perfil de k6'
+        type: choice
+        options: [stress, soak, smoke]
+        default: stress
+      duration:
+        description: 'Duración del soak (p. ej. 10m, 30m; máx. 60m)'
+        required: false
+        default: '10m'
+      confirm_staging:
+        description: 'Confirmo que quiero cargar staging (requerido con target=staging)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: load-${{ inputs.target }}
+  cancel-in-progress: false
+
+env:
+  K6_VERSION: '2.3.0'
+  PROFILE: ${{ inputs.profile }}
+  DURATION: ${{ inputs.duration }}
+
+jobs:
+  local:
+    name: Load (API in runner)
+    if: inputs.target == 'local'
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    services:
+      mongo:
+        image: mongo:7
+        ports: ['27017:27017']
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ping:1})'"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      BASE_URL: http://127.0.0.1:8080
+      TARGET: local
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Validate inputs
+        shell: bash
+        run: |
+          [[ $DURATION =~ ^([1-9]|[1-5][0-9]|60)m$ ]] || { echo "duration no válida: '$DURATION' (1m a 60m)" >&2; exit 1; }
+      - name: Build and start API
+        env:
+          # test: Cloudinary, TLS y JWT son opcionales; no hacen falta secretos.
+          APP_ENV: test
+          APP_VERSION: load-${{ github.sha }}
+          HTTP_ADDR: 127.0.0.1:8080
+          MONGO_URI: mongodb://127.0.0.1:27017/?directConnection=true
+          MONGO_DB: vaiven_load
+          REDIS_URL: redis://127.0.0.1:6379/0
+          LOG_LEVEL: warn
+          # Parecido al contenedor de staging (GOMEMLIMIT 120MiB, 0.5 CPU).
+          GOMEMLIMIT: 120MiB
+          GOMAXPROCS: '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p reports/load
+          go build -o bin/api ./cmd/api
+          # Secreto efímero solo para este job (por si la API lo exige); nunca
+          # se guarda en el repositorio.
+          JWT_ACCESS_SECRET=$(openssl rand -hex 32)
+          echo "::add-mask::$JWT_ACCESS_SECRET"
+          export JWT_ACCESS_SECRET
+          nohup ./bin/api >reports/load/api.log 2>&1 &
+          echo "API_PID=$!" >>"$GITHUB_ENV"
+          for _ in $(seq 1 60); do
+            if curl --silent --fail "$BASE_URL/readyz" >/dev/null; then
+              echo "API lista"; exit 0
+            fi
+            sleep 1
+          done
+          echo "La API no estuvo lista en 60 s" >&2
+          cat reports/load/api.log >&2
+          exit 1
+      - uses: grafana/setup-k6-action@43b9fc21641a76002687994433dd586f56e791b1 # v1.2.2
+        with:
+          k6-version: ${{ env.K6_VERSION }}
+      - name: Run k6
+        shell: bash
+        run: |
+          k6 run --summary-export reports/load/summary.json \
+            -e BASE_URL="$BASE_URL" -e TARGET="$TARGET" -e PROFILE="$PROFILE" -e DURATION="$DURATION" \
+            tests/load/api.js 2>&1 | tee reports/load/k6.txt
+      - name: Check API memory and liveness
+        if: always() && env.API_PID != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          limit_kib=$((160 * 1024))
+          if ! kill -0 "$API_PID" 2>/dev/null; then
+            echo "La API terminó durante la carga" >&2
+            tail -n 50 reports/load/api.log >&2
+            exit 1
+          fi
+          peak_kib=$(awk '/^VmHWM:/ {print $2}' "/proc/$API_PID/status")
+          {
+            echo "## Carga local ($PROFILE)"
+            echo
+            echo "Pico de memoria residente de la API: $((peak_kib / 1024)) MiB (límite de staging: 160 MiB)."
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          bash scripts/smoke.sh "$BASE_URL" || true
+          kill "$API_PID"
+          if ((peak_kib > limit_kib)); then
+            echo "La API superó 160 MiB de memoria residente" >&2
+            exit 1
+          fi
+        env:
+          SMOKE_ALLOW_HTTP: '1'
+      - name: Upload load report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: load-local-${{ inputs.profile }}
+          path: reports/load/
+          if-no-files-found: warn
+          retention-days: 30
+
+  staging:
+    name: Load (staging)
+    if: inputs.target == 'staging'
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      BASE_URL: ${{ vars.STAGING_URL || 'https://vaiven-staging.westus2.cloudapp.azure.com:8443' }}
+      TARGET: staging
+      SMOKE_EXPECT_ENV: staging
+      CONFIRM: ${{ inputs.confirm_staging }}
+    steps:
+      - name: Require confirmation
+        id: confirm
+        shell: bash
+        run: |
+          if [[ $CONFIRM != true ]]; then
+            echo "Marca confirm_staging para cargar staging." >&2
+            exit 1
+          fi
+          [[ $DURATION =~ ^([1-9]|[1-5][0-9]|60)m$ ]] || { echo "duration no válida: '$DURATION' (1m a 60m)" >&2; exit 1; }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Smoke before load
+        run: bash scripts/smoke.sh "$BASE_URL"
+      - uses: grafana/setup-k6-action@43b9fc21641a76002687994433dd586f56e791b1 # v1.2.2
+        with:
+          k6-version: ${{ env.K6_VERSION }}
+      - name: Run k6
+        shell: bash
+        run: |
+          mkdir -p reports/load
+          k6 run --summary-export reports/load/summary.json \
+            -e BASE_URL="$BASE_URL" -e TARGET="$TARGET" -e PROFILE="$PROFILE" -e DURATION="$DURATION" \
+            tests/load/api.js 2>&1 | tee reports/load/k6.txt
+      - name: Smoke after load
+        if: always() && steps.confirm.outcome == 'success'
+        shell: bash
+        run: |
+          # Deja pasar la ventana del límite de tasa antes de comprobar.
+          sleep 65
+          bash scripts/smoke.sh "$BASE_URL"
+      - name: Upload load report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: load-staging-${{ inputs.profile }}
+          path: reports/load/
+          if-no-files-found: warn
+          retention-days: 30

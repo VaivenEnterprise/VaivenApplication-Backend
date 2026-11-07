@@ -122,6 +122,16 @@ Contrato completo: `api/openapi.yaml`. Toda respuesta trae `X-Request-Id` y todo
 
 La CI ejecuta además `go test -race`, la cobertura mínima de `domain` y `usecase` (80 %), `govulncheck` y CodeQL.
 
+### Pruebas de humo, carga y mutación
+
+Workflows aparte de la CI, visibles en la pestaña *Actions* (detalle en `docs/pruebas-ci.md`):
+
+| Workflow | Cuándo | Local |
+|---|---|---|
+| **Smoke**: `/healthz`, `/readyz`, `/api/v1/meta` y error 404 de staging por HTTPS | a mano, diario y tras push a `develop` | `bash scripts/smoke.sh https://vaiven-staging.westus2.cloudapp.azure.com:8443` |
+| **Load**: estrés y fatiga con k6, contra la API en el runner o contra staging | solo a mano | `k6 run -e BASE_URL=... -e PROFILE=smoke tests/load/api.js` |
+| **Mutation**: gremlins sobre `domain`, `usecase` y `platform/security` | a mano y semanal | `bash scripts/mutation.sh` (en Linux) |
+
 ### Pruebas de integración
 
 Levantan MongoDB 7 con Testcontainers; necesitan Docker o Podman en marcha.

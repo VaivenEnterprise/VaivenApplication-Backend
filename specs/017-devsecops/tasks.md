@@ -11,3 +11,4 @@
 
 - [ ] T009: exigir tipo/SCRUM-NN-SPEC-NN-TNNN en ramas de trabajo, actualizar guia y probar nombres validos e invalidos. Rama provisional autorizada por el responsable: chore/SCRUM-01-SPEC-01-T001; los numeros son ejemplos y no identificadores verificados en Jira.
 
+- [x] T010: pruebas de humo (scripts/smoke.sh), carga y fatiga con k6 (tests/load/api.js) y mutación con gremlins (scripts/mutation.sh) como workflows de GitHub Actions; ver docs/pruebas-ci.md.
