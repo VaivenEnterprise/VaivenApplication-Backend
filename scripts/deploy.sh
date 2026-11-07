@@ -58,7 +58,8 @@ log() { printf '[deploy %s] %s\n' "$ENV_NAME" "$*"; }
 # Levanta la etiqueta indicada con Compose en la VM.
 compose_up() {
     local tag=$1
-    ssh_vm "cd '$REMOTE_DIR' && sudo env VAIVEN_ENV='$ENV_NAME' API_IMAGE_TAG='$tag' API_PORT='$API_PORT' docker compose up -d --remove-orphans api" </dev/null
+    # El directorio es de deploy (750): se entra con sudo.
+    ssh_vm "sudo sh -c \"cd '$REMOTE_DIR' && VAIVEN_ENV='$ENV_NAME' API_IMAGE_TAG='$tag' API_PORT='$API_PORT' docker compose up -d --remove-orphans api\"" </dev/null
 }
 
 # Espera /healthz por HTTPS, validando el certificado (sin -k), hasta 60 s.
@@ -72,7 +73,7 @@ wait_healthy() {
         sleep 2
     done
     log "FALLA: $url no respondió en 60 s"
-    ssh_vm "cd '$REMOTE_DIR' && sudo docker compose -p 'vaiven-$ENV_NAME' logs --tail 30 api" </dev/null || true
+    ssh_vm "sudo docker logs --tail 30 vaiven-$ENV_NAME-api-1" </dev/null || true
     return 1
 }
 
@@ -82,7 +83,7 @@ ssh_vm "sudo test -f '$REMOTE_DIR/.env'" </dev/null || {
 }
 
 if $ROLLBACK; then
-    previous=$(ssh_vm "cat '$REMOTE_DIR/previous-tag' 2>/dev/null" </dev/null || true)
+    previous=$(ssh_vm "sudo cat '$REMOTE_DIR/previous-tag' 2>/dev/null" </dev/null || true)
     [ -n "$previous" ] || { echo "No hay una imagen anterior a la que volver" >&2; exit 1; }
     log "Volviendo a vaiven-api:$previous"
     compose_up "$previous"
@@ -107,6 +108,8 @@ log "Compilando vaiven-api:$TAG para linux/$ARCH con $ENGINE"
 # 3. Envío por SSH (docker save | ssh docker load).
 log "Enviando la imagen a la VM"
 "$ENGINE" save "vaiven-api:$TAG" | ssh_vm "sudo docker load" >/dev/null
+# Podman guarda la imagen como localhost/vaiven-api; Compose usa vaiven-api.
+ssh_vm "sudo docker image inspect 'vaiven-api:$TAG' >/dev/null 2>&1 || sudo docker tag 'localhost/vaiven-api:$TAG' 'vaiven-api:$TAG'" </dev/null
 
 # 4. Compose y hook del certificado.
 scp -q -i "$SSH_KEY" -o BatchMode=yes \
@@ -119,7 +122,7 @@ ssh_vm "sudo install -d -m 0750 -o deploy -g deploy '$REMOTE_DIR' \
     && sudo test -f /opt/vaiven/certs/privkey.pem || sudo AZURE_HOST='$AZURE_HOST' /etc/letsencrypt/renewal-hooks/deploy/vaiven-api.sh" </dev/null
 
 # 5. Guarda la etiqueta anterior para --rollback y arranca la nueva.
-ssh_vm "cd '$REMOTE_DIR' && { [ -f current-tag ] && sudo cp current-tag previous-tag || true; } && echo '$TAG' | sudo tee current-tag >/dev/null" </dev/null
+ssh_vm "sudo sh -c \"cd '$REMOTE_DIR' && { [ -f current-tag ] && cp current-tag previous-tag || true; } && echo '$TAG' > current-tag\"" </dev/null
 log "Arrancando vaiven-api:$TAG (corte de unos segundos)"
 compose_up "$TAG"
 
