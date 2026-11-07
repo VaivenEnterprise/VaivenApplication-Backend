@@ -18,15 +18,19 @@ type Auth struct {
 	RefreshTTL time.Duration
 	// RateLimitPerMin es el límite por IP de register, login y refresh (RF-07).
 	RateLimitPerMin int
+	// LoginAttemptsPerAccount son los intentos de login por cuenta cada
+	// 15 min (20 por defecto); complementa el límite por IP.
+	LoginAttemptsPerAccount int
 }
 
 // loadAuth exige JWT_ACCESS_SECRET (≥ 32 caracteres) en todos los entornos
 // salvo test. El valor nunca aparece en los mensajes de error.
 func loadAuth(r *reader, appEnv string) Auth {
 	a := Auth{
-		AccessTTL:       r.duration("JWT_ACCESS_TTL", 15*time.Minute),
-		RefreshTTL:      r.duration("REFRESH_TTL", 720*time.Hour),
-		RateLimitPerMin: r.positiveInt("RATE_LIMIT_AUTH_PER_MIN", 10),
+		AccessTTL:               r.duration("JWT_ACCESS_TTL", 15*time.Minute),
+		RefreshTTL:              r.duration("REFRESH_TTL", 720*time.Hour),
+		RateLimitPerMin:         r.positiveInt("RATE_LIMIT_AUTH_PER_MIN", 10),
+		LoginAttemptsPerAccount: r.positiveInt("LOGIN_ATTEMPTS_PER_ACCOUNT", 20),
 	}
 	var secret string
 	if appEnv == EnvTest {

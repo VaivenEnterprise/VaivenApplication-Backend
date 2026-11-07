@@ -194,8 +194,20 @@ func (f *fakeRefresh) RevokeAllForUser(_ context.Context, userID string, at time
 type fakeHasher struct {
 	mu         sync.Mutex
 	verifies   int
+	encodings  []string // hashes contra los que se verificó, en orden
 	failHash   error
 	failVerify error
+	noDecoy    bool
+}
+
+// fakeDecoy es el hash señuelo del doble: nunca coincide con "hash:"+pw.
+const fakeDecoy = "decoy:valor-desconocido"
+
+func (h *fakeHasher) DecoyHash() string {
+	if h.noDecoy {
+		return ""
+	}
+	return fakeDecoy
 }
 
 func (h *fakeHasher) Hash(_ context.Context, pw string) (string, error) {
@@ -205,9 +217,14 @@ func (h *fakeHasher) Hash(_ context.Context, pw string) (string, error) {
 	return "hash:" + pw, nil
 }
 
-func (h *fakeHasher) Verify(_ context.Context, pw, encoded string) (bool, error) {
+// Verify respeta la cancelación como el Hasher real.
+func (h *fakeHasher) Verify(ctx context.Context, pw, encoded string) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
 	h.mu.Lock()
 	h.verifies++
+	h.encodings = append(h.encodings, encoded)
 	h.mu.Unlock()
 	if h.failVerify != nil {
 		return false, h.failVerify

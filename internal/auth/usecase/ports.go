@@ -45,6 +45,10 @@ type PasswordHasher interface {
 	Hash(ctx context.Context, password string) (string, error)
 	// Verify devuelve false, nil si la contraseña no coincide.
 	Verify(ctx context.Context, password, encoded string) (bool, error)
+	// DecoyHash es un hash válido de un valor desconocido, con los parámetros
+	// actuales, calculado al crear el hasher (no por petición). Login verifica
+	// contra él cuando el correo no existe.
+	DecoyHash() string
 }
 
 // AccessTokens emite tokens de acceso (JWT).

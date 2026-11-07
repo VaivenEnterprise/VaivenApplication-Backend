@@ -53,6 +53,8 @@ register:
                 requestId: 43d4c7dbb802d8b3711c8f4163ffc823
       '429':
         $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'
       '500':
         $ref: '../openapi.yaml#/components/responses/InternalError'
 
@@ -64,7 +66,8 @@ login:
     description: |
       Devuelve el usuario y tokens nuevos (RF-04). Ante credenciales inválidas o
       una cuenta dada de baja responde 401 con un mensaje genérico que no revela
-      si el correo existe. Límite: 10 peticiones por minuto por IP (RF-07).
+      si el correo existe. Límites: 10 peticiones por minuto por IP (RF-07) y
+      20 intentos por cuenta cada 15 minutos (429 con `Retry-After: 900`).
     security: []
     parameters:
       - $ref: '../openapi.yaml#/components/parameters/RequestId'
@@ -105,6 +108,8 @@ login:
                 requestId: 43d4c7dbb802d8b3711c8f4163ffc823
       '429':
         $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'
       '500':
         $ref: '../openapi.yaml#/components/responses/InternalError'
 
@@ -299,5 +304,7 @@ me:
                 requestId: 43d4c7dbb802d8b3711c8f4163ffc823
       '429':
         $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'
       '500':
         $ref: '../openapi.yaml#/components/responses/InternalError'
