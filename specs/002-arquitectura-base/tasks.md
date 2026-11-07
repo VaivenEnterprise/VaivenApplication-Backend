@@ -202,7 +202,7 @@
   - Aceptación: límite por IP (rutas públicas) y por usuario (autenticadas) con 429 en el formato de error del Art. IV; si Redis falla usa el limitador local y registra una sola vez; `/readyz` devuelve 503 solo si Mongo falla y `redis: "degradado"` (200) si Redis falla (CA-S5, CA-S6)
   - Refs: RF-05, RF-S6 · P-S5
 
-- [ ] **T028** Servidor HTTPS con certificado recargable
+- [x] **T028** Servidor HTTPS con certificado recargable
   - Archivos: `internal/adapter/http/tlsserver.go`, `internal/adapter/http/tlsserver_test.go`, `cmd/api/main.go`
   - Agente: `dev-go` · Depende de: T015, T024
   - Aceptación: con `APP_ENV=staging|production` la API sirve **solo HTTPS** con `TLS_CERT_FILE` y `TLS_KEY_FILE` y rechaza arrancar sin ellos; relee el par de archivos cuando cambia su fecha de modificación (≤ 1 min) y la prueba con un certificado autofirmado demuestra que el nuevo se sirve sin reiniciar (CA-S4); en `development` y `test` puede servir HTTP; cierre ordenado intacto; cobertura ≥ 80 %
