@@ -68,3 +68,15 @@ Tambien se permite `tipo/SPEC-NN-Fase-N`, por ejemplo `feat/SPEC-02-Fase-3`, con
 Crear la rama de fase desde la rama de spec y abrir su PR hacia esa misma SPEC; tambien se permite fase -> develop. No se permite fase -> main, ni fase -> otra SPEC. Las ramas de fase no son destinos de PR de tareas: implementar las tareas de la fase en ella y conservar el formato por tarea para los flujos existentes. Los titulos de PR siguen siendo libres y se mantienen las secciones de evidencia y los controles de seguridad.
 
 Las ramas de spec existentes deben incorporar esta actualizacion desde develop para validar PRs de fase con la nueva politica.
+
+## Concurrencia, runners y guardia de despliegue
+
+**Concurrencia de CI.** En un PR, un push nuevo cancela la ejecucion anterior del mismo PR: solo importa el ultimo commit del PR. Los push a `develop`, `main` y `spec/**` nunca se cancelan: cada commit integrado debe quedar validado. Como GitHub deja solo una ejecucion pendiente por grupo (una nueva reemplaza a la pendiente aunque `cancel-in-progress` sea falso), el grupo de push incluye el SHA y cada commit corre por separado. `workflow_dispatch` usa un grupo por ejecucion y `schedule` el suyo propio, de modo que no se cancelan con los push.
+
+**Runners fijos.** Todos los jobs usan `ubuntu-24.04` (no `ubuntu-latest`), para que un cambio de imagen de GitHub no altere el pipeline sin aviso. Quality necesita Docker (testcontainers) y gcc para `go test -race`; ambos vienen en esa imagen. Procedimiento para probar `ubuntu-26.04`:
+
+1. Actions > CI > Run workflow, elegir la rama y `runner = ubuntu-26.04`.
+2. Comparar con una ejecucion en `ubuntu-24.04` del mismo commit: todos los jobs en verde, Required checks incluido, y tiempos y avisos similares.
+3. Si todo pasa, cambiar el valor por defecto (`default` del input y el respaldo de `runs-on`) en un solo PR hacia `develop`.
+
+**Guardia de `scripts/deploy.sh`.** Antes de cualquier SSH o build exige: arbol limpio en archivos versionados, repositorio no superficial (si lo es, `git fetch --unshallow`) y que HEAD este en `origin/develop` (staging) u `origin/main` (production), tras un `git fetch` no destructivo. `--check` ejecuta solo estas verificaciones y termina con 0 o 1, sin SSH ni despliegue. `--allow-unmerged` es solo para staging y solo para la tarea «Despliegue» de una spec (Art. XIII.5), que despliega la rama de la spec antes de fusionar su PR: sigue exigiendo arbol limpio y que el commit este publicado en alguna rama de `origin`, y muestra un aviso visible. Production nunca lo acepta. `--rollback` omite la guardia porque reutiliza una imagen que ya esta en la VM.

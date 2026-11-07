@@ -87,7 +87,7 @@ Las contraseñas se pasan por variables de entorno (`process.env`), no en la lí
 - Contenedor `vaiven-staging-api-1` (proyecto de Compose `vaiven-staging`, `/opt/vaiven/staging/`), unido a la red `base_vaiven-net` del stack base; usuario no root, sistema de archivos de solo lectura, 160 MiB.
 - Variables en `/opt/vaiven/staging/.env` (600, dueño `deploy`; plantilla en `deploy/.env.example`), generadas en la VM.
 - Certificado para la API en `/opt/vaiven/certs` (uid 65532); lo renueva el hook `/etc/letsencrypt/renewal-hooks/deploy/vaiven-api.sh` (copia de `deploy/certbot-deploy-hook.sh`) y la API lo recarga sola.
-- Desplegar: `scripts/deploy.sh staging` (con Docker o `ENGINE=podman`); volver atrás: `scripts/deploy.sh staging --rollback`.
+- Desplegar: `scripts/deploy.sh staging` (con Docker o `ENGINE=podman`) desde un árbol limpio y un commit ya fusionado en `origin/develop`; comprobar antes sin desplegar: `scripts/deploy.sh staging --check`; en la tarea «Despliegue» de una spec, con la rama ya publicada y sin fusionar: `scripts/deploy.sh staging --allow-unmerged` (nunca en production, que exige `origin/main`); volver atrás: `scripts/deploy.sh staging --rollback`. Reglas en `docs/devsecops.md`.
 
 ## 8. Probar una subida real (spec 004)
 
@@ -119,3 +119,13 @@ curl -s "$(jq -r .uploadUrl <<<"$SIG")" \
 - Si se cambia cualquier campo firmado (`public_id`, `type`, `allowed_formats`, `overwrite`, `timestamp`), Cloudinary responde `401 Invalid Signature`. La firma vence a la hora.
 - Al usarla en otra spec, el cliente manda solo la referencia (`{"photos":[{"publicId":"<publicId>"}]}`) y el servidor llama a `images.Service.Resolve`: comprueba que la imagen es de quien la envía y del propósito correcto, y pide a Cloudinary formato y tamaño. Si no cumple responde `400 validation_failed` con un detalle por imagen; si Cloudinary no responde, `503 service_unavailable`. Las URL (`url`, `thumbUrl`) se calculan al leer con `images.Service.URLs`; las evidencias dan una URL firmada que vence a los 10 minutos.
 - Sin red ni credenciales, el mismo flujo se prueba con `go test -tags integration -run Integration ./internal/images/adapter/http/` (Cloudinary simulado).
+
+## 9. Validación `$jsonSchema` de MongoDB (spec 003, A-09)
+
+La API crea `users` y `refresh_tokens` con su validador cuando no existen. En una base donde ya existen (staging), aplicarlo requiere `collMod`, que el usuario `vaiven_app` (readWrite) no tiene: la API lo avisa en el log («validación $jsonSchema no aplicada») y sigue. Para aplicarlo una vez, con aprobación humana y sin tocar datos:
+
+1. Comprobar en la VM que los documentos actuales cumplen el esquema (solo lectura; debe dar 0): `db.users.countDocuments({$nor: [{$jsonSchema: <UsersSchema>}]})` y lo mismo con `refresh_tokens`.
+2. Con el usuario `root` (contraseña por variable de entorno, nunca en la línea de comandos), ejecutar `collMod` con `validator: {$jsonSchema: …}`, `validationLevel: "moderate"` y `validationAction: "error"`. Los esquemas exactos son `UsersSchema()` y `RefreshTokensSchema()` de `internal/auth/adapter/mongo/schema.go`.
+3. Reiniciar la API y confirmar que el aviso ya no aparece.
+
+`moderate` no revalida documentos antiguos que no cumplan; los nuevos y las actualizaciones de documentos válidos sí se validan.

@@ -66,3 +66,6 @@ Thumbs.db
 Desktop.ini
 *.swp
 *.swo
+
+# Archivo que deja `podman machine ssh` desde Git Bash (no es un dispositivo NUL real).
+NUL
