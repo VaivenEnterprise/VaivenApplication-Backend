@@ -45,7 +45,7 @@
   - Aceptación: expone `Signature`, `Resolve`, `URLs`; es lo único que importan otras specs; documentación del paquete con ejemplo de uso
   - Refs: P-04 · Art. XII
 
-- [ ] **T008** Handler, límite de tasa y registro del módulo
+- [x] **T008** Handler, límite de tasa y registro del módulo
   - Archivos: `internal/images/adapter/http/{handler.go, dto.go, routes.go, handler_test.go}`, `cmd/api/modules.go` (una línea)
   - Agente: `dev-go` · Depende de: T001, T007, 003-T010
   - Aceptación: 401 sin sesión; 429 tras 30 firmas/hora; respuesta cumple el contrato; módulo registrado con una línea
