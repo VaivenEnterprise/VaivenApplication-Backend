@@ -1,0 +1,56 @@
+# Firma de subida de imágenes a Cloudinary (spec 004, T001; Art. IV, VI.7 y XII.2).
+# Se referencia desde api/openapi.yaml; los esquemas compartidos viven allí.
+signature:
+  post:
+    tags: [imagenes]
+    operationId: createUploadSignature
+    summary: Firma para subir una imagen
+    description: |
+      Devuelve lo necesario para subir **una** imagen directamente a Cloudinary
+      (RF-01). El cliente envía a `uploadUrl` un `multipart/form-data` con `file`,
+      `api_key`, `timestamp`, `signature`, `public_id`, `type` y `allowed_formats`
+      (los valores de esta respuesta, sin cambiarlos). La firma vale para ese
+      `publicId`; el API secret nunca sale del servidor (RNF-01).
+
+      - `item_photo` → `type: upload` (pública); `evidence` → `type: authenticated`
+        (privada, solo con URL firmada de 10 min).
+      - Después, las demás rutas reciben la imagen como `ImageInput`
+        (`{ "publicId": "…" }`) y el servidor la verifica con Cloudinary: que sea
+        de quien la envía, formato jpg, jpeg, png o webp y ≤ 5 MB (POL-13).
+      - Límite: 30 firmas por persona y por hora (RF-04).
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/UploadSignatureRequest'
+          example:
+            purpose: item_photo
+    responses:
+      '200':
+        description: Firma de un solo uso para subir la imagen.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/UploadSignature'
+            example:
+              uploadUrl: https://api.cloudinary.com/v1_1/vaiven/image/upload
+              apiKey: '123456789012345'
+              timestamp: 1762480800
+              signature: 3f1c2d9a8b7e6f5a4d3c2b1a0f9e8d7c6b5a4f3e
+              publicId: vaiven/staging/item_photo/6730f1c2a9b3e4d5f6a7b8c9/9b2f6c1e4a7d4c0e8f3b5a2d1c6e7f80
+              type: upload
+              allowedFormats: jpg,jpeg,png,webp
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'

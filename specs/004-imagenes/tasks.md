@@ -3,7 +3,7 @@
 - **Dueño:** BE-B · **Estado:** sin ejecutar · `[P]` = paralelizable
 - **T001 se integra el primer día**; MO-B y las demás specs leen el contrato y `images.Service`.
 
-- [ ] **T001** Contrato OpenAPI de subida
+- [x] **T001** Contrato OpenAPI de subida
   - Archivos: `api/paths/uploads.yaml`, `api/openapi.yaml` (agregar `$ref`)
   - Agente: `spec-writer` · Depende de: 003-T001
   - Aceptación: describe `POST /api/v1/uploads/signature`, esquemas `UploadSignature`, `ImageInput`, `Image`; ejemplos
