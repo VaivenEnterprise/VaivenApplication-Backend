@@ -46,6 +46,8 @@ paths:
                 status: ok
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
   /readyz:
@@ -54,8 +56,9 @@ paths:
       operationId: getReadyz
       summary: El servicio puede atender peticiones
       description: |
-        Hace ping a MongoDB (máximo 2 s). Responde 503 `service_unavailable` si
-        MongoDB no responde.
+        Hace ping a MongoDB (máximo 2 s). Responde 503 `service_unavailable` solo si
+        MongoDB no responde. Redis nunca es fuente de verdad: si falla, responde 200
+        con `redis: degradado` (Art. XIV.2).
       parameters:
         - $ref: '#/components/parameters/RequestId'
       responses:
@@ -67,13 +70,16 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Status'
+                $ref: '#/components/schemas/Ready'
               example:
                 status: ready
+                redis: ok
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
   /api/v1/meta:
@@ -101,6 +107,8 @@ paths:
                 serverTime: '2026-11-07T15:00:00Z'
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
 components:
@@ -127,7 +135,18 @@ components:
       properties:
         status:
           type: string
-          enum: [ok, ready]
+          enum: [ok]
+    Ready:
+      type: object
+      required: [status, redis]
+      properties:
+        status:
+          type: string
+          enum: [ready]
+        redis:
+          type: string
+          enum: [ok, degradado]
+          description: Estado de Redis; degradado si no responde o no está configurado.
     Meta:
       type: object
       required: [name, version, environment, serverTime]
@@ -219,6 +238,24 @@ components:
             error:
               code: not_found
               message: Este método no está permitido para esta ruta.
+              requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+    RateLimited:
+      description: Se superó el límite de peticiones por IP o por usuario (Art. XIV.2).
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+        Retry-After:
+          description: Segundos que conviene esperar antes de reintentar.
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: rate_limited
+              message: Hiciste demasiadas solicitudes. Espera un momento e intenta de nuevo.
               requestId: 43d4c7dbb802d8b3711c8f4163ffc823
     InternalError:
       description: Fallo inesperado; nunca expone detalles internos.

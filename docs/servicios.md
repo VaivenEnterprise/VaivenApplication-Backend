@@ -78,3 +78,12 @@ Las contraseñas se pasan por variables de entorno (`process.env`), no en la lí
 | Secretos en el contexto del modelo | Los secretos se generan en la VM; nunca se imprimen ni se pegan en chats; rotar si alguno se expone |
 | La renovación del certificado necesita el puerto 80 | Mantener abierto el 80 en el NSG; `certbot renew --dry-run` pendiente de repetir (el servidor de pruebas de Let's Encrypt no respondía el 2026-11-04) |
 | La IP pública de la administradora cambia | El SSH deja de responder: actualizar la regla `Allow-SSH-Admin` (§4) |
+
+## 7. API de staging (spec 002, T031)
+
+- **URL para el móvil:** `https://vaiven-staging.westus2.cloudapp.azure.com:8443` (solo HTTPS, certificado de Let's Encrypt).
+- Endpoints: `GET /healthz`, `GET /readyz` (`redis: ok|degradado`), `GET /api/v1/meta`. Contrato: `api/openapi.yaml`.
+- Contenedor `vaiven-staging-api-1` (proyecto de Compose `vaiven-staging`, `/opt/vaiven/staging/`), unido a la red `base_vaiven-net` del stack base; usuario no root, sistema de archivos de solo lectura, 160 MiB.
+- Variables en `/opt/vaiven/staging/.env` (600, dueño `deploy`; plantilla en `deploy/.env.example`), generadas en la VM.
+- Certificado para la API en `/opt/vaiven/certs` (uid 65532); lo renueva el hook `/etc/letsencrypt/renewal-hooks/deploy/vaiven-api.sh` (copia de `deploy/certbot-deploy-hook.sh`) y la API lo recarga sola.
+- Desplegar: `scripts/deploy.sh staging` (con Docker o `ENGINE=podman`); volver atrás: `scripts/deploy.sh staging --rollback`.

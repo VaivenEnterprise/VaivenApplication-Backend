@@ -178,49 +178,49 @@
 
 ## Fase 5 — Servicios, Redis, HTTPS y despliegue (Art. XIII y XIV)
 
-- [ ] **T024** Config modular: Cloudinary, Redis y TLS
+- [x] **T024** Config modular: Cloudinary, Redis y TLS
   - Archivos: `internal/config/cloudinary.go`, `internal/config/redis.go`, `internal/config/tls.go`, `internal/config/config_services_test.go`, `internal/config/config.go`, `.env.example`
   - Agente: `dev-go` · Depende de: T005, 001-T008
   - Aceptación: `Load()` incluye `Cloudinary`, `Redis` (`REDIS_URL`) y `TLS` (`TLS_CERT_FILE`, `TLS_KEY_FILE`, obligatorios solo con `APP_ENV=staging|production`); faltantes listados todos juntos; `APP_ENV=test` y `development` no los exigen; los secretos imprimen `***`; pruebas de tabla; cobertura ≥ 80 %
   - Refs: RF-S1, RF-S2, RF-S5, RF-S7 · Art. VI, XII
 
-- [ ] **T025** [P] Cliente de ping a Cloudinary
+- [x] **T025** [P] Cliente de ping a Cloudinary
   - Archivos: `internal/platform/cloudinary/ping.go`, `internal/platform/cloudinary/ping_test.go`
   - Agente: `dev-go` · Depende de: T024
   - Aceptación: `Ping(ctx, cfg)` llama a `/v1_1/<cloud>/ping` con autenticación básica y timeout 5 s; 200 → nil; 401 → error que **no contiene** el secreto; pruebas con `httptest`
   - Refs: RF-S3 · P-S3
 
-- [ ] **T026** Adaptador de Redis y puertos `Limiter` y `Cache`
+- [x] **T026** Adaptador de Redis y puertos `Limiter` y `Cache`
   - Archivos: `internal/platform/redis/client.go`, `internal/platform/redis/limiter.go`, `internal/platform/redis/cache.go`, `internal/platform/redis/memory.go`, `internal/platform/redis/redis_test.go`
   - Agente: `dev-go` · Depende de: T024
   - Aceptación: puertos `ratelimit.Limiter` (`Allow(ctx, key, limit, window)`) y `cache.Cache` (`Get/Set/Delete` con TTL) declarados donde se consumen; implementación Redis (ventana fija o deslizante con script atómico) y una **en memoria**; claves con prefijo `vaiven:<APP_ENV>:`; `Ping(ctx)` para `/readyz`; solo este paquete importa `go-redis`; pruebas contra Redis real (`-tags integration`) y contra la versión en memoria; cobertura ≥ 80 %
   - Refs: RF-S5 · P-S5 · Art. III, XIV
 
-- [ ] **T027** Middleware de límite de tasa y `/readyz` con Redis
+- [x] **T027** Middleware de límite de tasa y `/readyz` con Redis
   - Archivos: `internal/adapter/http/middleware/ratelimit.go`, `internal/adapter/http/middleware/ratelimit_test.go`, `internal/adapter/http/health.go`
   - Agente: `dev-go` · Depende de: T012, T026
   - Aceptación: límite por IP (rutas públicas) y por usuario (autenticadas) con 429 en el formato de error del Art. IV; si Redis falla usa el limitador local y registra una sola vez; `/readyz` devuelve 503 solo si Mongo falla y `redis: "degradado"` (200) si Redis falla (CA-S5, CA-S6)
   - Refs: RF-05, RF-S6 · P-S5
 
-- [ ] **T028** Servidor HTTPS con certificado recargable
+- [x] **T028** Servidor HTTPS con certificado recargable
   - Archivos: `internal/adapter/http/tlsserver.go`, `internal/adapter/http/tlsserver_test.go`, `cmd/api/main.go`
   - Agente: `dev-go` · Depende de: T015, T024
   - Aceptación: con `APP_ENV=staging|production` la API sirve **solo HTTPS** con `TLS_CERT_FILE` y `TLS_KEY_FILE` y rechaza arrancar sin ellos; relee el par de archivos cuando cambia su fecha de modificación (≤ 1 min) y la prueba con un certificado autofirmado demuestra que el nuevo se sirve sin reiniciar (CA-S4); en `development` y `test` puede servir HTTP; cierre ordenado intacto; cobertura ≥ 80 %
   - Refs: RF-S7 · P-S8 · Art. XIV.4
 
-- [ ] **T029** Comando `check-services`
+- [x] **T029** Comando `check-services`
   - Archivos: `cmd/admin/main.go`, `cmd/admin/check_services.go`, `cmd/admin/check_services_test.go`
   - Agente: `dev-go` · Depende de: T024, T025, T026, T008
   - Aceptación: imprime `OK`/`FALLA` por servicio (MongoDB, Redis y Cloudinary); código ≠ 0 si alguno falla; no imprime secretos; prueba con dobles (CA-S1, CA-S2)
   - Refs: RF-S3
 
-- [ ] **T030** Artefactos de despliegue: Compose y `deploy.sh`
+- [x] **T030** Artefactos de despliegue: Compose y `deploy.sh`
   - Archivos: `deploy/docker-compose.yml`, `deploy/.env.example`, `scripts/deploy.sh`
   - Agente: `dev-go` · Depende de: T019, T028, 001-T007
   - Aceptación: Compose con `api`, `mongo` (`rs0`) y `redis`, límites de memoria y `GOMEMLIMIT`; solo la API publica puerto (8443 en staging, 443 en producción) y monta de solo lectura el certificado; `deploy.sh <entorno>` compila para la arquitectura de la VM (`amd64`/`arm64`), envía la imagen por SSH, reinicia la API y espera su `/healthz` por HTTPS; `--rollback` vuelve a la imagen anterior; ningún secreto escrito; `shellcheck` sin errores
   - Refs: RF-S8 · P-S6, P-S7 · Art. XIII, XIV
 
-- [ ] **T031** Despliegue de la spec en Azure (staging)
+- [x] **T031** Despliegue de la spec en Azure (staging)
   - Archivos: `docs/servicios.md` (anexar la URL de staging), `memoria.md` (solo anexar)
   - Agente: `devops-mcp` · Depende de: T019, T020, T023, T029, T030, 001-T010
   - Aceptación: `make fmt lint test` en verde; `.env` de staging completo en la VM (nunca en el repo); `scripts/deploy.sh staging` termina bien; `/healthz`, `/readyz` y `/api/v1/meta` devuelven 200 en `https://<host>:8443` **sin `-k`** (CA-S3); no hay respuesta HTTP en claro (CA-S4); el límite de tasa responde 429 al pasarse (CA-S6); con Redis detenido la API responde y `/readyz` marca `degradado` (CA-S5); registros sin secretos ni datos personales; URL anotada para el móvil. **La spec 003 no empieza hasta que esta tarea pase.**

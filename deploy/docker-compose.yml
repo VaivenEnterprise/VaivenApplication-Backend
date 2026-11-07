@@ -1,0 +1,52 @@
+# =============================================================================
+# deploy/docker-compose.yml — API de VAIVÉN en la VM (spec 002, T030; Art. XIII y XIV)
+#
+# Solo la API: MongoDB y Redis son los del stack base de la spec 001
+# (deploy/base/docker-compose.yml, proyecto «base»). La VM tiene ~1 GiB de RAM y
+# no caben dos MongoDB, así que la API se une a la red de ese stack.
+#
+# Lo arranca scripts/deploy.sh desde /opt/vaiven/<entorno>/, con:
+#   VAIVEN_ENV     staging | production (proyecto de Compose vaiven-<entorno>)
+#   API_IMAGE_TAG  etiqueta de la imagen vaiven-api ya cargada en la VM
+#   API_PORT       8443 en staging, 443 en production (Art. XIII.6)
+# Los secretos viven solo en /opt/vaiven/<entorno>/.env (600), nunca aquí.
+# =============================================================================
+name: vaiven-${VAIVEN_ENV:?falta VAIVEN_ENV}
+
+services:
+  api:
+    image: vaiven-api:${API_IMAGE_TAG:?falta API_IMAGE_TAG}
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      APP_ENV: ${VAIVEN_ENV}
+      HTTP_ADDR: ":8443"
+      # Copia del certificado de Let's Encrypt legible por el usuario no root de
+      # la imagen (la deja ahí deploy/certbot-deploy-hook.sh en cada renovación).
+      TLS_CERT_FILE: /certs/fullchain.pem
+      TLS_KEY_FILE: /certs/privkey.pem
+      GOMEMLIMIT: 120MiB
+    # Solo la API publica puerto; MongoDB y Redis nunca (Art. XIV.4).
+    ports:
+      - "${API_PORT:?falta API_PORT}:8443"
+    volumes:
+      - /opt/vaiven/certs:/certs:ro
+    networks:
+      - base
+    # Endurecimiento: sistema de archivos de solo lectura y sin privilegios.
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 160M
+          cpus: "0.5"
+
+networks:
+  base:
+    external: true
+    name: base_vaiven-net

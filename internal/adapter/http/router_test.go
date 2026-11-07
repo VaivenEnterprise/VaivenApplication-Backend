@@ -11,8 +11,11 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/handler"
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/middleware"
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/platform/redis"
 )
 
 const testOrigin = "https://app.vaiven.mx"
@@ -176,5 +179,30 @@ func TestLimitBody(t *testing.T) {
 				t.Errorf("MaxBytesError = %v (err=%v), want %v", got, readErr, tt.wantErr)
 			}
 		})
+	}
+}
+
+// TestRateLimitMounted cubre CA-S6 a través del router: con un límite de 2,
+// la tercera petición de la misma IP recibe 429 rate_limited.
+func TestRateLimitMounted(t *testing.T) {
+	h := NewRouter(Deps{
+		Log:             slog.New(slog.DiscardHandler),
+		Pinger:          fakePinger{},
+		Meta:            handler.MetaInfo{Name: "vaiven-backend"},
+		Limiter:         redis.NewMemoryLimiter(),
+		LimiterFallback: redis.NewMemoryLimiter(),
+		RateLimit:       middleware.RateLimitConfig{Limit: 2, Window: time.Minute},
+	})
+
+	var codes []int
+	for i := 0; i < 3; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/meta", nil)
+		req.RemoteAddr = "203.0.113.7:5000"
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		codes = append(codes, rec.Code)
+	}
+	if codes[0] != http.StatusOK || codes[1] != http.StatusOK || codes[2] != http.StatusTooManyRequests {
+		t.Errorf("códigos = %v, want [200 200 429]", codes)
 	}
 }

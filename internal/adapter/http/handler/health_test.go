@@ -34,14 +34,28 @@ func TestHealthz(t *testing.T) {
 }
 
 func TestReadyzReady(t *testing.T) {
-	rec := httptest.NewRecorder()
-	Readyz(fakePinger{})(rec, httptest.NewRequest(http.MethodGet, "/readyz", nil))
-
-	if rec.Code != http.StatusOK {
-		t.Errorf("status = %d, want 200", rec.Code)
+	tests := []struct {
+		name  string
+		redis Pinger
+		want  string
+	}{
+		{"Redis responde", fakePinger{}, `{"status":"ready","redis":"ok"}`},
+		// CA-S5: Redis caído no produce 503.
+		{"Redis caído", fakePinger{err: errors.New("redis: ping: connection refused")}, `{"status":"ready","redis":"degradado"}`},
+		{"sin Redis configurado", nil, `{"status":"ready","redis":"degradado"}`},
 	}
-	if got := strings.TrimSpace(rec.Body.String()); got != `{"status":"ready"}` {
-		t.Errorf("body = %q", got)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			Readyz(fakePinger{}, tt.redis)(rec, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+
+			if rec.Code != http.StatusOK {
+				t.Errorf("status = %d, want 200", rec.Code)
+			}
+			if got := strings.TrimSpace(rec.Body.String()); got != tt.want {
+				t.Errorf("body = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -50,7 +64,7 @@ func TestReadyzUnavailable(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 	req = req.WithContext(respond.WithRequestID(req.Context(), "req-3"))
 	rec := httptest.NewRecorder()
-	Readyz(fakePinger{err: cause})(rec, req)
+	Readyz(fakePinger{err: cause}, fakePinger{})(rec, req)
 
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503", rec.Code)

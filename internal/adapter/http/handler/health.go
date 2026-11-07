@@ -20,20 +20,37 @@ type statusResponse struct {
 	Status string `json:"status"`
 }
 
+// Estados de Redis en /readyz (RF-05, CA-S5).
+const (
+	redisOK        = "ok"
+	redisDegradado = "degradado"
+)
+
+type readyResponse struct {
+	Status string `json:"status"`
+	Redis  string `json:"redis"`
+}
+
 // Healthz responde 200 mientras el proceso vive, sin consultar ninguna
 // dependencia (RF-04).
 func Healthz(w http.ResponseWriter, _ *http.Request) {
 	respond.JSON(w, http.StatusOK, statusResponse{Status: "ok"})
 }
 
-// Readyz responde 200 si pinger responde y 503 service_unavailable si no
-// (RF-05). La causa del fallo no se expone en la respuesta.
-func Readyz(pinger Pinger) http.HandlerFunc {
+// Readyz responde 503 service_unavailable solo si MongoDB no responde (RF-05).
+// Redis nunca es fuente de verdad: si falla o no está configurado (nil), la API
+// sigue lista y lo informa como "degradado" (Art. XIV.2, CA-S5). La causa del
+// fallo no se expone en la respuesta.
+func Readyz(mongo, redis Pinger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if err := pinger.Ping(r.Context()); err != nil {
+		if err := mongo.Ping(r.Context()); err != nil {
 			respond.Failure(w, r, http.StatusServiceUnavailable, respond.CodeServiceUnavailable, messageUnavailable)
 			return
 		}
-		respond.JSON(w, http.StatusOK, statusResponse{Status: "ready"})
+		redisState := redisOK
+		if redis == nil || redis.Ping(r.Context()) != nil {
+			redisState = redisDegradado
+		}
+		respond.JSON(w, http.StatusOK, readyResponse{Status: "ready", Redis: redisState})
 	}
 }

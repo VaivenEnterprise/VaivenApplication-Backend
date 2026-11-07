@@ -14,6 +14,7 @@ import (
 const (
 	EnvDevelopment = "development"
 	EnvTest        = "test"
+	EnvStaging     = "staging"
 	EnvProduction  = "production"
 )
 
@@ -33,12 +34,46 @@ type Config struct {
 
 	CORSAllowedOrigins []string
 	LogLevel           slog.Level
+
+	// Servicios (plan §9, P-S1): cada uno se carga en su propio archivo.
+	Cloudinary Cloudinary
+	Redis      Redis
+	TLS        TLS
 }
 
 // IsProduction indica si el servicio corre en producción (logs en JSON, plan P-04).
 func (c Config) IsProduction() bool {
 	return c.AppEnv == EnvProduction
 }
+
+// isDeployed indica un entorno desplegado en la VM, donde HTTPS y Redis son
+// obligatorios (Art. XIV).
+func isDeployed(appEnv string) bool {
+	return appEnv == EnvStaging || appEnv == EnvProduction
+}
+
+// Secret guarda un valor sensible que nunca se imprime: fmt, slog y JSON
+// muestran «***» (Art. VI). Reveal devuelve el valor real.
+type Secret string
+
+func (s Secret) String() string {
+	if s == "" {
+		return ""
+	}
+	return "***"
+}
+
+// GoString cubre %#v.
+func (s Secret) GoString() string { return s.String() }
+
+// LogValue cubre slog.
+func (s Secret) LogValue() slog.Value { return slog.StringValue(s.String()) }
+
+// MarshalText cubre JSON y otros codificadores de texto.
+func (s Secret) MarshalText() ([]byte, error) { return []byte(s.String()), nil }
+
+// Reveal devuelve el valor real; usarlo solo donde se necesita el secreto.
+func (s Secret) Reveal() string { return string(s) }
 
 // Error reúne todas las variables faltantes o inválidas, no solo la primera.
 type Error struct {
@@ -62,7 +97,7 @@ func load(lookup lookupFunc) (Config, error) {
 	r := reader{lookup: lookup}
 
 	cfg := Config{
-		AppEnv:              r.oneOf("APP_ENV", EnvDevelopment, EnvDevelopment, EnvTest, EnvProduction),
+		AppEnv:              r.oneOf("APP_ENV", EnvDevelopment, EnvDevelopment, EnvTest, EnvStaging, EnvProduction),
 		AppVersion:          r.text("APP_VERSION", "dev"),
 		HTTPAddr:            r.text("HTTP_ADDR", ":8080"),
 		HTTPReadTimeout:     r.duration("HTTP_READ_TIMEOUT", 10*time.Second),
@@ -74,6 +109,9 @@ func load(lookup lookupFunc) (Config, error) {
 		CORSAllowedOrigins:  r.list("CORS_ALLOWED_ORIGINS"),
 		LogLevel:            r.logLevel("LOG_LEVEL", slog.LevelInfo),
 	}
+	cfg.Cloudinary = loadCloudinary(&r, cfg.AppEnv)
+	cfg.Redis = loadRedis(&r, cfg.AppEnv)
+	cfg.TLS = loadTLS(&r, cfg.AppEnv)
 
 	if len(r.problems) > 0 {
 		return Config{}, &Error{Problems: r.problems}
