@@ -39,7 +39,7 @@
   - Aceptación: índices único de hash, por familia y TTL; marcar usado, revocar familia, buscar por hash; prueba de integración
   - Refs: P-03, P-04
 
-- [ ] **T007** Casos de uso: registro y login
+- [x] **T007** Casos de uso: registro y login
   - Archivos: `internal/auth/usecase/ports.go`, `register.go`, `login.go`, `auth_usecase_test.go`
   - Agente: `dev-go` · Depende de: T005, T006
   - Aceptación: validaciones de POL-12; correo normalizado; login con error genérico; emite tokens; pruebas con repos falsos; ≥ 80 %
