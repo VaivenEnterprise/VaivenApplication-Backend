@@ -125,14 +125,14 @@
   - Aceptación: con Docker, `go test -tags integration ./...` pasa; cubre conexión+ping, `EnsureAll` dos veces sin error y un solo índice, `/readyz` 200 con Mongo activo y 503 tras detener el contenedor
   - Refs: plan §6 · CA-03, CA-04, CA-09 · Art. VII
 
-- [ ] **T017** [P] Prueba de arquitectura
+- [x] **T017** [P] Prueba de arquitectura
   - Archivos: `internal/architecture_test.go`
   - Agente: `qa-go`
   - Depende de: T006
   - Aceptación: falla si `internal/domain` o `internal/usecase` dependen (directa o transitivamente) de `net/http`, `go-chi`, `mongo-driver` o `bson`; pasa en el estado actual
   - Refs: RNF-07 · Art. III
 
-- [ ] **T018** [P] Contrato OpenAPI
+- [x] **T018** [P] Contrato OpenAPI
   - Archivos: `api/openapi.yaml`
   - Agente: `spec-writer`
   - Depende de: T013
@@ -146,7 +146,7 @@
   - Aceptación: build multi‑etapa; binario estático; imagen final `distroless`, usuario no root; `docker build .` termina sin errores
   - Refs: plan P-09 · Art. VI
 
-- [ ] **T020** [P] Verificación local de calidad
+- [x] **T020** [P] Verificación local de calidad
   - Archivos: `go.mod`, `.golangci.yml` (ya previsto), `Makefile` (ajustes mínimos)
   - Agente: `dev-go`
   - Depende de: T002, T004
@@ -155,21 +155,21 @@
 
 ## Fase 4 — Cierre
 
-- [ ] **T021** README del backend
+- [x] **T021** README del backend
   - Archivos: `README.md`
   - Agente: `spec-writer`
   - Depende de: T015, T019
   - Aceptación: explica requisitos, cómo levantar MongoDB y la API, variables de entorno, comandos `make`, equivalentes sin `make` para Windows, y cómo ejecutar pruebas unitarias e integración; un compañero puede seguirlo sin ayuda (CA-01)
   - Refs: H-01
 
-- [ ] **T022** Actualizar memoria y verificar criterios de aceptación
+- [x] **T022** Actualizar memoria y verificar criterios de aceptación
   - Archivos: `memoria.md`
   - Agente: `spec-writer`
   - Depende de: T016, T017, T018, T020, T021
   - Aceptación: estado de la spec 002 actualizado; dependencias reales registradas; CA-01…CA-10 comprobados y anotados
   - Refs: Art. XI
 
-- [ ] **T023** Revisión de conformidad con la constitución
+- [x] **T023** Revisión de conformidad con la constitución
   - Archivos: ninguno (solo informe)
   - Agente: `revisor-constitucion`
   - Depende de: T022

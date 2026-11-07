@@ -33,7 +33,7 @@ Staging en el puerto 8443 y producción en el 443 (proyectos de Compose separado
 1. Inicia sesión con `az login` y define `CLOUDINARY_URL`; reinicia OpenCode y comprueba con `opencode mcp list` que `azure` y los dos MCP de Cloudinary estén conectados.
 2. Spec **001**: `@devops-mcp` elige región y talla gratuitas, crea la VM, la red y el stack base (MongoDB y Redis) y emite el certificado HTTPS.
 3. Desde la **002**: se implementan las tareas con `@dev-go`; la última tarea de cada spec es «Despliegue» (`@devops-mcp` ejecuta `scripts/deploy.sh staging` y verifica). **La spec siguiente no empieza hasta que esa tarea pase.**
-4. El despliegue no depende del repositorio (la imagen viaja por SSH). Repositorio en GitHub: una rama y una PR por spec con `main` protegida, por el MCP de GitHub y `@gestor-repo` (Art. XV); sin pipeline automatizado.
+4. El despliegue no depende del repositorio (la imagen viaja por SSH). Repositorio en GitHub con `main` y `develop` protegidas, PR por tarea, fase o spec (formatos en `docs/devsecops.md`) y CI en GitHub Actions (política, calidad, secretos y CodeQL; spec 017).
 
 ## Cómo se usa con OpenCode
 
@@ -50,6 +50,100 @@ opencode          # desde la raíz de este repositorio
 - Los Artículos **IV** (contrato de API) y **V** (dinero, fechas, idioma) deben mantenerse idénticos en las constituciones de backend y móvil. Si cambias uno, cámbialo en ambos repositorios y registra la decisión en ambos `memoria.md`.
 - `ROADMAP.md` y `docs/VAIVEN_Idea_y_Objetivo.pdf` son copias en cada repositorio; si se actualiza una, hay que actualizar las demás.
 
+## Desarrollo local
+
+### Requisitos
+
+| Herramienta | Versión | Para qué |
+|---|---|---|
+| Go | 1.26 (la línea `toolchain` de `go.mod` fija 1.26.10; Go la descarga solo) | Compilar y probar |
+| Docker **o** Podman | Docker Desktop o Podman Desktop | MongoDB local y pruebas de integración |
+| golangci-lint | v2.15.0 (la misma de la CI): `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0` | `make lint` |
+| make | opcional | Atajos; en Windows hay equivalentes abajo |
+
+### Levantar MongoDB y la API
+
+1. MongoDB 7 local como replica set `rs0` (sin autenticación, solo para tu máquina):
+   ```bash
+   make up                       # o: docker compose up -d
+   ```
+   El `docker-compose.yml` de la raíz es **solo para desarrollo**; el de la VM vive en `deploy/base/`.
+2. Variables de entorno: copia `.env.example` a `.env` (ignorado por git) y ajusta la sección «API en desarrollo local». La API **solo lee variables de entorno**, no el archivo, así que cárgalas en la terminal:
+   ```bash
+   set -a; source .env; set +a   # Git Bash o WSL
+   ```
+   ```powershell
+   Get-Content .env | Where-Object { $_ -match '^[A-Z_]+=' } | ForEach-Object { $k, $v = $_ -split '=', 2; Set-Item "env:$k" $v }   # PowerShell
+   ```
+3. Arranca la API (escucha en `:8080`):
+   ```bash
+   make run                      # o: go run ./cmd/api
+   ```
+   Si falta una variable obligatoria (`MONGO_URI`, `MONGO_DB`), termina con código 1 y un mensaje que las nombra todas.
+
+### Variables (spec 002, plan §4.1)
+
+| Variable | Obligatoria | Por defecto | Descripción |
+|---|---|---|---|
+| `APP_ENV` | No | `development` | `development`, `test` o `production` (logs en JSON solo en `production`) |
+| `APP_VERSION` | No | `dev` | Versión que muestra `/api/v1/meta` si el build no inyecta otra |
+| `HTTP_ADDR` | No | `:8080` | Dirección de escucha |
+| `HTTP_READ_TIMEOUT` / `HTTP_WRITE_TIMEOUT` | No | `10s` / `15s` | Duraciones de Go (`500ms`, `10s`, `1m`) |
+| `SHUTDOWN_TIMEOUT` | No | `15s` | Espera máxima del cierre ordenado |
+| `MONGO_URI` | **Sí** | — | Local: `mongodb://localhost:27017/?replicaSet=rs0` |
+| `MONGO_DB` | **Sí** | — | Local: `vaiven_dev` |
+| `MONGO_CONNECT_TIMEOUT` | No | `10s` | Tiempo máximo de la conexión inicial |
+| `CORS_ALLOWED_ORIGINS` | No | vacío | Orígenes separados por comas |
+| `LOG_LEVEL` | No | `info` | `debug`, `info`, `warn` o `error` |
+
+Una variable vacía equivale a no definida. Las variables de Redis, TLS y Cloudinary llegan con la fase 5 de la spec 002.
+
+### Endpoints
+
+| Método y ruta | Respuesta |
+|---|---|
+| `GET /healthz` | 200 `{"status":"ok"}` mientras el proceso vive |
+| `GET /readyz` | 200 `{"status":"ready"}` si MongoDB responde; 503 `service_unavailable` si no |
+| `GET /api/v1/meta` | 200 con `name`, `version`, `environment` y `serverTime` (UTC) |
+
+Contrato completo: `api/openapi.yaml`. Toda respuesta trae `X-Request-Id` y todo error usa `{"error":{"code","message","details","requestId"}}`.
+
+### Comandos
+
+| `make` | Equivalente sin `make` | Qué hace |
+|---|---|---|
+| `make fmt` | `gofmt -s -w .` | Formatea el código |
+| `make lint` | `golangci-lint run` | Análisis estático (`.golangci.yml`) |
+| `make test` | `go test ./... -race -cover` | Pruebas unitarias con cobertura |
+| `make test RACE=` | `go test ./... -cover` | Igual, sin `-race` (necesita cgo; en Windows suele no haber compilador de C) |
+| `make test-integration` | `go test -tags=integration ./... -race` | Pruebas con MongoDB real (Testcontainers) |
+| `make build` | `go build -ldflags "-s -w -X main.version=dev" -o bin/api ./cmd/api` | Compila el binario |
+| `make up` / `make down` | `docker compose up -d` / `docker compose down` | MongoDB local |
+
+La CI ejecuta además `go test -race`, la cobertura mínima de `domain` y `usecase` (80 %), `govulncheck` y CodeQL.
+
+### Pruebas de integración
+
+Levantan MongoDB 7 con Testcontainers; necesitan Docker o Podman en marcha.
+
+- **Docker:** `make test-integration`.
+- **Podman en Windows (WSL):** el puerto publicado no llega a `localhost`, así que Testcontainers debe usar la IP de la máquina de Podman:
+  ```bash
+  export DOCKER_HOST=npipe:////./pipe/podman-machine-default
+  export TESTCONTAINERS_RYUK_DISABLED=true
+  export TESTCONTAINERS_HOST_OVERRIDE=$(wsl -d podman-machine-default -- ip -4 -o addr show eth0 | tr -d '\0' | awk '{print $4}' | cut -d/ -f1)
+  go test -tags=integration ./... -count=1
+  ```
+
+### Imagen de Docker
+
+```bash
+docker build --build-arg APP_VERSION=$(git rev-parse --short HEAD) -t vaiven-api .
+```
+Imagen `distroless` de unos 13 MB que corre como usuario no root. El despliegue en la VM (HTTPS, Compose y `scripts/deploy.sh`) llega con la fase 5 de la spec 002.
+
 ## Estado
 
-Todavía no hay código ni se han ejecutado tareas: están definidos los archivos de gobierno, el SDD por spec y la configuración de OpenCode con MCP. El repositorio y el pipeline se integrarán de cero.
+- **Spec 001 (infraestructura en Azure):** T001–T009 cerradas; la VM, MongoDB, Redis, el certificado HTTPS y Cloudinary están en marcha (`docs/servicios.md`).
+- **Spec 002 (arquitectura base):** configuración, MongoDB, errores, logger, capa HTTP, router, `main`, pruebas de integración, Dockerfile y contrato OpenAPI listos; falta la fase 5 (Redis, TLS, Cloudinary, `check-services` y despliegue en staging).
+- Detalle de cada tarea en `specs/<spec>/tasks.md` y decisiones en `memoria.md`.

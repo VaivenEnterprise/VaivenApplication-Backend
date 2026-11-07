@@ -1,0 +1,236 @@
+openapi: 3.1.0
+info:
+  title: VAIVÉN API
+  version: 0.2.0
+  summary: API REST del backend de VAIVÉN (préstamo y renta de objetos en México).
+  description: |
+    Contrato de la spec 002 (arquitectura base): endpoints de infraestructura y
+    el envoltorio único de errores (Art. IV de la constitución).
+
+    - Rutas de negocio bajo `/api/v1`; `/healthz` y `/readyz` fuera del prefijo.
+    - JSON en `camelCase`; fechas en ISO-8601 UTC.
+    - Toda respuesta trae `X-Request-Id`: si la petición envía uno válido
+      (≤ 64 caracteres alfanuméricos y guiones) se reutiliza; si no, se genera.
+    - Las specs siguientes agregan sus rutas en `api/paths/<modulo>.yaml`.
+security: []  # endpoints públicos: no requieren autenticación
+servers:
+  - url: https://vaiven-staging.westus2.cloudapp.azure.com:8443
+    description: Staging (Azure)
+  - url: http://localhost:8080
+    description: Desarrollo local
+tags:
+  - name: infraestructura
+    description: Salud del proceso y de sus dependencias.
+  - name: meta
+    description: Información del servicio para el cliente móvil.
+paths:
+  /healthz:
+    get:
+      tags: [infraestructura]
+      operationId: getHealthz
+      summary: El proceso está vivo
+      description: Responde 200 mientras el proceso vive; no consulta dependencias.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: El proceso está vivo.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+              example:
+                status: ok
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /readyz:
+    get:
+      tags: [infraestructura]
+      operationId: getReadyz
+      summary: El servicio puede atender peticiones
+      description: |
+        Hace ping a MongoDB (máximo 2 s). Responde 503 `service_unavailable` si
+        MongoDB no responde.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: MongoDB responde.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+              example:
+                status: ready
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/meta:
+    get:
+      tags: [meta]
+      operationId: getMeta
+      summary: Información del servicio
+      description: Permite al móvil comprobar conectividad y versión.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Datos del servicio.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Meta'
+              example:
+                name: vaiven-backend
+                version: 0.2.0
+                environment: staging
+                serverTime: '2026-11-07T15:00:00Z'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '500':
+          $ref: '#/components/responses/InternalError'
+components:
+  parameters:
+    RequestId:
+      name: X-Request-Id
+      in: header
+      required: false
+      description: Identificador de la petición; se reutiliza si es válido.
+      schema:
+        type: string
+        maxLength: 64
+        pattern: '^[A-Za-z0-9-]{1,64}$'
+  headers:
+    X-Request-Id:
+      description: Identificador de la petición (el recibido si era válido o uno nuevo).
+      schema:
+        type: string
+        maxLength: 64
+  schemas:
+    Status:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok, ready]
+    Meta:
+      type: object
+      required: [name, version, environment, serverTime]
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        environment:
+          type: string
+          enum: [development, test, staging, production]
+        serverTime:
+          type: string
+          format: date-time
+          description: Hora del servidor en UTC (ISO-8601).
+    ErrorCode:
+      type: string
+      description: Códigos permitidos por el Art. IV.3 de la constitución.
+      enum:
+        - validation_failed
+        - unauthorized
+        - forbidden
+        - not_found
+        - conflict
+        - rate_limited
+        - internal_error
+        - service_unavailable
+    ErrorDetail:
+      type: object
+      required: [field, issue]
+      properties:
+        field:
+          type: string
+        issue:
+          type: string
+    Error:
+      type: object
+      description: Envoltorio único de errores (Art. IV.3).
+      examples:
+        - error:
+            code: validation_failed
+            message: Revisa los datos marcados.
+            details:
+              - field: email
+                issue: formato inválido
+            requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, requestId]
+          properties:
+            code:
+              $ref: '#/components/schemas/ErrorCode'
+            message:
+              type: string
+              description: Texto legible en español (es-MX).
+            details:
+              type: array
+              items:
+                $ref: '#/components/schemas/ErrorDetail'
+            requestId:
+              type: string
+  responses:
+    ServiceUnavailable:
+      description: Una dependencia obligatoria (MongoDB) no responde.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: service_unavailable
+              message: El servicio no está disponible por ahora. Intenta de nuevo en unos minutos.
+              requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+    MethodNotAllowed:
+      description: Método no permitido para la ruta; usa el código not_found.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: not_found
+              message: Este método no está permitido para esta ruta.
+              requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+    InternalError:
+      description: Fallo inesperado; nunca expone detalles internos.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: internal_error
+              message: Ocurrió un error inesperado. Intenta de nuevo.
+              requestId: 43d4c7dbb802d8b3711c8f4163ffc823
