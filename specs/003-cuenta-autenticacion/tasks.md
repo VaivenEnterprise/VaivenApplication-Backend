@@ -45,7 +45,7 @@
   - Aceptación: validaciones de POL-12; correo normalizado; login con error genérico; emite tokens; pruebas con repos falsos; ≥ 80 %
   - Refs: RF-01…RF-04 · Art. III
 
-- [ ] **T008** Casos de uso: refresh, logout, perfil y baja
+- [x] **T008** Casos de uso: refresh, logout, perfil y baja
   - Archivos: `internal/auth/usecase/refresh.go`, `logout.go`, `profile.go`, `deactivate.go`, `session_usecase_test.go`
   - Agente: `dev-go` · Depende de: T007
   - Aceptación: rotación y detección de reutilización; baja bloqueada si `ActiveBookingChecker` devuelve true; la baja **anonimiza** correo (se sustituye por un valor único no enrutable), nombre («Cuenta eliminada») y teléfono, y revoca todas las familias de refresh tokens (prueba: tras la baja el correo original puede volver a registrarse); perfil público con «Cuenta eliminada»; expone `users.Directory` con `PublicUsers(ctx, ids) → map[id]PublicUser` (lectura por lote que usarán 005, 006, 007, 008 y 010) y `users.Admin` con `Suspend(ctx, userID, until)` y `AddRating(ctx, userID, score)` (`$inc` de `ratingSum`/`ratingCount`; los usan 010 y 011), todo con implementación en Mongo; pruebas

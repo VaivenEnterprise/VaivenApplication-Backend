@@ -11,6 +11,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/domain"
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/usecase"
 )
 
 // RefreshTokensCollection es el nombre de la colección de refresh tokens.
@@ -132,3 +133,6 @@ func (r *RefreshRepo) revoke(ctx context.Context, filter bson.D, at time.Time) e
 	}
 	return nil
 }
+
+// Comprobación en compilación del puerto que implementa RefreshRepo.
+var _ usecase.RefreshTokens = (*RefreshRepo)(nil)

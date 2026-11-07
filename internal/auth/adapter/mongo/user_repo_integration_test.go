@@ -13,6 +13,7 @@ import (
 	drv "go.mongodb.org/mongo-driver/v2/mongo"
 
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/domain"
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/usecase"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/platform/mongodb"
 )
 
@@ -128,5 +129,96 @@ func TestIntegrationUserRepo(t *testing.T) {
 		if _, err := find(); !domain.Is(err, domain.ErrUserNotFound) {
 			t.Errorf("%s: err = %v, want ErrUserNotFound", name, err)
 		}
+	}
+}
+
+func TestIntegrationUserRepoProfileAndAdmin(t *testing.T) {
+	ctx := context.Background()
+	repo := NewUserRepo(newDB(t))
+	if err := repo.EnsureIndexes(ctx); err != nil {
+		t.Fatal(err)
+	}
+	ana, err := repo.Create(ctx, newUser("ana@example.com"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	beto, err := repo.Create(ctx, newUser("beto@example.com"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Millisecond)
+
+	name, phone := "Ana López", "+525512345678"
+	u, err := repo.UpdateProfile(ctx, ana.ID, usecase.ProfileChanges{DisplayName: &name, Phone: &phone}, now)
+	if err != nil || u.DisplayName != name || u.Phone == nil || *u.Phone != phone || u.Version != 2 || !u.UpdatedAt.Equal(now) {
+		t.Fatalf("UpdateProfile = %+v, %v", u, err)
+	}
+	u, err = repo.UpdateProfile(ctx, ana.ID, usecase.ProfileChanges{ClearPhone: true}, now)
+	if err != nil || u.Phone != nil || u.DisplayName != name || u.Version != 3 {
+		t.Fatalf("borrar teléfono = %+v, %v", u, err)
+	}
+	for _, id := range []string{"no-es-id", "0123456789abcdef01234567"} {
+		if _, err := repo.UpdateProfile(ctx, id, usecase.ProfileChanges{DisplayName: &name}, now); !domain.Is(err, domain.ErrUserNotFound) {
+			t.Errorf("UpdateProfile(%s) = %v", id, err)
+		}
+	}
+
+	// Calificaciones y suspensión (users.Admin).
+	for _, s := range []int{5, 4} {
+		if err := repo.AddRating(ctx, ana.ID, s); err != nil {
+			t.Fatalf("AddRating: %v", err)
+		}
+	}
+	if err := repo.AddRating(ctx, ana.ID, 6); err == nil {
+		t.Error("AddRating(6) debe fallar")
+	}
+	if err := repo.AddRating(ctx, "0123456789abcdef01234567", 5); !domain.Is(err, domain.ErrUserNotFound) {
+		t.Errorf("AddRating inexistente = %v", err)
+	}
+	until := now.Add(24 * time.Hour)
+	if err := repo.Suspend(ctx, ana.ID, until); err != nil {
+		t.Fatalf("Suspend: %v", err)
+	}
+	if err := repo.Suspend(ctx, "no-es-id", until); !domain.Is(err, domain.ErrUserNotFound) {
+		t.Errorf("Suspend id inválido = %v", err)
+	}
+	got, _ := repo.ByID(ctx, ana.ID)
+	if got.RatingSum != 9 || got.RatingCount != 2 || !got.IsSuspended(now) {
+		t.Errorf("tras calificar y suspender = %+v", got)
+	}
+
+	// Baja: anonimiza y libera el correo.
+	anon := domain.AnonymizedEmail(beto.ID)
+	if err := repo.Deactivate(ctx, beto.ID, anon, now); err != nil {
+		t.Fatalf("Deactivate: %v", err)
+	}
+	if err := repo.Deactivate(ctx, "0123456789abcdef01234567", "x@vaiven.invalid", now); !domain.Is(err, domain.ErrUserNotFound) {
+		t.Errorf("Deactivate inexistente = %v", err)
+	}
+	if err := repo.Deactivate(ctx, "no-es-id", "x@vaiven.invalid", now); !domain.Is(err, domain.ErrUserNotFound) {
+		t.Errorf("Deactivate id inválido = %v", err)
+	}
+	b, _ := repo.ByID(ctx, beto.ID)
+	if b.Email != anon || b.DisplayName != domain.DeletedDisplayName || b.Phone != nil || b.IsActive() || b.DeactivatedAt == nil {
+		t.Errorf("tras la baja = %+v", b)
+	}
+	if _, err := repo.UpdateProfile(ctx, beto.ID, usecase.ProfileChanges{DisplayName: &name}, now); !domain.Is(err, domain.ErrUserNotFound) {
+		t.Errorf("editar una cuenta de baja = %v", err)
+	}
+	if _, err := repo.Create(ctx, newUser("beto@example.com")); err != nil {
+		t.Errorf("el correo original debe quedar libre: %v", err)
+	}
+
+	// Directorio por lote (users.Directory).
+	dir, err := repo.PublicUsers(ctx, []string{ana.ID, beto.ID, "no-es-id", "0123456789abcdef01234567"})
+	if err != nil {
+		t.Fatalf("PublicUsers: %v", err)
+	}
+	if len(dir) != 2 || dir[ana.ID].DisplayName != name || dir[ana.ID].RatingAverage == nil ||
+		*dir[ana.ID].RatingAverage != 4.5 || dir[beto.ID].DisplayName != domain.DeletedDisplayName {
+		t.Errorf("PublicUsers = %+v", dir)
+	}
+	if empty, err := repo.PublicUsers(ctx, []string{"x"}); err != nil || len(empty) != 0 {
+		t.Errorf("PublicUsers sin ids válidos = %v, %v", empty, err)
 	}
 }
