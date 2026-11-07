@@ -190,7 +190,7 @@
   - Aceptación: `Ping(ctx, cfg)` llama a `/v1_1/<cloud>/ping` con autenticación básica y timeout 5 s; 200 → nil; 401 → error que **no contiene** el secreto; pruebas con `httptest`
   - Refs: RF-S3 · P-S3
 
-- [ ] **T026** Adaptador de Redis y puertos `Limiter` y `Cache`
+- [x] **T026** Adaptador de Redis y puertos `Limiter` y `Cache`
   - Archivos: `internal/platform/redis/client.go`, `internal/platform/redis/limiter.go`, `internal/platform/redis/cache.go`, `internal/platform/redis/memory.go`, `internal/platform/redis/redis_test.go`
   - Agente: `dev-go` · Depende de: T024
   - Aceptación: puertos `ratelimit.Limiter` (`Allow(ctx, key, limit, window)`) y `cache.Cache` (`Get/Set/Delete` con TTL) declarados donde se consumen; implementación Redis (ventana fija o deslizante con script atómico) y una **en memoria**; claves con prefijo `vaiven:<APP_ENV>:`; `Ping(ctx)` para `/readyz`; solo este paquete importa `go-redis`; pruebas contra Redis real (`-tags integration`) y contra la versión en memoria; cobertura ≥ 80 %
