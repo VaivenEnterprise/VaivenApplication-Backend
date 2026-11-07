@@ -1,18 +1,22 @@
 openapi: 3.1.0
 info:
   title: VAIVÉN API
-  version: 0.2.0
+  version: 0.3.0
   summary: API REST del backend de VAIVÉN (préstamo y renta de objetos en México).
   description: |
     Contrato de la spec 002 (arquitectura base): endpoints de infraestructura y
-    el envoltorio único de errores (Art. IV de la constitución).
+    el envoltorio único de errores (Art. IV de la constitución). La spec 003
+    agrega la cuenta y la autenticación (`api/paths/auth.yaml` y `users.yaml`).
 
     - Rutas de negocio bajo `/api/v1`; `/healthz` y `/readyz` fuera del prefijo.
     - JSON en `camelCase`; fechas en ISO-8601 UTC.
     - Toda respuesta trae `X-Request-Id`: si la petición envía uno válido
       (≤ 64 caracteres alfanuméricos y guiones) se reutiliza; si no, se genera.
     - Las specs siguientes agregan sus rutas en `api/paths/<modulo>.yaml`.
-security: []  # endpoints públicos: no requieren autenticación
+    - Autenticación (spec 003): `Authorization: Bearer <accessToken>` (JWT de
+      15 min). Las rutas sin autenticación declaran `security: []`.
+security:
+  - bearerAuth: []
 servers:
   - url: https://vaiven-staging.westus2.cloudapp.azure.com:8443
     description: Staging (Azure)
@@ -23,11 +27,18 @@ tags:
     description: Salud del proceso y de sus dependencias.
   - name: meta
     description: Información del servicio para el cliente móvil.
+  - name: auth
+    description: Registro, inicio de sesión y tokens (spec 003).
+  - name: cuenta
+    description: La cuenta de la persona autenticada (spec 003).
+  - name: usuarios
+    description: Perfiles públicos (spec 003).
 paths:
   /healthz:
     get:
       tags: [infraestructura]
       operationId: getHealthz
+      security: []
       summary: El proceso está vivo
       description: Responde 200 mientras el proceso vive; no consulta dependencias.
       parameters:
@@ -54,6 +65,7 @@ paths:
     get:
       tags: [infraestructura]
       operationId: getReadyz
+      security: []
       summary: El servicio puede atender peticiones
       description: |
         Hace ping a MongoDB (máximo 2 s). Responde 503 `service_unavailable` solo si
@@ -86,6 +98,7 @@ paths:
     get:
       tags: [meta]
       operationId: getMeta
+      security: []
       summary: Información del servicio
       description: Permite al móvil comprobar conectividad y versión.
       parameters:
@@ -111,7 +124,25 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+  /api/v1/auth/register:
+    $ref: './paths/auth.yaml#/register'
+  /api/v1/auth/login:
+    $ref: './paths/auth.yaml#/login'
+  /api/v1/auth/refresh:
+    $ref: './paths/auth.yaml#/refresh'
+  /api/v1/auth/logout:
+    $ref: './paths/auth.yaml#/logout'
+  /api/v1/me:
+    $ref: './paths/auth.yaml#/me'
+  /api/v1/users/{id}:
+    $ref: './paths/users.yaml#/userById'
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: "Token de acceso que entregan login, register y refresh."
   parameters:
     RequestId:
       name: X-Request-Id
@@ -162,6 +193,134 @@ components:
           type: string
           format: date-time
           description: Hora del servidor en UTC (ISO-8601).
+    Role:
+      type: string
+      enum: [user, admin]
+    User:
+      type: object
+      description: La cuenta propia (solo la ve su dueña).
+      required: [id, email, displayName, phone, role, ratingAverage, ratingCount, createdAt]
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+        phone:
+          type: [string, 'null']
+        role:
+          $ref: '#/components/schemas/Role'
+        ratingAverage:
+          type: [number, 'null']
+          description: Promedio de calificaciones (1 a 5); null sin calificaciones (spec 010).
+        ratingCount:
+          type: integer
+          minimum: 0
+        createdAt:
+          type: string
+          format: date-time
+    PublicUser:
+      type: object
+      description: Perfil público; nunca incluye correo ni teléfono (Art. VI.4).
+      required: [id, displayName, ratingAverage, ratingCount, memberSince]
+      properties:
+        id:
+          type: string
+        displayName:
+          type: string
+          description: «Cuenta eliminada» si la cuenta se dio de baja.
+        ratingAverage:
+          type: [number, 'null']
+        ratingCount:
+          type: integer
+          minimum: 0
+        memberSince:
+          type: string
+          format: date-time
+    Tokens:
+      type: object
+      required: [accessToken, refreshToken, expiresIn]
+      properties:
+        accessToken:
+          type: string
+          description: "JWT HS256 para el encabezado `Authorization: Bearer`."
+        refreshToken:
+          type: string
+          description: Token opaco de un solo uso (30 días); se cambia en cada `refresh`.
+        expiresIn:
+          type: integer
+          description: Segundos de vida del token de acceso (900).
+    AuthResult:
+      type: object
+      required: [user, tokens]
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        tokens:
+          $ref: '#/components/schemas/Tokens'
+    RegisterRequest:
+      type: object
+      required: [email, password, displayName, acceptTerms, isAdult]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: Se guarda en minúsculas y sin espacios.
+        password:
+          type: string
+          minLength: 8
+          maxLength: 72
+        displayName:
+          type: string
+          minLength: 2
+          maxLength: 40
+        acceptTerms:
+          type: boolean
+          const: true
+          description: Aceptación de términos y privacidad (POL-12).
+        isAdult:
+          type: boolean
+          const: true
+          description: Declaración de mayoría de edad (POL-12).
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          maxLength: 254
+        password:
+          type: string
+          maxLength: 72
+    RefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+          maxLength: 128
+    UpdateMeRequest:
+      type: object
+      minProperties: 1
+      properties:
+        displayName:
+          type: string
+          minLength: 2
+          maxLength: 40
+        phone:
+          type: [string, 'null']
+          pattern: '^\+?[0-9]{10,15}$'
+          description: 10 a 15 dígitos, con `+` opcional; null lo borra.
+    DeleteMeRequest:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+          maxLength: 72
     ErrorCode:
       type: string
       description: Códigos permitidos por el Art. IV.3 de la constitución.
@@ -211,6 +370,37 @@ components:
             requestId:
               type: string
   responses:
+    ValidationFailed:
+      description: Datos inválidos; `details` indica cada campo.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: validation_failed
+              message: Revisa los datos marcados.
+              details:
+                - field: email
+                  issue: formato inválido
+              requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+    Unauthorized:
+      description: Falta el token, es inválido o venció; también un refreshToken inválido o reutilizado.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: unauthorized
+              message: Tu sesión no es válida o venció. Inicia sesión de nuevo.
+              requestId: 43d4c7dbb802d8b3711c8f4163ffc823
     ServiceUnavailable:
       description: Una dependencia obligatoria (MongoDB) no responde.
       headers:
