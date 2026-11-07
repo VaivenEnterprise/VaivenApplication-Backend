@@ -6,10 +6,12 @@ toolchain go1.26.10
 
 require (
 	github.com/go-chi/chi/v5 v5.5.0
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/redis/go-redis/v9 v9.23.0
 	github.com/testcontainers/testcontainers-go/modules/mongodb v0.45.0
 	github.com/testcontainers/testcontainers-go/modules/redis v0.45.0
 	go.mongodb.org/mongo-driver/v2 v2.9.3
+	golang.org/x/crypto v0.58.0
 )
 
 require (
@@ -66,7 +68,6 @@ require (
 	go.opentelemetry.io/otel/trace v1.44.0 // indirect
 	go.uber.org/atomic v1.12.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
-	golang.org/x/crypto v0.58.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/text v0.43.0 // indirect

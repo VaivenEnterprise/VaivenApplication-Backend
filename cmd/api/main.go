@@ -17,6 +17,8 @@ import (
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/middleware"
 	adaptermongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/mongo"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/config"
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/moderation"
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/notify"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/platform/logger"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/platform/mongodb"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/platform/redis"
@@ -96,6 +98,15 @@ func run() error {
 		limiter = redis.NewLimiter(rc)
 	}
 
+	mods := modules(moduleDeps{
+		Log:        log,
+		Notifier:   notify.Noop{},
+		Moderation: moderation.AllowAll{},
+	})
+	for _, m := range mods {
+		log.Info("módulo registrado", "module", m.Name())
+	}
+
 	srv := &http.Server{
 		Addr: cfg.HTTPAddr,
 		Handler: apihttp.NewRouter(apihttp.Deps{
@@ -106,6 +117,7 @@ func run() error {
 			Limiter:         limiter,
 			LimiterFallback: redis.NewMemoryLimiter(),
 			RateLimit:       middleware.RateLimitConfig{Limit: rateLimitPerWindow, Window: rateLimitWindow},
+			Modules:         mods,
 			Meta: handler.MetaInfo{
 				Name:        serviceName,
 				Version:     resolveVersion(version, cfg.AppVersion),

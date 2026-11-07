@@ -39,6 +39,9 @@ type Config struct {
 	Cloudinary Cloudinary
 	Redis      Redis
 	TLS        TLS
+
+	// Autenticación (spec 003, plan §5).
+	Auth Auth
 }
 
 // IsProduction indica si el servicio corre en producción (logs en JSON, plan P-04).
@@ -112,6 +115,7 @@ func load(lookup lookupFunc) (Config, error) {
 	cfg.Cloudinary = loadCloudinary(&r, cfg.AppEnv)
 	cfg.Redis = loadRedis(&r, cfg.AppEnv)
 	cfg.TLS = loadTLS(&r, cfg.AppEnv)
+	cfg.Auth = loadAuth(&r, cfg.AppEnv)
 
 	if len(r.problems) > 0 {
 		return Config{}, &Error{Problems: r.problems}

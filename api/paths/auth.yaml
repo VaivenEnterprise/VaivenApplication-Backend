@@ -1,0 +1,303 @@
+# Rutas de autenticación y de la cuenta propia (spec 003, T001; Art. IV y XII.2).
+# Se referencian desde api/openapi.yaml; los esquemas compartidos viven allí.
+register:
+  post:
+    tags: [auth]
+    operationId: register
+    summary: Crear una cuenta
+    description: |
+      Crea la cuenta y abre la sesión (RF-01). El correo se normaliza (minúsculas,
+      sin espacios) y debe ser único (RF-02). La persona debe aceptar los términos
+      y declarar que es mayor de edad (POL-12). Límite: 10 peticiones por minuto
+      por IP (RF-07).
+    security: []
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/RegisterRequest'
+          example:
+            email: ana@example.com
+            password: una-contrasena-larga
+            displayName: Ana
+            acceptTerms: true
+            isAdult: true
+    responses:
+      '201':
+        description: Cuenta creada; la sesión queda abierta.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/AuthResult'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '409':
+        description: El correo ya tiene una cuenta (sin importar mayúsculas).
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/Error'
+            example:
+              error:
+                code: conflict
+                message: Ya existe una cuenta con ese correo.
+                requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+login:
+  post:
+    tags: [auth]
+    operationId: login
+    summary: Iniciar sesión
+    description: |
+      Devuelve el usuario y tokens nuevos (RF-04). Ante credenciales inválidas o
+      una cuenta dada de baja responde 401 con un mensaje genérico que no revela
+      si el correo existe. Límite: 10 peticiones por minuto por IP (RF-07).
+    security: []
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/LoginRequest'
+          example:
+            email: ana@example.com
+            password: una-contrasena-larga
+    responses:
+      '200':
+        description: Sesión iniciada.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/AuthResult'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        description: Correo o contraseña incorrectos.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/Error'
+            example:
+              error:
+                code: unauthorized
+                message: El correo o la contraseña no son correctos.
+                requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+refresh:
+  post:
+    tags: [auth]
+    operationId: refreshTokens
+    summary: Renovar la sesión
+    description: |
+      Rotación (RF-05): entrega un par nuevo e invalida el `refreshToken` usado.
+      Reutilizar un `refreshToken` ya usado revoca toda su familia (todas las
+      sesiones abiertas a partir del mismo inicio de sesión) y responde 401.
+      Límite: 10 peticiones por minuto por IP (RF-07).
+    security: []
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/RefreshRequest'
+    responses:
+      '200':
+        description: Tokens nuevos.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tokens]
+              properties:
+                tokens:
+                  $ref: '../openapi.yaml#/components/schemas/Tokens'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+logout:
+  post:
+    tags: [auth]
+    operationId: logout
+    summary: Cerrar sesión
+    description: |
+      Revoca la familia del `refreshToken` (RF-06). Es idempotente: un token
+      desconocido, vencido o ya revocado también responde 204. El token de
+      acceso sigue siendo válido hasta que vence (15 min); el móvil lo descarta.
+    security: []
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/RefreshRequest'
+    responses:
+      '204':
+        description: Sesión cerrada.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+me:
+  get:
+    tags: [cuenta]
+    operationId: getMe
+    summary: Mi cuenta
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+    responses:
+      '200':
+        description: Datos de la cuenta propia.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/User'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+  patch:
+    tags: [cuenta]
+    operationId: updateMe
+    summary: Editar mi perfil
+    description: |
+      Cambia solo los campos enviados (RF-08). `phone: null` borra el teléfono.
+      El teléfono nunca aparece en el perfil público.
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/UpdateMeRequest'
+          example:
+            displayName: Ana López
+            phone: '+525512345678'
+    responses:
+      '200':
+        description: Perfil actualizado.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/User'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+  delete:
+    tags: [cuenta]
+    operationId: deleteMe
+    summary: Dar de baja mi cuenta
+    description: |
+      Baja con confirmación de contraseña (RF-08, POL-17): anonimiza correo,
+      nombre y teléfono, revoca todas las sesiones y la cuenta deja de aceptar
+      inicio de sesión. El correo original queda libre para una cuenta nueva.
+      Si hay reservas activas responde 409 (cuando exista la spec 007).
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/DeleteMeRequest'
+    responses:
+      '204':
+        description: Cuenta dada de baja.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '403':
+        description: |
+          La contraseña no es correcta. Se usa 403 y no 401 para que el móvil no
+          lo confunda con una sesión vencida.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/Error'
+            example:
+              error:
+                code: forbidden
+                message: La contraseña no es correcta.
+                requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+      '409':
+        description: Hay reservas activas; termínalas antes de dar de baja la cuenta.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/Error'
+            example:
+              error:
+                code: conflict
+                message: Tienes reservas activas. Termínalas antes de dar de baja tu cuenta.
+                requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
