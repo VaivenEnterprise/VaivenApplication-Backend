@@ -40,6 +40,7 @@ Pasos manuales adicionales, justificados:
 | `REDIS_PASSWORD` | `/opt/vaiven/base/.env` en la VM | `openssl rand -hex 24` en la VM | Actualizar `.env` y `docker compose up -d redis` (Redis no guarda datos persistentes) |
 | keyFile de MongoDB | `/opt/vaiven/secrets/mongo-keyfile` (999:999, 400) | `deploy/bootstrap.sh` | Detener mongo, regenerar el archivo con los mismos permisos y arrancar |
 | `AZURE_HOST` | `.env` local de despliegue | Etiqueta DNS de la IP pública | No es secreto; no se rota |
+| `JWT_ACCESS_SECRET` | `/opt/vaiven/staging/.env` en la VM (600, dueño `deploy`) | `openssl rand -hex 32` en la VM (spec 003, T014; 64 caracteres) | Generar uno nuevo en la VM, reemplazar la línea y `scripts/deploy.sh staging`: todas las sesiones de acceso vencen (los refresh tokens siguen sirviendo) |
 | Llave SSH `vaiven_azure` | `~/.ssh/vaiven_azure` de quien administra | `ssh-keygen` (T004) | Ver §4 |
 
 Las contraseñas se pasan a los comandos como variables de entorno dentro de la VM; nunca se imprimen ni se pegan en conversaciones con modelos.
@@ -82,7 +83,7 @@ Las contraseñas se pasan por variables de entorno (`process.env`), no en la lí
 ## 7. API de staging (spec 002, T031)
 
 - **URL para el móvil:** `https://vaiven-staging.westus2.cloudapp.azure.com:8443` (solo HTTPS, certificado de Let's Encrypt).
-- Endpoints: `GET /healthz`, `GET /readyz` (`redis: ok|degradado`), `GET /api/v1/meta`. Contrato: `api/openapi.yaml`.
+- Endpoints: `GET /healthz`, `GET /readyz` (`redis: ok|degradado`), `GET /api/v1/meta` y, desde la spec 003, `/api/v1/auth/{register,login,refresh,logout}`, `/api/v1/me` y `/api/v1/users/{id}`. Contrato: `api/openapi.yaml` y `api/paths/`.
 - Contenedor `vaiven-staging-api-1` (proyecto de Compose `vaiven-staging`, `/opt/vaiven/staging/`), unido a la red `base_vaiven-net` del stack base; usuario no root, sistema de archivos de solo lectura, 160 MiB.
 - Variables en `/opt/vaiven/staging/.env` (600, dueño `deploy`; plantilla en `deploy/.env.example`), generadas en la VM.
 - Certificado para la API en `/opt/vaiven/certs` (uid 65532); lo renueva el hook `/etc/letsencrypt/renewal-hooks/deploy/vaiven-api.sh` (copia de `deploy/certbot-deploy-hook.sh`) y la API lo recarga sola.
