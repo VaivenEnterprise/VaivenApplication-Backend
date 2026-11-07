@@ -40,5 +40,5 @@ Dar a toda la plataforma una manera segura y gratuita de recibir fotos (objetos 
 Borrado de imágenes huérfanas en Cloudinary, video, avatar de perfil, moderación visual automática.
 
 ## 6. Preguntas abiertas
-- ~~¿SHA-1 o SHA-256?~~ **Resuelto en T002:** la cuenta firma con SHA-1 (subida real verificada, `memoria.md` 004/T002).
+- ~~¿SHA-1 o SHA-256?~~ **Resuelto en T002:** la cuenta acepta SHA-1 (T002) y también SHA-256, que es el que se usa desde la corrección de CodeQL (`memoria.md`).
 - ~~¿Sirve la descarga privada con vencimiento?~~ **Resuelto en T002:** `image/download` firmada con `expires_at` devuelve la imagen (200) y, vencida, 401; no hace falta el plan alterno.
