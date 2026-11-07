@@ -88,3 +88,33 @@ Las contraseñas se pasan por variables de entorno (`process.env`), no en la lí
 - Variables en `/opt/vaiven/staging/.env` (600, dueño `deploy`; plantilla en `deploy/.env.example`), generadas en la VM.
 - Certificado para la API en `/opt/vaiven/certs` (uid 65532); lo renueva el hook `/etc/letsencrypt/renewal-hooks/deploy/vaiven-api.sh` (copia de `deploy/certbot-deploy-hook.sh`) y la API lo recarga sola.
 - Desplegar: `scripts/deploy.sh staging` (con Docker o `ENGINE=podman`); volver atrás: `scripts/deploy.sh staging --rollback`.
+
+## 8. Probar una subida real (spec 004)
+
+El móvil sube cada imagen **directo a Cloudinary** con una firma de un solo uso que da la API; la imagen no pasa por nuestro servidor. El **API secret de Cloudinary nunca se usa del lado del cliente**: solo la API lo tiene y firma con él. Para probarlo a mano (Git Bash o WSL, con `jq`):
+
+```bash
+API=https://vaiven-staging.westus2.cloudapp.azure.com:8443/api/v1
+
+# 1. Iniciar sesión con una cuenta de prueba (las credenciales van en variables, no en el historial).
+TOKEN=$(curl -s "$API/auth/login" -H 'Content-Type: application/json' \
+  -d "{\"email\":\"$VAIVEN_EMAIL\",\"password\":\"$VAIVEN_PASSWORD\"}" | jq -r .tokens.accessToken)
+
+# 2. Pedir la firma (item_photo → pública; evidence → privada). Límite: 30 por hora.
+SIG=$(curl -s "$API/uploads/signature" -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"purpose":"item_photo"}')
+
+# 3. Subir a uploadUrl con los campos tal cual (jpg, jpeg, png o webp, máximo 5 MB).
+curl -s "$(jq -r .uploadUrl <<<"$SIG")" \
+  -F file=@foto.jpg \
+  -F api_key="$(jq -r .apiKey <<<"$SIG")" \
+  -F timestamp="$(jq -r .timestamp <<<"$SIG")" \
+  -F signature="$(jq -r .signature <<<"$SIG")" \
+  -F public_id="$(jq -r .publicId <<<"$SIG")" \
+  -F type="$(jq -r .type <<<"$SIG")" \
+  -F allowed_formats="$(jq -r .allowedFormats <<<"$SIG")"
+```
+
+- Si se cambia cualquier campo firmado (`public_id`, `type`, `allowed_formats`, `timestamp`), Cloudinary responde `401 Invalid Signature`. La firma vence a la hora.
+- Al usarla en otra spec, el cliente manda solo la referencia (`{"photos":[{"publicId":"<publicId>"}]}`) y el servidor llama a `images.Service.Resolve`: comprueba que la imagen es de quien la envía y del propósito correcto, y pide a Cloudinary formato y tamaño. Si no cumple responde `400 validation_failed` con un detalle por imagen; si Cloudinary no responde, `503 service_unavailable`. Las URL (`url`, `thumbUrl`) se calculan al leer con `images.Service.URLs`; las evidencias dan una URL firmada que vence a los 10 minutos.
+- Sin red ni credenciales, el mismo flujo se prueba con `go test -tags integration -run Integration ./internal/images/adapter/http/` (Cloudinary simulado).

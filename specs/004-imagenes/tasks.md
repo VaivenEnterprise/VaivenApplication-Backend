@@ -9,7 +9,7 @@
   - Aceptación: describe `POST /api/v1/uploads/signature`, esquemas `UploadSignature`, `ImageInput`, `Image`; ejemplos
   - Refs: Art. IV, XII
 
-- [ ] **T002** Firmador de Cloudinary
+- [x] **T002** Firmador de Cloudinary
   - Archivos: `internal/images/adapter/cloudinary/signer.go`, `internal/images/adapter/cloudinary/signer_test.go`
   - Agente: `dev-go` · Depende de: 002-T024
   - Aceptación: función `Sign(params, secret)` con parámetros ordenados, SHA-1 hex; prueba con vector conocido de la documentación de Cloudinary; no registra el secreto; **una subida de prueba real documentada en `memoria.md`** confirma el algoritmo
@@ -51,7 +51,7 @@
   - Aceptación: 401 sin sesión; 429 tras 30 firmas/hora; respuesta cumple el contrato; módulo registrado con una línea
   - Refs: RF-01, RF-04 · CA-05
 
-- [ ] **T009** Prueba de integración con Cloudinary simulado y guía de prueba real
+- [x] **T009** Prueba de integración con Cloudinary simulado y guía de prueba real
   - Archivos: `internal/images/adapter/http/images_integration_test.go`, `docs/servicios.md` (sección "Probar subida real")
   - Agente: `qa-go` · Depende de: T008
   - Aceptación: flujo firma→`Resolve` con servidor simulado pasa; la guía explica cómo subir una imagen real con `curl`/`.http`
