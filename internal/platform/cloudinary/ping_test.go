@@ -11,10 +11,12 @@ import (
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/config"
 )
 
-const secret = "s3cr3t-no-debe-salir"
+// fakeSecret es un valor inventado y de baja entropía: solo sirve para comprobar
+// que el secreto nunca aparezca en los errores.
+const fakeSecret = "valor-de-prueba-falso"
 
 func creds() config.Cloudinary {
-	return config.Cloudinary{CloudName: "mi-nube", APIKey: "123456", APISecret: config.Secret(secret)}
+	return config.Cloudinary{CloudName: "mi-nube", APIKey: "123456", APISecret: config.Secret(fakeSecret)}
 }
 
 func TestPingStatuses(t *testing.T) {
@@ -46,7 +48,7 @@ func TestPingStatuses(t *testing.T) {
 			if gotPath != "/v1_1/mi-nube/ping" {
 				t.Errorf("ruta = %q", gotPath)
 			}
-			if gotUser != "123456" || gotPass != secret {
+			if gotUser != "123456" || gotPass != fakeSecret {
 				t.Errorf("autenticación básica = %q / %q", gotUser, gotPass)
 			}
 			if (err != nil) != tt.wantErr {
@@ -56,7 +58,7 @@ func TestPingStatuses(t *testing.T) {
 				if !strings.Contains(err.Error(), tt.errHas) {
 					t.Errorf("err = %q, se esperaba %q", err, tt.errHas)
 				}
-				if strings.Contains(err.Error(), secret) {
+				if strings.Contains(err.Error(), fakeSecret) {
 					t.Errorf("el error revela el secreto: %q", err)
 				}
 			}
@@ -92,7 +94,7 @@ func TestPingTimeout(t *testing.T) {
 	if err == nil {
 		t.Fatal("se esperaba error por tiempo agotado")
 	}
-	if strings.Contains(err.Error(), secret) {
+	if strings.Contains(err.Error(), fakeSecret) {
 		t.Errorf("el error revela el secreto: %q", err)
 	}
 	if d := time.Since(start); d > 3*time.Second {
@@ -102,7 +104,7 @@ func TestPingTimeout(t *testing.T) {
 
 func TestPingUnreachable(t *testing.T) {
 	err := ping(context.Background(), http.DefaultClient, "http://127.0.0.1:1", creds())
-	if err == nil || strings.Contains(err.Error(), secret) {
+	if err == nil || strings.Contains(err.Error(), fakeSecret) {
 		t.Errorf("err = %v", err)
 	}
 }
