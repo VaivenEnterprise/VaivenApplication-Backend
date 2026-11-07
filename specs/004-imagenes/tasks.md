@@ -15,7 +15,7 @@
   - Aceptación: función `Sign(params, secret)` con parámetros ordenados, SHA-1 hex; prueba con vector conocido de la documentación de Cloudinary; no registra el secreto; **una subida de prueba real documentada en `memoria.md`** confirma el algoritmo
   - Refs: RF-03 · P-01
 
-- [ ] **T003** [P] Dominio de imágenes
+- [x] **T003** [P] Dominio de imágenes
   - Archivos: `internal/images/domain/image.go`, `internal/images/domain/image_test.go`
   - Agente: `dev-go` · Depende de: 002-T006
   - Aceptación: tipos `Image`, `Purpose`, `Delivery`; constructor del `publicId` `<base>/<purpose>/<userId>/<uuid>`; validación de prefijo propio; solo stdlib
