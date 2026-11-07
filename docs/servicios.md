@@ -83,7 +83,7 @@ Las contraseñas se pasan por variables de entorno (`process.env`), no en la lí
 ## 7. API de staging (spec 002, T031)
 
 - **URL para el móvil:** `https://vaiven-staging.westus2.cloudapp.azure.com:8443` (solo HTTPS, certificado de Let's Encrypt).
-- Endpoints: `GET /healthz`, `GET /readyz` (`redis: ok|degradado`), `GET /api/v1/meta` y, desde la spec 003, `/api/v1/auth/{register,login,refresh,logout}`, `/api/v1/me` y `/api/v1/users/{id}`. Contrato: `api/openapi.yaml` y `api/paths/`.
+- Endpoints: `GET /healthz`, `GET /readyz` (`redis: ok|degradado`), `GET /api/v1/meta` y, desde la spec 003, `/api/v1/auth/{register,login,refresh,logout}`, `/api/v1/me`, `/api/v1/users/{id}` y, desde la spec 004, `POST /api/v1/uploads/signature`. Contrato: `api/openapi.yaml` y `api/paths/`.
 - Contenedor `vaiven-staging-api-1` (proyecto de Compose `vaiven-staging`, `/opt/vaiven/staging/`), unido a la red `base_vaiven-net` del stack base; usuario no root, sistema de archivos de solo lectura, 160 MiB.
 - Variables en `/opt/vaiven/staging/.env` (600, dueño `deploy`; plantilla en `deploy/.env.example`), generadas en la VM.
 - Certificado para la API en `/opt/vaiven/certs` (uid 65532); lo renueva el hook `/etc/letsencrypt/renewal-hooks/deploy/vaiven-api.sh` (copia de `deploy/certbot-deploy-hook.sh`) y la API lo recarga sola.
