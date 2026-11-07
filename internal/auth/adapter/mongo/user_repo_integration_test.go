@@ -48,7 +48,9 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// newDB devuelve una base vacía y exclusiva de la prueba.
+// newDB devuelve una base vacía y exclusiva de la prueba, sin validadores;
+// newSchemaDB (schema_integration_test.go) la devuelve con EnsureSchemas
+// aplicado, y es la que usan las pruebas de los repositorios.
 func newDB(t *testing.T) *drv.Database {
 	t.Helper()
 	db := testClient.Database(fmt.Sprintf("auth_it_%d", time.Now().UnixNano()))
@@ -73,7 +75,7 @@ func newUser(email string) domain.User {
 
 func TestIntegrationUserRepo(t *testing.T) {
 	ctx := context.Background()
-	repo := NewUserRepo(newDB(t))
+	repo := NewUserRepo(newSchemaDB(t))
 
 	// Dos veces: EnsureIndexes es idempotente.
 	for i := 0; i < 2; i++ {
@@ -134,7 +136,7 @@ func TestIntegrationUserRepo(t *testing.T) {
 
 func TestIntegrationUserRepoProfileAndAdmin(t *testing.T) {
 	ctx := context.Background()
-	repo := NewUserRepo(newDB(t))
+	repo := NewUserRepo(newSchemaDB(t))
 	if err := repo.EnsureIndexes(ctx); err != nil {
 		t.Fatal(err)
 	}
