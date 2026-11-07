@@ -69,7 +69,7 @@
   - Aceptación: crea usuario `admin` leyendo correo y contraseña por entrada estándar; no acepta la contraseña por argumento; idempotente (existe → mensaje y código ≠ 0)
   - Refs: RF-10
 
-- [ ] **T012** Pruebas de integración del flujo de sesión
+- [x] **T012** Pruebas de integración del flujo de sesión
   - Archivos: `internal/auth/adapter/http/flow_integration_test.go`
   - Agente: `qa-go` · Depende de: T010
   - Aceptación: registro→`/me`→refresh→reutilización revoca familia→logout; CA-01…CA-07 cubiertos (con `-tags integration`)
