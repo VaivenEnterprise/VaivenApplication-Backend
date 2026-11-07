@@ -1,0 +1,5 @@
+# Falsos positivos revisados de gitleaks (una huella por línea: commit:archivo:regla:línea).
+# Solo valores de prueba inventados; nunca credenciales reales.
+
+# T025: constante de prueba que verifica que el API secret NO aparezca en los errores.
+ac1b588358d85e25e540f4f4d8969f70bc2428d7:internal/platform/cloudinary/ping_test.go:generic-api-key:14
