@@ -39,7 +39,7 @@
   - Aceptación: casos CA-01…CA-04 con dobles; límites POL-13 (1–5 imágenes, formato, ≤ 5 MB); carpeta ajena → `validation_failed` con `details`; ≥ 80 %
   - Refs: RF-01, RF-02, RF-05 · POL-13
 
-- [ ] **T007** Fachada `images.Service`
+- [x] **T007** Fachada `images.Service`
   - Archivos: `internal/images/service.go`, `internal/images/service_test.go`
   - Agente: `dev-go` · Depende de: T006
   - Aceptación: expone `Signature`, `Resolve`, `URLs`; es lo único que importan otras specs; documentación del paquete con ejemplo de uso
