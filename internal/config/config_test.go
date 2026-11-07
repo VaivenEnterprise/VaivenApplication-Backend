@@ -17,11 +17,14 @@ func (e env) lookup(key string) (string, bool) {
 	return v, ok
 }
 
-// valid devuelve el mínimo de variables obligatorias.
+// valid devuelve el mínimo de variables obligatorias en development.
 func valid() env {
 	return env{
-		"MONGO_URI": "mongodb://localhost:27017/?replicaSet=rs0",
-		"MONGO_DB":  "vaiven_dev",
+		"MONGO_URI":             "mongodb://localhost:27017/?replicaSet=rs0",
+		"MONGO_DB":              "vaiven_dev",
+		"CLOUDINARY_CLOUD_NAME": "nube",
+		"CLOUDINARY_API_KEY":    "clave",
+		"CLOUDINARY_API_SECRET": "secreto",
 	}
 }
 
@@ -43,6 +46,12 @@ func TestLoadDefaults(t *testing.T) {
 		MongoConnectTimeout: 10 * time.Second,
 		CORSAllowedOrigins:  nil,
 		LogLevel:            slog.LevelInfo,
+		Cloudinary: Cloudinary{
+			CloudName:  "nube",
+			APIKey:     "clave",
+			APISecret:  "secreto",
+			BaseFolder: "vaiven/development",
+		},
 	}
 	if !reflect.DeepEqual(cfg, want) {
 		t.Errorf("load:\n got %+v\nwant %+v", cfg, want)
@@ -66,7 +75,7 @@ func TestLoadEmptyMeansDefault(t *testing.T) {
 }
 
 func TestLoadOverrides(t *testing.T) {
-	e := valid()
+	e := deployed() // producción exige además Redis y TLS
 	e["APP_ENV"] = "production"
 	e["APP_VERSION"] = "1.2.3"
 	e["HTTP_ADDR"] = ":9090"

@@ -79,13 +79,13 @@ opencode          # desde la raíz de este repositorio
    ```bash
    make run                      # o: go run ./cmd/api
    ```
-   Si falta una variable obligatoria (`MONGO_URI`, `MONGO_DB`), termina con código 1 y un mensaje que las nombra todas.
+   Si falta una variable obligatoria (`MONGO_URI`, `MONGO_DB` y las tres de Cloudinary), termina con código 1 y un mensaje que las nombra todas.
 
 ### Variables (spec 002, plan §4.1)
 
 | Variable | Obligatoria | Por defecto | Descripción |
 |---|---|---|---|
-| `APP_ENV` | No | `development` | `development`, `test` o `production` (logs en JSON solo en `production`) |
+| `APP_ENV` | No | `development` | `development`, `test`, `staging` o `production` (logs en JSON solo en `production`) |
 | `APP_VERSION` | No | `dev` | Versión que muestra `/api/v1/meta` si el build no inyecta otra |
 | `HTTP_ADDR` | No | `:8080` | Dirección de escucha |
 | `HTTP_READ_TIMEOUT` / `HTTP_WRITE_TIMEOUT` | No | `10s` / `15s` | Duraciones de Go (`500ms`, `10s`, `1m`) |
@@ -96,7 +96,12 @@ opencode          # desde la raíz de este repositorio
 | `CORS_ALLOWED_ORIGINS` | No | vacío | Orígenes separados por comas |
 | `LOG_LEVEL` | No | `info` | `debug`, `info`, `warn` o `error` |
 
-Una variable vacía equivale a no definida. Las variables de Redis, TLS y Cloudinary llegan con la fase 5 de la spec 002.
+| `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | **Sí**, salvo con `APP_ENV=test` | — | Credenciales de Cloudinary; el secreto nunca se imprime (`***`) |
+| `CLOUDINARY_BASE_FOLDER` | No | `vaiven/<APP_ENV>` | Carpeta base de las imágenes |
+| `REDIS_URL` | Sí en `staging` y `production` | vacío | `redis://:<contraseña>@<host>:6379/0`; sin ella se usa la versión en memoria |
+| `TLS_CERT_FILE`, `TLS_KEY_FILE` | Sí en `staging` y `production` | vacío | Certificado y clave para HTTPS; vacías en local = HTTP |
+
+Una variable vacía equivale a no definida. Si faltan varias, el error las lista todas juntas.
 
 ### Endpoints
 
