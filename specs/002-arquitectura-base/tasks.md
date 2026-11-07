@@ -214,13 +214,13 @@
   - Aceptación: imprime `OK`/`FALLA` por servicio (MongoDB, Redis y Cloudinary); código ≠ 0 si alguno falla; no imprime secretos; prueba con dobles (CA-S1, CA-S2)
   - Refs: RF-S3
 
-- [ ] **T030** Artefactos de despliegue: Compose y `deploy.sh`
+- [x] **T030** Artefactos de despliegue: Compose y `deploy.sh`
   - Archivos: `deploy/docker-compose.yml`, `deploy/.env.example`, `scripts/deploy.sh`
   - Agente: `dev-go` · Depende de: T019, T028, 001-T007
   - Aceptación: Compose con `api`, `mongo` (`rs0`) y `redis`, límites de memoria y `GOMEMLIMIT`; solo la API publica puerto (8443 en staging, 443 en producción) y monta de solo lectura el certificado; `deploy.sh <entorno>` compila para la arquitectura de la VM (`amd64`/`arm64`), envía la imagen por SSH, reinicia la API y espera su `/healthz` por HTTPS; `--rollback` vuelve a la imagen anterior; ningún secreto escrito; `shellcheck` sin errores
   - Refs: RF-S8 · P-S6, P-S7 · Art. XIII, XIV
 
-- [ ] **T031** Despliegue de la spec en Azure (staging)
+- [x] **T031** Despliegue de la spec en Azure (staging)
   - Archivos: `docs/servicios.md` (anexar la URL de staging), `memoria.md` (solo anexar)
   - Agente: `devops-mcp` · Depende de: T019, T020, T023, T029, T030, 001-T010
   - Aceptación: `make fmt lint test` en verde; `.env` de staging completo en la VM (nunca en el repo); `scripts/deploy.sh staging` termina bien; `/healthz`, `/readyz` y `/api/v1/meta` devuelven 200 en `https://<host>:8443` **sin `-k`** (CA-S3); no hay respuesta HTTP en claro (CA-S4); el límite de tasa responde 429 al pasarse (CA-S6); con Redis detenido la API responde y `/readyz` marca `degradado` (CA-S5); registros sin secretos ni datos personales; URL anotada para el móvil. **La spec 003 no empieza hasta que esta tarea pase.**
