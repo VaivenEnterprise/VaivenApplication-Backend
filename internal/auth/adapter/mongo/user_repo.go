@@ -193,6 +193,28 @@ func (r *UserRepo) UpdateProfile(ctx context.Context, id string, p usecase.Profi
 	return d.toDomain(), nil
 }
 
+// UpdatePasswordHash reemplaza el hash de una cuenta activa; si no existe o se
+// dio de baja devuelve domain.ErrUserNotFound.
+func (r *UserRepo) UpdatePasswordHash(ctx context.Context, id, passwordHash string, now time.Time) error {
+	oid, err := bson.ObjectIDFromHex(id)
+	if err != nil {
+		return domain.ErrUserNotFound
+	}
+	res, err := r.col.UpdateOne(ctx,
+		bson.D{{Key: "_id", Value: oid}, {Key: "status", Value: string(domain.StatusActive)}},
+		bson.D{
+			{Key: "$set", Value: bson.D{{Key: "passwordHash", Value: passwordHash}, {Key: "updatedAt", Value: now}}},
+			{Key: "$inc", Value: bson.D{{Key: "version", Value: 1}}},
+		})
+	if err != nil {
+		return fmt.Errorf("users: actualizar hash: %w", err)
+	}
+	if res.MatchedCount == 0 {
+		return domain.ErrUserNotFound
+	}
+	return nil
+}
+
 // Deactivate da de baja la cuenta y anonimiza correo, nombre y teléfono
 // (RF-08). El correo anónimo es único, así que el índice se conserva.
 func (r *UserRepo) Deactivate(ctx context.Context, id, anonymizedEmail string, now time.Time) error {

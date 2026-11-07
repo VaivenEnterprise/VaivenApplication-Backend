@@ -28,13 +28,23 @@ type Params struct {
 	Threads   uint8
 }
 
-// DefaultParams son los parámetros de los hashes nuevos (plan P-01, enmienda
+// DefaultParams devuelve los parámetros de los hashes nuevos (plan P-01, enmienda
 // A-07 de la spec 003): la configuración mínima recomendada por OWASP para
 // argon2id (19 MiB, 2 iteraciones, paralelismo 1). Medido con los límites de
 // la VM (2 vCPU, 160 MiB): ~50 ms y ~19 MiB por hash, frente a ~140 ms y
 // 64 MiB de los parámetros anteriores (m=64 MiB, t=3, p=2), que dejaban el
 // proceso en ~131 MiB de 160 con un solo hash.
-var DefaultParams = Params{MemoryKiB: 19 * 1024, Time: 2, Threads: 1}
+// Es una función (no una variable) para que nadie pueda cambiarlos en tiempo
+// de ejecución (constitución §5: sin variables globales mutables).
+func DefaultParams() Params {
+	return Params{MemoryKiB: defaultMemoryKiB, Time: defaultTime, Threads: defaultThreads}
+}
+
+const (
+	defaultMemoryKiB = 19 * 1024
+	defaultTime      = 2
+	defaultThreads   = 1
+)
 
 const (
 	argonSaltLen = 16
@@ -46,7 +56,7 @@ const (
 	maxTime      = 10
 
 	// DefaultMemoryBudgetKiB es la memoria máxima que pueden usar a la vez
-	// los hashes en curso: 2 hashes con DefaultParams. Un hash más grande que
+	// los hashes en curso: 2 hashes con DefaultParams(). Un hash más grande que
 	// el presupuesto (p. ej. uno antiguo de 64 MiB) se calcula solo.
 	DefaultMemoryBudgetKiB = 40 * 1024
 	// DefaultMaxWait es lo más que una petición espera su turno; después
@@ -80,12 +90,12 @@ type Hasher struct {
 	decoy     string
 }
 
-// NewHasher crea un Hasher con DefaultParams, el presupuesto de memoria
+// NewHasher crea un Hasher con DefaultParams(), el presupuesto de memoria
 // indicado (KiB; ≤ 0 usa DefaultMemoryBudgetKiB) y la espera máxima (≤ 0 usa
 // DefaultMaxWait). Calcula al crearse el hash señuelo (ver DecoyHash), fuera de
 // cualquier petición; falla solo si no hay fuente de aleatoriedad.
 func NewHasher(budgetKiB int64, maxWait time.Duration) (*Hasher, error) {
-	return newHasher(DefaultParams, budgetKiB, maxWait, rand.Reader)
+	return newHasher(DefaultParams(), budgetKiB, maxWait, rand.Reader)
 }
 
 func newHasher(p Params, budgetKiB int64, maxWait time.Duration, random io.Reader) (*Hasher, error) {
@@ -175,6 +185,20 @@ func (h *Hasher) Verify(ctx context.Context, password, encoded string) (bool, er
 	key := argon2.IDKey([]byte(password), p.salt, p.time, p.memory, p.threads, p.keyLen)
 	h.sem.Release(w)
 	return subtle.ConstantTimeCompare(key, p.key) == 1, nil
+}
+
+// NeedsRehash indica si encoded se calculó con parámetros distintos de los
+// actuales (p. ej. un hash antiguo de m=64 MiB). El login lo recalcula tras
+// verificar la contraseña: así las cuentas antiguas migran solas y desaparece
+// la diferencia de tiempo frente al señuelo (auditoría 2026-11-07, N2). Un hash
+// mal formado devuelve false: no se puede verificar, así que no se migra.
+func (h *Hasher) NeedsRehash(encoded string) bool {
+	p, err := parsePHC(encoded)
+	if err != nil {
+		return false
+	}
+	return p.memory != h.params.MemoryKiB || p.time != h.params.Time ||
+		p.threads != h.params.Threads || p.keyLen != argonKeyLen
 }
 
 type phcParams struct {

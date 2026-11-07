@@ -142,7 +142,7 @@ type failingReader struct{}
 func (failingReader) Read([]byte) (int, error) { return 0, errors.New("sin entropía") }
 
 func TestNewHasherFailsWithoutRandomness(t *testing.T) {
-	if _, err := newHasher(DefaultParams, 0, 0, failingReader{}); err == nil {
+	if _, err := newHasher(DefaultParams(), 0, 0, failingReader{}); err == nil {
 		t.Fatal("sin aleatoriedad NewHasher debe fallar al arrancar")
 	}
 	h := newTestHasher(t, 0, 0)
@@ -188,16 +188,16 @@ func TestHasherRespectsContextAndWait(t *testing.T) {
 
 func TestHasherBudgetLimitsConcurrency(t *testing.T) {
 	// Presupuesto para dos hashes de 19 MiB: un tercero espera.
-	h := newTestHasher(t, 2*int64(DefaultParams.MemoryKiB), 30*time.Millisecond)
-	w1, err := h.acquire(context.Background(), int64(DefaultParams.MemoryKiB))
+	h := newTestHasher(t, 2*int64(DefaultParams().MemoryKiB), 30*time.Millisecond)
+	w1, err := h.acquire(context.Background(), int64(DefaultParams().MemoryKiB))
 	if err != nil {
 		t.Fatal(err)
 	}
-	w2, err := h.acquire(context.Background(), int64(DefaultParams.MemoryKiB))
+	w2, err := h.acquire(context.Background(), int64(DefaultParams().MemoryKiB))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := h.acquire(context.Background(), int64(DefaultParams.MemoryKiB)); !errors.Is(err, ErrBusy) {
+	if _, err := h.acquire(context.Background(), int64(DefaultParams().MemoryKiB)); !errors.Is(err, ErrBusy) {
 		t.Errorf("tercer hash concurrente = %v, want ErrBusy", err)
 	}
 	h.sem.Release(w1)
@@ -240,7 +240,7 @@ func TestHasherConcurrent(t *testing.T) {
 	}
 }
 
-func BenchmarkHashDefault(b *testing.B) { benchHash(b, DefaultParams) }
+func BenchmarkHashDefault(b *testing.B) { benchHash(b, DefaultParams()) }
 
 func BenchmarkHashLegacy(b *testing.B) { benchHash(b, legacyParams) }
 
@@ -363,4 +363,47 @@ func sign(t *testing.T, m jwt.SigningMethod, secret string, c jwt.MapClaims) str
 func argonKey(t *testing.T, pw string, salt []byte, time, memory uint32, threads uint8, keyLen uint32) []byte {
 	t.Helper()
 	return argon2.IDKey([]byte(pw), salt, time, memory, threads, keyLen)
+}
+
+func TestDefaultParamsImmutable(t *testing.T) {
+	p := DefaultParams()
+	p.MemoryKiB = 1
+	if DefaultParams().MemoryKiB != 19*1024 {
+		t.Error("modificar la copia no debe cambiar los parámetros por defecto")
+	}
+}
+
+func TestNeedsRehash(t *testing.T) {
+	ctx := context.Background()
+	h := newTestHasher(t, 0, 0)
+	current, err := h.Hash(ctx, "pw")
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy, err := newHasher(legacyParams, 64*1024, time.Second, rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old, err := legacy.Hash(ctx, "pw")
+	if err != nil {
+		t.Fatal(err)
+	}
+	salt := []byte("sal-de-16-bytes!")
+	short := "$argon2id$v=19$m=19456,t=2,p=1$" + b64.EncodeToString(salt) + "$" +
+		b64.EncodeToString(argonKey(t, "pw", salt, 2, 19*1024, 1, 16))
+	for _, tc := range []struct {
+		name string
+		enc  string
+		want bool
+	}{
+		{"actual", current, false},
+		{"señuelo", h.DecoyHash(), false},
+		{"antiguo 64 MiB", old, true},
+		{"clave de 16 bytes", short, true},
+		{"mal formado", "texto", false},
+	} {
+		if got := h.NeedsRehash(tc.enc); got != tc.want {
+			t.Errorf("%s: NeedsRehash = %v, want %v", tc.name, got, tc.want)
+		}
+	}
 }

@@ -16,10 +16,11 @@ var errBoom = errors.New("falla simulada")
 
 // fakeUsers es un repositorio de cuentas en memoria.
 type fakeUsers struct {
-	mu      sync.Mutex
-	byID    map[string]domain.User
-	next    int
-	failAll error // si no es nil, todas las operaciones fallan
+	mu             sync.Mutex
+	byID           map[string]domain.User
+	next           int
+	failAll        error // si no es nil, todas las operaciones fallan
+	failUpdateHash error // solo UpdatePasswordHash falla
 }
 
 func newFakeUsers() *fakeUsers { return &fakeUsers{byID: map[string]domain.User{}} }
@@ -91,6 +92,25 @@ func (f *fakeUsers) UpdateProfile(_ context.Context, id string, p ProfileChanges
 	u.Version++
 	f.byID[id] = u
 	return u, nil
+}
+
+func (f *fakeUsers) UpdatePasswordHash(_ context.Context, id, hash string, now time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.failAll != nil {
+		return f.failAll
+	}
+	if f.failUpdateHash != nil {
+		return f.failUpdateHash
+	}
+	u, ok := f.byID[id]
+	if !ok || !u.IsActive() {
+		return domain.ErrUserNotFound
+	}
+	u.PasswordHash, u.UpdatedAt = hash, now
+	u.Version++
+	f.byID[id] = u
+	return nil
 }
 
 func (f *fakeUsers) Deactivate(_ context.Context, id, anonymizedEmail string, now time.Time) error {
@@ -203,6 +223,9 @@ type fakeHasher struct {
 // fakeDecoy es el hash señuelo del doble: nunca coincide con "hash:"+pw.
 const fakeDecoy = "decoy:valor-desconocido"
 
+// NeedsRehash marca como antiguos los hashes "legacy:<pw>".
+func (h *fakeHasher) NeedsRehash(encoded string) bool { return strings.HasPrefix(encoded, "legacy:") }
+
 func (h *fakeHasher) DecoyHash() string {
 	if h.noDecoy {
 		return ""
@@ -229,7 +252,7 @@ func (h *fakeHasher) Verify(ctx context.Context, pw, encoded string) (bool, erro
 	if h.failVerify != nil {
 		return false, h.failVerify
 	}
-	return encoded == "hash:"+pw, nil
+	return encoded == "hash:"+pw || encoded == "legacy:"+pw, nil
 }
 
 // fakeAccess emite tokens de acceso legibles.
