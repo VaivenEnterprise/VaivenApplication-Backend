@@ -1,6 +1,6 @@
 # Tareas 003 — Cuenta y autenticación (backend)
 
-- **Dueño:** BE-A · **Estado:** sin ejecutar · `[P]` = paralelizable
+- **Dueño:** BE-A · **Estado:** desplegada en staging (2026-11-06) · `[P]` = paralelizable
 - **T001 va primero (contrato publicado el mismo día)**, para que MO-A y los demás lean el contrato.
 
 - [x] **T001** Contrato OpenAPI de auth y usuarios
@@ -75,13 +75,13 @@
   - Aceptación: registro→`/me`→refresh→reutilización revoca familia→logout; CA-01…CA-07 cubiertos (con `-tags integration`)
   - Refs: CA-01…CA-07
 
-- [ ] **T013** Memoria, dependencias y revisión
+- [x] **T013** Memoria, dependencias y revisión
   - Archivos: `memoria.md` (solo anexar)
   - Agente: `revisor-constitucion` · Depende de: T012
   - Aceptación: dependencias registradas; veredicto **CONFORME**; hito H1 (backend) marcado
   - Refs: DoD
 
-- [ ] **T014** Despliegue de la spec en Azure (staging)
+- [x] **T014** Despliegue de la spec en Azure (staging)
   - Archivos: `memoria.md` (solo anexar)
   - Agente: `devops-mcp` · Depende de: T013 (y todas las anteriores `[x]`)
   - Aceptación: `make fmt lint test` en verde; `scripts/deploy.sh staging` (construye, envía a la VM y reinicia la API); `/healthz` y `/readyz` devuelven 200 por HTTPS sin `-k`; cada endpoint nuevo de esta spec (`api/paths/<modulo>.yaml`) responde con una petición correcta y una inválida en el formato de error del Art. IV; registros sin secretos ni datos personales; resultado anotado en `memoria.md`. **La spec siguiente no empieza hasta que esta tarea pase.**
