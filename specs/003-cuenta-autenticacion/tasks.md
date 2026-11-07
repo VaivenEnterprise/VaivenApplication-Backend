@@ -33,7 +33,7 @@
   - Aceptación: colección `users` con índice único de correo (`EnsureIndexes`); creación y búsqueda por correo/id; duplicado → error de dominio `conflict`; prueba de integración
   - Refs: plan §3 · Art. II
 
-- [ ] **T006** Repositorio de refresh tokens
+- [x] **T006** Repositorio de refresh tokens
   - Archivos: `internal/auth/adapter/mongo/refresh_repo.go`, `internal/auth/adapter/mongo/refresh_repo_integration_test.go`
   - Agente: `modelador-mongo` · Depende de: T005
   - Aceptación: índices único de hash, por familia y TTL; marcar usado, revocar familia, buscar por hash; prueba de integración
