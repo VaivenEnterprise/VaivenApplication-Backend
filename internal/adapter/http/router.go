@@ -23,6 +23,15 @@ const (
 	messageMethodNotAllowed = "Este método no está permitido para esta ruta."
 )
 
+// Module es una funcionalidad que registra sus rutas bajo /api/v1 (spec 003,
+// RF-11; Art. XII.3). Cada módulo se agrega con una línea en cmd/api/modules.go.
+type Module interface {
+	// Name identifica el módulo en los logs.
+	Name() string
+	// Register monta las rutas del módulo; r ya está bajo /api/v1.
+	Register(r chi.Router)
+}
+
 // Deps son las dependencias que el router recibe desde main.
 type Deps struct {
 	Log            *slog.Logger
@@ -35,6 +44,9 @@ type Deps struct {
 	Limiter         ratelimit.Limiter
 	LimiterFallback ratelimit.Limiter
 	RateLimit       middleware.RateLimitConfig
+
+	// Modules son los módulos de negocio, en el orden de cmd/api/modules.go.
+	Modules []Module
 }
 
 // NewRouter devuelve el handler raíz de la API.
@@ -58,15 +70,21 @@ func NewRouter(d Deps) http.Handler {
 	}
 	r.Use(limitBody)
 
-	r.Get("/healthz", handler.Healthz)
-	r.Get("/readyz", handler.Readyz(d.Pinger, d.Redis))
-	r.Get("/api/v1/meta", handler.Meta(d.Meta))
-
+	// 404 y 405 se fijan antes de r.Route: chi los copia al subrouter de /api/v1.
 	r.NotFound(func(w http.ResponseWriter, req *http.Request) {
 		respond.Failure(w, req, http.StatusNotFound, string(domain.CodeNotFound), messageNotFound)
 	})
 	r.MethodNotAllowed(func(w http.ResponseWriter, req *http.Request) {
 		respond.Failure(w, req, http.StatusMethodNotAllowed, string(domain.CodeNotFound), messageMethodNotAllowed)
+	})
+
+	r.Get("/healthz", handler.Healthz)
+	r.Get("/readyz", handler.Readyz(d.Pinger, d.Redis))
+	r.Route("/api/v1", func(api chi.Router) {
+		api.Get("/meta", handler.Meta(d.Meta))
+		for _, m := range d.Modules {
+			m.Register(api)
+		}
 	})
 
 	return r
