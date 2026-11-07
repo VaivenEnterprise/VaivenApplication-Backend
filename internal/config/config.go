@@ -132,10 +132,15 @@ type reader struct {
 	problems []string
 }
 
-// value devuelve el valor sin espacios; una variable vacía cuenta como ausente.
+// bom es la marca de orden de bytes (U+FEFF).
+const bom = string(rune(0xFEFF))
+
+// value devuelve el valor sin espacios ni BOM (U+FEFF, que agregan algunas
+// herramientas de Windows al copiar valores); una variable vacía cuenta como
+// ausente.
 func (r *reader) value(key string) (string, bool) {
 	v, ok := r.lookup(key)
-	v = strings.TrimSpace(v)
+	v = strings.TrimSpace(strings.ReplaceAll(v, bom, ""))
 	return v, ok && v != ""
 }
 
