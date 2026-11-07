@@ -42,6 +42,8 @@ type Config struct {
 
 	// Autenticación (spec 003, plan §5).
 	Auth Auth
+	// Imágenes (spec 004, plan §5).
+	Images Images
 }
 
 // IsProduction indica si el servicio corre en producción (logs en JSON, plan P-04).
@@ -116,6 +118,7 @@ func load(lookup lookupFunc) (Config, error) {
 	cfg.Redis = loadRedis(&r, cfg.AppEnv)
 	cfg.TLS = loadTLS(&r, cfg.AppEnv)
 	cfg.Auth = loadAuth(&r, cfg.AppEnv)
+	cfg.Images = loadImages(&r)
 
 	if len(r.problems) > 0 {
 		return Config{}, &Error{Problems: r.problems}

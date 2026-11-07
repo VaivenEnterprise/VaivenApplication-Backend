@@ -21,19 +21,19 @@
   - Aceptación: tipos `Image`, `Purpose`, `Delivery`; constructor del `publicId` `<base>/<purpose>/<userId>/<uuid>`; validación de prefijo propio; solo stdlib
   - Refs: RF-03, RF-06 · Art. III
 
-- [ ] **T004** [P] Cliente de administración de Cloudinary
+- [x] **T004** [P] Cliente de administración de Cloudinary
   - Archivos: `internal/images/adapter/cloudinary/admin_client.go`, `internal/images/adapter/cloudinary/admin_client_test.go`
   - Agente: `dev-go` · Depende de: 002-T025
   - Aceptación: `GetResource(ctx, type, publicId)` devuelve `width,height,format,bytes`; 404 → error de dominio; 5xx → `service_unavailable`; timeout 5 s; pruebas con `httptest`
   - Refs: RF-05, RF-08 · P-02
 
-- [ ] **T005** [P] Constructor de URLs
+- [x] **T005** [P] Constructor de URLs
   - Archivos: `internal/images/adapter/cloudinary/urlbuilder.go`, `internal/images/adapter/cloudinary/urlbuilder_test.go`, `internal/platform/clock/clock.go`
   - Agente: `dev-go` · Depende de: T002, T003
   - Aceptación: URL pública con transformaciones del RF-07; URL de descarga privada con `expires_at = ahora + 10 min` firmada; pruebas con reloj falso
   - Refs: RF-07 · P-03, P-06
 
-- [ ] **T006** Casos de uso: firma y resolución
+- [x] **T006** Casos de uso: firma y resolución
   - Archivos: `internal/images/usecase/ports.go`, `signature.go`, `resolve.go`, `urls.go`, `usecase_test.go`
   - Agente: `dev-go` · Depende de: T003, T004, T005
   - Aceptación: casos CA-01…CA-04 con dobles; límites POL-13 (1–5 imágenes, formato, ≤ 5 MB); carpeta ajena → `validation_failed` con `details`; ≥ 80 %
