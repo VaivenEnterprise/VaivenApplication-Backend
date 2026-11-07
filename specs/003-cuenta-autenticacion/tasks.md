@@ -63,7 +63,7 @@
   - Aceptación: las 8 rutas cumplen el contrato; `Authenticate`, `RequireRole`, `RequireActive`; `auth.UserID(ctx)`; el módulo se registra con **una línea** en `modules.go`; pruebas `httptest` por ruta y por código de error
   - Refs: RF-10, RF-13 · Art. IV, XII
 
-- [ ] **T011** [P] Comando `create-admin`
+- [x] **T011** [P] Comando `create-admin`
   - Archivos: `cmd/admin/create_admin.go`, `cmd/admin/create_admin_test.go`
   - Agente: `dev-go` · Depende de: T005, 002-T029
   - Aceptación: crea usuario `admin` leyendo correo y contraseña por entrada estándar; no acepta la contraseña por argumento; idempotente (existe → mensaje y código ≠ 0)
