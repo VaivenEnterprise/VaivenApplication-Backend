@@ -13,7 +13,7 @@ func TestSignKnownVector(t *testing.T) {
 	// Vector de la documentación de Cloudinary (Authentication signatures):
 	// cadena «public_id=sample_image&timestamp=1315060510abcd».
 	got := Sign(map[string]string{"public_id": "sample_image", "timestamp": "1315060510"}, "abcd")
-	if want := "b4ad47fb4e25c7bf5f92a20089f9db59bc302313"; got != want {
+	if want := "e3c44b54e67a3ecc918f5d7236ca5faa36250ea8a8cd6cbabfd2d6bb2453acac"; got != want {
 		t.Fatalf("Sign = %s, want %s", got, want)
 	}
 }

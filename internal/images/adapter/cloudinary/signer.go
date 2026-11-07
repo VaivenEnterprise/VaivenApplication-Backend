@@ -5,7 +5,7 @@
 package cloudinary
 
 import (
-	"crypto/sha1" //nolint:gosec // Cloudinary exige SHA-1 para sus firmas (plan §3).
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -18,7 +18,11 @@ var errMissingConfig = errors.New("falta configuración")
 
 // Sign calcula la firma de Cloudinary (plan §3): ordena las claves
 // alfabéticamente, omite las de valor vacío, une «k=v» con «&», concatena el
-// secreto y devuelve el SHA-1 en hexadecimal.
+// secreto y devuelve el SHA-256 en hexadecimal. Cloudinary acepta SHA-1 y
+// SHA-256 sin parámetros extra; se usa SHA-256 porque SHA-1 está roto para
+// datos sensibles (CodeQL go/weak-sensitive-data-hashing). Verificado con la
+// cuenta real: subidas upload y authenticated y descarga privada con
+// vencimiento (memoria.md, 004 SHA-256).
 func Sign(params map[string]string, secret string) string {
 	keys := make([]string, 0, len(params))
 	for k, v := range params {
@@ -31,7 +35,7 @@ func Sign(params map[string]string, secret string) string {
 	for _, k := range keys {
 		pairs = append(pairs, k+"="+params[k])
 	}
-	sum := sha1.Sum([]byte(strings.Join(pairs, "&") + secret)) //nolint:gosec // ver import.
+	sum := sha256.Sum256([]byte(strings.Join(pairs, "&") + secret))
 	return hex.EncodeToString(sum[:])
 }
 

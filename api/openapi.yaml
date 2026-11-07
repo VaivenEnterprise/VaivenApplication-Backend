@@ -352,7 +352,7 @@ components:
           description: Segundos Unix; Cloudinary rechaza firmas de más de 1 h.
         signature:
           type: string
-          description: SHA-1 en hexadecimal de los parámetros firmados.
+          description: SHA-256 en hexadecimal de los parámetros firmados.
         publicId:
           type: string
           description: '<carpeta base>/<purpose>/<userId>/<id>; enviarlo sin cambios como public_id.'

@@ -30,7 +30,7 @@ Referencia que reciben otras specs: `{ "publicId": "…" }` → se guarda y se d
 `Image` + `{ url, thumbUrl }` calculados al leer.
 
 ## 3. Firma (Cloudinary)
-Cadena a firmar: parámetros ordenados alfabéticamente `allowed_formats=…&overwrite=false&public_id=…&timestamp=…&type=…` + `API_SECRET`; `signature = hex(SHA-1(cadena))`. Se excluyen `file`, `api_key`, `resource_type`, `cloud_name`.
+Cadena a firmar: parámetros ordenados alfabéticamente `allowed_formats=…&overwrite=false&public_id=…&timestamp=…&type=…` + `API_SECRET`; `signature = hex(SHA-256(cadena))` (Cloudinary acepta SHA-1 y SHA-256; se usa SHA-256 desde la corrección de CodeQL, ver plan §8 A-06). Se excluyen `file`, `api_key`, `resource_type`, `cloud_name`.
 
 ## 4. Decisiones
 | # | Decisión | Art. |
@@ -66,3 +66,4 @@ Firma contra un vector conocido (cadena fija + secreto de prueba); prefijo de ca
 | A-03 | Código de dominio compartido `service_unavailable` (`internal/domain.CodeUnavailable` → 503) | RF-08: Resolve lo usan otros módulos y su handler debe responder 503 sin código especial |
 | A-04 | `dto.go` y `routes.go` quedaron dentro de `handler.go` | Art. VIII: un solo endpoint |
 | A-05 | El límite de firmas usa el middleware `RateLimit` (Redis) con clave por usuario y `KeyPrefix: "uploads:"` | Art. XIV (igual que la 003) |
+| A-06 | Firmas con **SHA-256** en lugar de SHA-1 (plan §3) | CodeQL `go/weak-sensitive-data-hashing` (severidad 7,5) bloqueaba la PR; verificado con la cuenta real que Cloudinary acepta SHA-256 en subidas `upload` y `authenticated` y en la descarga privada con vencimiento |
