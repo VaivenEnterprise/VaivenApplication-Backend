@@ -27,7 +27,7 @@
   - Aceptación: variables del plan §5; `JWT_ACCESS_SECRET` < 32 caracteres → error; `Load()` con una línea nueva
   - Refs: P-02 · Art. VI
 
-- [ ] **T005** Dominio y repositorio de usuarios
+- [x] **T005** Dominio y repositorio de usuarios
   - Archivos: `internal/auth/domain/user.go`, `internal/auth/domain/errors.go`, `internal/auth/adapter/mongo/user_repo.go`, `internal/auth/adapter/mongo/user_repo_integration_test.go`
   - Agente: `modelador-mongo` · Depende de: T003, 002-T014
   - Aceptación: colección `users` con índice único de correo (`EnsureIndexes`); creación y búsqueda por correo/id; duplicado → error de dominio `conflict`; prueba de integración
