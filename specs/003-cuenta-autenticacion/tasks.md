@@ -57,7 +57,7 @@
   - Aceptación: middleware por IP, ventana de 1 min, 429 `rate_limited` con envoltorio; probado con reloj inyectado
   - Refs: RF-07
 
-- [ ] **T010** Handlers, middleware de autenticación y rutas
+- [x] **T010** Handlers, middleware de autenticación y rutas
   - Archivos: `internal/auth/adapter/http/{handler.go, dto.go, middleware.go, routes.go, handler_test.go}`
   - Agente: `dev-go` · Depende de: T001, T002, T008, T009
   - Aceptación: las 8 rutas cumplen el contrato; `Authenticate`, `RequireRole`, `RequireActive`; `auth.UserID(ctx)`; el módulo se registra con **una línea** en `modules.go`; pruebas `httptest` por ruta y por código de error
