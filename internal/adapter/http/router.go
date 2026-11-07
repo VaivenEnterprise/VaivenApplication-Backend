@@ -12,6 +12,7 @@ import (
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/middleware"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/respond"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/domain"
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/usecase/ratelimit"
 )
 
 // maxBodyBytes es el límite global del cuerpo de una petición: 1 MiB (Art. VI.6).
@@ -26,8 +27,14 @@ const (
 type Deps struct {
 	Log            *slog.Logger
 	AllowedOrigins []string
-	Pinger         handler.Pinger
+	Pinger         handler.Pinger // MongoDB
+	Redis          handler.Pinger // nil si no hay Redis configurado
 	Meta           handler.MetaInfo
+
+	// Límite de tasa (Art. XIV.2). Sin Limiter no se monta el middleware.
+	Limiter         ratelimit.Limiter
+	LimiterFallback ratelimit.Limiter
+	RateLimit       middleware.RateLimitConfig
 }
 
 // NewRouter devuelve el handler raíz de la API.
@@ -45,11 +52,14 @@ func NewRouter(d Deps) http.Handler {
 		middleware.Logging(d.Log),
 		middleware.Recover(d.Log),
 		middleware.CORS(d.AllowedOrigins),
-		limitBody,
 	)
+	if d.Limiter != nil {
+		r.Use(middleware.RateLimit(d.Limiter, d.LimiterFallback, d.RateLimit, d.Log))
+	}
+	r.Use(limitBody)
 
 	r.Get("/healthz", handler.Healthz)
-	r.Get("/readyz", handler.Readyz(d.Pinger))
+	r.Get("/readyz", handler.Readyz(d.Pinger, d.Redis))
 	r.Get("/api/v1/meta", handler.Meta(d.Meta))
 
 	r.NotFound(func(w http.ResponseWriter, req *http.Request) {

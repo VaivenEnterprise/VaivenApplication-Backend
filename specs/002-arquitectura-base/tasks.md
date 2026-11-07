@@ -196,7 +196,7 @@
   - Aceptación: puertos `ratelimit.Limiter` (`Allow(ctx, key, limit, window)`) y `cache.Cache` (`Get/Set/Delete` con TTL) declarados donde se consumen; implementación Redis (ventana fija o deslizante con script atómico) y una **en memoria**; claves con prefijo `vaiven:<APP_ENV>:`; `Ping(ctx)` para `/readyz`; solo este paquete importa `go-redis`; pruebas contra Redis real (`-tags integration`) y contra la versión en memoria; cobertura ≥ 80 %
   - Refs: RF-S5 · P-S5 · Art. III, XIV
 
-- [ ] **T027** Middleware de límite de tasa y `/readyz` con Redis
+- [x] **T027** Middleware de límite de tasa y `/readyz` con Redis
   - Archivos: `internal/adapter/http/middleware/ratelimit.go`, `internal/adapter/http/middleware/ratelimit_test.go`, `internal/adapter/http/health.go`
   - Agente: `dev-go` · Depende de: T012, T026
   - Aceptación: límite por IP (rutas públicas) y por usuario (autenticadas) con 429 en el formato de error del Art. IV; si Redis falla usa el limitador local y registra una sola vez; `/readyz` devuelve 503 solo si Mongo falla y `redis: "degradado"` (200) si Redis falla (CA-S5, CA-S6)
