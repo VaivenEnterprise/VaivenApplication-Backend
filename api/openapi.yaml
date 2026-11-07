@@ -339,7 +339,7 @@ components:
     UploadSignature:
       type: object
       description: Datos para subir una imagen directo a Cloudinary (RF-01). Nunca incluye el API secret.
-      required: [uploadUrl, apiKey, timestamp, signature, publicId, type, allowedFormats]
+      required: [uploadUrl, apiKey, timestamp, signature, publicId, type, allowedFormats, overwrite]
       properties:
         uploadUrl:
           type: string
@@ -362,6 +362,10 @@ components:
         allowedFormats:
           type: string
           const: jpg,jpeg,png,webp
+        overwrite:
+          type: string
+          const: 'false'
+          description: Va firmado; impide volver a subir encima de una imagen ya verificada.
     ImageInput:
       type: object
       description: Referencia a una imagen ya subida, que reciben las demás rutas (RF-05). Máximo 5 por recurso.

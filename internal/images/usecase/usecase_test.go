@@ -112,7 +112,7 @@ func TestSignature(t *testing.T) { // CA-01, RF-02, RF-03
 		sig.Signature != "firma("+sig.PublicID+")" {
 		t.Errorf("firma = %+v", sig)
 	}
-	want := map[string]string{"allowed_formats": "jpg,jpeg,png,webp", "public_id": sig.PublicID, "timestamp": "1762480800", "type": "upload"}
+	want := map[string]string{"allowed_formats": "jpg,jpeg,png,webp", "overwrite": "false", "public_id": sig.PublicID, "timestamp": "1762480800", "type": "upload"}
 	if fmt.Sprint(sg.got) != fmt.Sprint(want) {
 		t.Errorf("parámetros firmados = %v, want %v", sg.got, want)
 	}
@@ -194,7 +194,8 @@ func TestResolveRejects(t *testing.T) { // CA-02, CA-03, POL-13
 		{"no existe", refs(mine("nada")), "photos[0].publicId", "no se subió"},
 		{"formato", refs(mine("ok"), mine("gif")), "photos[1].publicId", "formato no permitido"},
 		{"más de 5 MB", refs(mine("big")), "photos[0].publicId", "más de 5 MB"},
-		{"tamaño cero", refs(mine("cero")), "photos[0].publicId", "más de 5 MB"},
+		{"tamaño cero", refs(mine("cero")), "photos[0].publicId", "vacía o dañada"},
+		{"publicId larguísimo", refs(mine(strings.Repeat("a", 300))), "photos[0].publicId", "demasiado largo"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

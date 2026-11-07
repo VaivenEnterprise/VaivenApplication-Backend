@@ -105,6 +105,9 @@ type UploadSignature struct {
 	PublicID       string
 	Type           string
 	AllowedFormats string
+	// Overwrite va firmado en "false": nadie puede reemplazar la imagen
+	// después de verificarla (firma de un solo uso, Art. VI.7).
+	Overwrite string
 }
 
 // FolderPrefix es la carpeta de una persona para un propósito:

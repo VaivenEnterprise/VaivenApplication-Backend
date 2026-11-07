@@ -36,7 +36,7 @@ func (f *fakeService) Signature(_ context.Context, userID string, p domain.Purpo
 	return domain.UploadSignature{
 		UploadURL: "https://api.cloudinary.com/v1_1/nube/image/upload", APIKey: "clave", Timestamp: 1762480800,
 		Signature: "firma", PublicID: "vaiven/test/" + string(p) + "/" + userID + "/x", Type: p.Delivery().CloudinaryType(),
-		AllowedFormats: domain.AllowedFormats,
+		AllowedFormats: domain.AllowedFormats, Overwrite: "false",
 	}, nil
 }
 
@@ -108,12 +108,12 @@ func TestSignatureOK(t *testing.T) { // CA-01
 	}
 	var got map[string]any
 	_ = json.Unmarshal(rec.Body.Bytes(), &got)
-	for _, k := range []string{"uploadUrl", "apiKey", "timestamp", "signature", "publicId", "type", "allowedFormats"} {
+	for _, k := range []string{"uploadUrl", "apiKey", "timestamp", "signature", "publicId", "type", "allowedFormats", "overwrite"} {
 		if _, ok := got[k]; !ok {
 			t.Errorf("falta %s en %v", k, got)
 		}
 	}
-	if got["type"] != "upload" || !strings.Contains(got["publicId"].(string), "/u1/") || len(got) != 7 {
+	if got["type"] != "upload" || !strings.Contains(got["publicId"].(string), "/u1/") || got["overwrite"] != "false" || len(got) != 8 {
 		t.Errorf("respuesta = %v", got)
 	}
 	if rec := post(h, `{"purpose":"evidence"}`, "u1"); !strings.Contains(rec.Body.String(), `"type":"authenticated"`) {

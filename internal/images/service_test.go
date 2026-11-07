@@ -94,3 +94,12 @@ func TestNewRequiresConfig(t *testing.T) {
 		}
 	}
 }
+
+func TestConfigHidesSecret(t *testing.T) {
+	cfg := Config{CloudName: "nube", APIKey: "clave", APISecret: testSecret, BaseFolder: "b"}
+	for _, out := range []string{fmt.Sprintf("%v", cfg), fmt.Sprintf("%+v", cfg), fmt.Sprintf("%#v", cfg), cfg.String()} {
+		if strings.Contains(out, testSecret) || !strings.Contains(out, "[REDACTED]") {
+			t.Errorf("la configuración impresa revela el secreto: %s", out)
+		}
+	}
+}

@@ -112,9 +112,10 @@ curl -s "$(jq -r .uploadUrl <<<"$SIG")" \
   -F signature="$(jq -r .signature <<<"$SIG")" \
   -F public_id="$(jq -r .publicId <<<"$SIG")" \
   -F type="$(jq -r .type <<<"$SIG")" \
-  -F allowed_formats="$(jq -r .allowedFormats <<<"$SIG")"
+  -F allowed_formats="$(jq -r .allowedFormats <<<"$SIG")" \
+  -F overwrite="$(jq -r .overwrite <<<"$SIG")"
 ```
 
-- Si se cambia cualquier campo firmado (`public_id`, `type`, `allowed_formats`, `timestamp`), Cloudinary responde `401 Invalid Signature`. La firma vence a la hora.
+- Si se cambia cualquier campo firmado (`public_id`, `type`, `allowed_formats`, `overwrite`, `timestamp`), Cloudinary responde `401 Invalid Signature`. La firma vence a la hora.
 - Al usarla en otra spec, el cliente manda solo la referencia (`{"photos":[{"publicId":"<publicId>"}]}`) y el servidor llama a `images.Service.Resolve`: comprueba que la imagen es de quien la envía y del propósito correcto, y pide a Cloudinary formato y tamaño. Si no cumple responde `400 validation_failed` con un detalle por imagen; si Cloudinary no responde, `503 service_unavailable`. Las URL (`url`, `thumbUrl`) se calculan al leer con `images.Service.URLs`; las evidencias dan una URL firmada que vence a los 10 minutos.
 - Sin red ni credenciales, el mismo flujo se prueba con `go test -tags integration -run Integration ./internal/images/adapter/http/` (Cloudinary simulado).

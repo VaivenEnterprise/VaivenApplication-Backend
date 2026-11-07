@@ -8,8 +8,8 @@ signature:
     description: |
       Devuelve lo necesario para subir **una** imagen directamente a Cloudinary
       (RF-01). El cliente envía a `uploadUrl` un `multipart/form-data` con `file`,
-      `api_key`, `timestamp`, `signature`, `public_id`, `type` y `allowed_formats`
-      (los valores de esta respuesta, sin cambiarlos). La firma vale para ese
+      `api_key`, `timestamp`, `signature`, `public_id`, `type`, `allowed_formats` y
+      `overwrite` (los valores de esta respuesta, sin cambiarlos). La firma vale para ese
       `publicId`; el API secret nunca sale del servidor (RNF-01).
 
       - `item_photo` → `type: upload` (pública); `evidence` → `type: authenticated`
@@ -46,6 +46,7 @@ signature:
               publicId: vaiven/staging/item_photo/6730f1c2a9b3e4d5f6a7b8c9/9b2f6c1e4a7d4c0e8f3b5a2d1c6e7f80
               type: upload
               allowedFormats: jpg,jpeg,png,webp
+              overwrite: 'false'
       '400':
         $ref: '../openapi.yaml#/components/responses/ValidationFailed'
       '401':

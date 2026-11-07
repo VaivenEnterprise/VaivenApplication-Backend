@@ -11,6 +11,9 @@ import (
 
 const messageInvalidImages = "Revisa las imágenes marcadas."
 
+// maxPublicIDLen es el máximo del contrato (ImageInput.publicId).
+const maxPublicIDLen = 255
+
 // Resolve valida las referencias que envió userID y devuelve las imágenes con
 // metadatos verificados por Cloudinary (RF-05, POL-13): de 1 a 5, sin
 // repetir, de su propia carpeta para el propósito, existentes, en formato
@@ -37,6 +40,8 @@ func (s *Service) Resolve(ctx context.Context, userID string, purpose domain.Pur
 	for i, ref := range refs {
 		f := fmt.Sprintf("%s[%d].publicId", field, i)
 		switch {
+		case len(ref.PublicID) > maxPublicIDLen:
+			details = append(details, shared.Detail{Field: f, Issue: "es demasiado largo"})
 		case !domain.OwnedBy(ref.PublicID, s.d.BaseFolder, purpose, userID):
 			details = append(details, shared.Detail{Field: f, Issue: "la imagen no es tuya o no corresponde a este uso"})
 		case seen[ref.PublicID]:
@@ -66,7 +71,10 @@ func (s *Service) Resolve(ctx context.Context, userID string, purpose domain.Pur
 		case !domain.AllowedFormat(info.Format):
 			details = append(details, shared.Detail{Field: f, Issue: "formato no permitido (jpg, jpeg, png o webp)"})
 			continue
-		case info.Bytes <= 0 || info.Bytes > s.d.MaxBytes:
+		case info.Bytes <= 0:
+			details = append(details, shared.Detail{Field: f, Issue: "la imagen está vacía o dañada"})
+			continue
+		case info.Bytes > s.d.MaxBytes:
 			details = append(details, shared.Detail{Field: f, Issue: fmt.Sprintf("la imagen pesa más de %d MB", s.d.MaxBytes/(1024*1024))})
 			continue
 		}

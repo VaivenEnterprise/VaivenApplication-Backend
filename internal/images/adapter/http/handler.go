@@ -10,18 +10,21 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-playground/validator/v10"
 
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/middleware"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/respond"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth"
 	shared "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/domain"
-	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/images"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/images/domain"
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/images/port"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/usecase/ratelimit"
 )
 
+// signatureRequest se valida en la frontera con validator/v10 (Art. VI.2) y
+// otra vez en el dominio (Purpose.Valid).
 type signatureRequest struct {
-	Purpose string `json:"purpose"`
+	Purpose string `json:"purpose" validate:"required,oneof=item_photo evidence"`
 }
 
 type signatureResponse struct {
@@ -32,11 +35,12 @@ type signatureResponse struct {
 	PublicID       string `json:"publicId"`
 	Type           string `json:"type"`
 	AllowedFormats string `json:"allowedFormats"`
+	Overwrite      string `json:"overwrite"`
 }
 
 // ModuleDeps son las dependencias del módulo de imágenes.
 type ModuleDeps struct {
-	Service images.Service
+	Service port.Service
 	// Authenticate es el middleware del módulo auth (spec 003).
 	Authenticate func(http.Handler) http.Handler
 	Log          *slog.Logger
@@ -48,10 +52,11 @@ type ModuleDeps struct {
 
 // Module registra las rutas de imágenes bajo /api/v1 (Art. XII.3).
 type Module struct {
-	svc   images.Service
+	svc   port.Service
 	log   *slog.Logger
 	auth  func(http.Handler) http.Handler
 	limit func(http.Handler) http.Handler
+	v     *validator.Validate
 }
 
 // NewModule crea el módulo. Falla si falta una dependencia obligatoria.
@@ -61,6 +66,7 @@ func NewModule(d ModuleDeps) (*Module, error) {
 	}
 	return &Module{
 		svc:  d.Service,
+		v:    validator.New(validator.WithRequiredStructEnabled()),
 		log:  d.Log,
 		auth: d.Authenticate,
 		// Clave por persona (va después de Authenticate): 30 firmas por hora.
@@ -91,6 +97,10 @@ func (m *Module) signature(w http.ResponseWriter, r *http.Request) {
 		respond.Error(w, r, shared.NewValidation("El cuerpo de la petición no es un JSON válido."))
 		return
 	}
+	if err := m.v.Struct(req); err != nil {
+		respond.Error(w, r, domain.ErrInvalidPurpose)
+		return
+	}
 	userID, _ := auth.UserID(r.Context())
 	sig, err := m.svc.Signature(r.Context(), userID, domain.Purpose(req.Purpose))
 	if err != nil {
@@ -109,5 +119,6 @@ func (m *Module) signature(w http.ResponseWriter, r *http.Request) {
 		PublicID:       sig.PublicID,
 		Type:           sig.Type,
 		AllowedFormats: sig.AllowedFormats,
+		Overwrite:      sig.Overwrite,
 	})
 }

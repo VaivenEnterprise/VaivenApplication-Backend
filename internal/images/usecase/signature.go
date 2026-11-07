@@ -38,9 +38,9 @@ func NewService(d Deps) (*Service, error) {
 }
 
 // Signature emite la firma para que userID suba una imagen con el propósito
-// indicado (RF-01 a RF-03). La firma cubre allowed_formats, public_id,
-// timestamp y type, así que el cliente no puede cambiar la carpeta, el tipo
-// de entrega ni los formatos.
+// indicado (RF-01 a RF-03). La firma cubre allowed_formats, overwrite,
+// public_id, timestamp y type, así que el cliente no puede cambiar la carpeta,
+// el tipo de entrega ni los formatos, ni volver a subir encima de la imagen.
 func (s *Service) Signature(_ context.Context, userID string, purpose domain.Purpose) (domain.UploadSignature, error) {
 	if !purpose.Valid() {
 		return domain.UploadSignature{}, domain.ErrInvalidPurpose
@@ -59,9 +59,11 @@ func (s *Service) Signature(_ context.Context, userID string, purpose domain.Pur
 		PublicID:       domain.NewPublicID(s.d.BaseFolder, purpose, userID, id),
 		Type:           purpose.Delivery().CloudinaryType(),
 		AllowedFormats: domain.AllowedFormats,
+		Overwrite:      "false",
 	}
 	sig.Signature = s.d.Signer.SignUpload(map[string]string{
 		"allowed_formats": sig.AllowedFormats,
+		"overwrite":       sig.Overwrite,
 		"public_id":       sig.PublicID,
 		"timestamp":       strconv.FormatInt(sig.Timestamp, 10),
 		"type":            sig.Type,

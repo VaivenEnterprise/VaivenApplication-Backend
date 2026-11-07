@@ -105,6 +105,7 @@ func (f *fakeCloudinary) upload(w http.ResponseWriter, r *http.Request) {
 	}
 	params := map[string]string{
 		"allowed_formats": r.FormValue("allowed_formats"),
+		"overwrite":       r.FormValue("overwrite"),
 		"public_id":       r.FormValue("public_id"),
 		"timestamp":       r.FormValue("timestamp"),
 		"type":            r.FormValue("type"),
@@ -245,6 +246,7 @@ func (e *itEnv) upload(sig signatureResponse, filename string, content []byte) (
 	for k, v := range map[string]string{
 		"api_key": sig.APIKey, "timestamp": strconv.FormatInt(sig.Timestamp, 10), "signature": sig.Signature,
 		"public_id": sig.PublicID, "type": sig.Type, "allowed_formats": sig.AllowedFormats,
+		"overwrite": sig.Overwrite,
 	} {
 		if err := mw.WriteField(k, v); err != nil {
 			e.t.Fatal(err)

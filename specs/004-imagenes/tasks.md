@@ -1,6 +1,6 @@
 # Tareas 004 — Imágenes con Cloudinary (backend)
 
-- **Dueño:** BE-B · **Estado:** sin ejecutar · `[P]` = paralelizable
+- **Dueño:** BE-B · **Estado:** implementada (2026-11-07) · `[P]` = paralelizable
 - **T001 se integra el primer día**; MO-B y las demás specs leen el contrato y `images.Service`.
 
 - [x] **T001** Contrato OpenAPI de subida
@@ -57,7 +57,7 @@
   - Aceptación: flujo firma→`Resolve` con servidor simulado pasa; la guía explica cómo subir una imagen real con `curl`/`.http`
   - Refs: CA-01…CA-05
 
-- [ ] **T010** Memoria y revisión
+- [x] **T010** Memoria y revisión
   - Archivos: `memoria.md` (solo anexar)
   - Agente: `revisor-constitucion` · Depende de: T009
   - Aceptación: veredicto **CONFORME**; sin secretos; hito H1 (backend) marcado
