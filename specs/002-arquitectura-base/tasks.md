@@ -202,7 +202,7 @@
   - Aceptación: límite por IP (rutas públicas) y por usuario (autenticadas) con 429 en el formato de error del Art. IV; si Redis falla usa el limitador local y registra una sola vez; `/readyz` devuelve 503 solo si Mongo falla y `redis: "degradado"` (200) si Redis falla (CA-S5, CA-S6)
   - Refs: RF-05, RF-S6 · P-S5
 
-- [ ] **T028** Servidor HTTPS con certificado recargable
+- [x] **T028** Servidor HTTPS con certificado recargable
   - Archivos: `internal/adapter/http/tlsserver.go`, `internal/adapter/http/tlsserver_test.go`, `cmd/api/main.go`
   - Agente: `dev-go` · Depende de: T015, T024
   - Aceptación: con `APP_ENV=staging|production` la API sirve **solo HTTPS** con `TLS_CERT_FILE` y `TLS_KEY_FILE` y rechaza arrancar sin ellos; relee el par de archivos cuando cambia su fecha de modificación (≤ 1 min) y la prueba con un certificado autofirmado demuestra que el nuevo se sirve sin reiniciar (CA-S4); en `development` y `test` puede servir HTTP; cierre ordenado intacto; cobertura ≥ 80 %
@@ -214,13 +214,13 @@
   - Aceptación: imprime `OK`/`FALLA` por servicio (MongoDB, Redis y Cloudinary); código ≠ 0 si alguno falla; no imprime secretos; prueba con dobles (CA-S1, CA-S2)
   - Refs: RF-S3
 
-- [ ] **T030** Artefactos de despliegue: Compose y `deploy.sh`
+- [x] **T030** Artefactos de despliegue: Compose y `deploy.sh`
   - Archivos: `deploy/docker-compose.yml`, `deploy/.env.example`, `scripts/deploy.sh`
   - Agente: `dev-go` · Depende de: T019, T028, 001-T007
   - Aceptación: Compose con `api`, `mongo` (`rs0`) y `redis`, límites de memoria y `GOMEMLIMIT`; solo la API publica puerto (8443 en staging, 443 en producción) y monta de solo lectura el certificado; `deploy.sh <entorno>` compila para la arquitectura de la VM (`amd64`/`arm64`), envía la imagen por SSH, reinicia la API y espera su `/healthz` por HTTPS; `--rollback` vuelve a la imagen anterior; ningún secreto escrito; `shellcheck` sin errores
   - Refs: RF-S8 · P-S6, P-S7 · Art. XIII, XIV
 
-- [ ] **T031** Despliegue de la spec en Azure (staging)
+- [x] **T031** Despliegue de la spec en Azure (staging)
   - Archivos: `docs/servicios.md` (anexar la URL de staging), `memoria.md` (solo anexar)
   - Agente: `devops-mcp` · Depende de: T019, T020, T023, T029, T030, 001-T010
   - Aceptación: `make fmt lint test` en verde; `.env` de staging completo en la VM (nunca en el repo); `scripts/deploy.sh staging` termina bien; `/healthz`, `/readyz` y `/api/v1/meta` devuelven 200 en `https://<host>:8443` **sin `-k`** (CA-S3); no hay respuesta HTTP en claro (CA-S4); el límite de tasa responde 429 al pasarse (CA-S6); con Redis detenido la API responde y `/readyz` marca `degradado` (CA-S5); registros sin secretos ni datos personales; URL anotada para el móvil. **La spec 003 no empieza hasta que esta tarea pase.**
