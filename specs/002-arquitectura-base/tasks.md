@@ -208,7 +208,7 @@
   - Aceptación: con `APP_ENV=staging|production` la API sirve **solo HTTPS** con `TLS_CERT_FILE` y `TLS_KEY_FILE` y rechaza arrancar sin ellos; relee el par de archivos cuando cambia su fecha de modificación (≤ 1 min) y la prueba con un certificado autofirmado demuestra que el nuevo se sirve sin reiniciar (CA-S4); en `development` y `test` puede servir HTTP; cierre ordenado intacto; cobertura ≥ 80 %
   - Refs: RF-S7 · P-S8 · Art. XIV.4
 
-- [ ] **T029** Comando `check-services`
+- [x] **T029** Comando `check-services`
   - Archivos: `cmd/admin/main.go`, `cmd/admin/check_services.go`, `cmd/admin/check_services_test.go`
   - Agente: `dev-go` · Depende de: T024, T025, T026, T008
   - Aceptación: imprime `OK`/`FALLA` por servicio (MongoDB, Redis y Cloudinary); código ≠ 0 si alguno falla; no imprime secretos; prueba con dobles (CA-S1, CA-S2)
