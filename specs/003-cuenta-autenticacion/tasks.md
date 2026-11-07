@@ -3,25 +3,25 @@
 - **Dueño:** BE-A · **Estado:** sin ejecutar · `[P]` = paralelizable
 - **T001 va primero (contrato publicado el mismo día)**, para que MO-A y los demás lean el contrato.
 
-- [ ] **T001** Contrato OpenAPI de auth y usuarios
+- [x] **T001** Contrato OpenAPI de auth y usuarios
   - Archivos: `api/paths/auth.yaml`, `api/paths/users.yaml`, `api/openapi.yaml` (agregar `$ref`)
   - Agente: `spec-writer` · Depende de: 002-T018
   - Aceptación: describe las 8 rutas del plan §2 con esquemas `User`, `PublicUser`, `Tokens` y errores; YAML válido
   - Refs: Art. IV, XII
 
-- [ ] **T002** [P] Registro de módulos y puertos vacíos
+- [x] **T002** [P] Registro de módulos y puertos vacíos
   - Archivos: `cmd/api/modules.go`, `internal/notify/notifier.go`, `internal/moderation/checker.go`
   - Agente: `dev-go` · Depende de: 002-T015
   - Aceptación: `Module` con `Name()` y `Register(chi.Router)`; `main` recorre `modules`; `Notifier` y `Checker` con implementación vacía y pruebas de que no fallan
   - Refs: RF-11, RF-12 · Art. XII
 
-- [ ] **T003** [P] Seguridad: contraseñas y tokens
+- [x] **T003** [P] Seguridad: contraseñas y tokens
   - Archivos: `internal/platform/security/password.go`, `jwt.go`, `tokens.go`, `security_test.go`
   - Agente: `dev-go` · Depende de: 002-T005
   - Aceptación: `argon2id` con parámetros del plan P-01 (hash/verify, formato PHC); JWT HS256 con expiración y rechazo de otro algoritmo; generador de refresh + SHA-256; pruebas de tabla
   - Refs: RF-03, RF-05 · Art. VI
 
-- [ ] **T004** [P] Configuración de auth
+- [x] **T004** [P] Configuración de auth
   - Archivos: `internal/config/auth.go`, `internal/config/auth_test.go`, `.env.example`
   - Agente: `dev-go` · Depende de: 002-T024
   - Aceptación: variables del plan §5; `JWT_ACCESS_SECRET` < 32 caracteres → error; `Load()` con una línea nueva
