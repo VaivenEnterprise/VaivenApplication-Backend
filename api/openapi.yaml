@@ -1,12 +1,13 @@
 openapi: 3.1.0
 info:
   title: VAIVÉN API
-  version: 0.3.0
+  version: 0.4.0
   summary: API REST del backend de VAIVÉN (préstamo y renta de objetos en México).
   description: |
     Contrato de la spec 002 (arquitectura base): endpoints de infraestructura y
     el envoltorio único de errores (Art. IV de la constitución). La spec 003
-    agrega la cuenta y la autenticación (`api/paths/auth.yaml` y `users.yaml`).
+    agrega la cuenta y la autenticación (`api/paths/auth.yaml` y `users.yaml`) y
+    la spec 004 las imágenes (`api/paths/uploads.yaml`).
 
     - Rutas de negocio bajo `/api/v1`; `/healthz` y `/readyz` fuera del prefijo.
     - JSON en `camelCase`; fechas en ISO-8601 UTC.
@@ -33,6 +34,8 @@ tags:
     description: La cuenta de la persona autenticada (spec 003).
   - name: usuarios
     description: Perfiles públicos (spec 003).
+  - name: imagenes
+    description: Subida de imágenes a Cloudinary con firma del servidor (spec 004).
 paths:
   /healthz:
     get:
@@ -136,6 +139,8 @@ paths:
     $ref: './paths/auth.yaml#/me'
   /api/v1/users/{id}:
     $ref: './paths/users.yaml#/userById'
+  /api/v1/uploads/signature:
+    $ref: './paths/uploads.yaml#/signature'
 components:
   securitySchemes:
     bearerAuth:
@@ -321,6 +326,82 @@ components:
         password:
           type: string
           maxLength: 72
+    ImagePurpose:
+      type: string
+      enum: [item_photo, evidence]
+      description: item_photo es pública; evidence es privada (solo las partes de la reserva).
+    UploadSignatureRequest:
+      type: object
+      required: [purpose]
+      properties:
+        purpose:
+          $ref: '#/components/schemas/ImagePurpose'
+    UploadSignature:
+      type: object
+      description: Datos para subir una imagen directo a Cloudinary (RF-01). Nunca incluye el API secret.
+      required: [uploadUrl, apiKey, timestamp, signature, publicId, type, allowedFormats, overwrite]
+      properties:
+        uploadUrl:
+          type: string
+          format: uri
+        apiKey:
+          type: string
+          description: API key pública de Cloudinary (no es secreta).
+        timestamp:
+          type: integer
+          description: Segundos Unix; Cloudinary rechaza firmas de más de 1 h.
+        signature:
+          type: string
+          description: SHA-1 en hexadecimal de los parámetros firmados.
+        publicId:
+          type: string
+          description: '<carpeta base>/<purpose>/<userId>/<id>; enviarlo sin cambios como public_id.'
+        type:
+          type: string
+          enum: [upload, authenticated]
+        allowedFormats:
+          type: string
+          const: jpg,jpeg,png,webp
+        overwrite:
+          type: string
+          const: 'false'
+          description: Va firmado; impide volver a subir encima de una imagen ya verificada.
+    ImageInput:
+      type: object
+      description: Referencia a una imagen ya subida, que reciben las demás rutas (RF-05). Máximo 5 por recurso.
+      required: [publicId]
+      properties:
+        publicId:
+          type: string
+          maxLength: 255
+    Image:
+      type: object
+      description: |
+        Imagen verificada con Cloudinary (RF-06, RF-07). Las URL se calculan al
+        leer; las de entrega authenticated caducan a los 10 minutos.
+      required: [publicId, width, height, format, bytes, delivery, url, thumbUrl]
+      properties:
+        publicId:
+          type: string
+        width:
+          type: integer
+        height:
+          type: integer
+        format:
+          type: string
+          enum: [jpg, jpeg, png, webp]
+        bytes:
+          type: integer
+          maximum: 5242880
+        delivery:
+          type: string
+          enum: [public, authenticated]
+        url:
+          type: string
+          format: uri
+        thumbUrl:
+          type: string
+          format: uri
     ErrorCode:
       type: string
       description: Códigos permitidos por el Art. IV.3 de la constitución.

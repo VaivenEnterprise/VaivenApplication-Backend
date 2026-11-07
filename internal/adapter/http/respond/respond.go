@@ -69,6 +69,7 @@ var statusByCode = map[domain.Code]int{
 	domain.CodeForbidden:    http.StatusForbidden,
 	domain.CodeNotFound:     http.StatusNotFound,
 	domain.CodeConflict:     http.StatusConflict,
+	domain.CodeUnavailable:  http.StatusServiceUnavailable,
 }
 
 // JSON escribe v como JSON con el estado indicado. Si v es nil solo escribe

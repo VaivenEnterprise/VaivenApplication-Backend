@@ -45,25 +45,27 @@ func TestHashAndVerify(t *testing.T) {
 		password string
 		encoded  string
 		want     error
+		match    bool
 	}{
-		{"correcta", "una-contrasena-larga", hash, nil},
-		{"incorrecta", "otra-contrasena", hash, ErrMismatch},
-		{"vacía", "", hash, ErrMismatch},
-		{"otro algoritmo", "x", "$argon2i$v=19$m=65536,t=3,p=2$c2FsdHNhbHQ$aGFzaGhhc2hoYXNoaGFzaA", ErrMalformedHash},
-		{"otra versión", "x", "$argon2id$v=16$m=65536,t=3,p=2$c2FsdHNhbHQ$aGFzaGhhc2hoYXNoaGFzaA", ErrMalformedHash},
-		{"sin partes", "x", "texto", ErrMalformedHash},
-		{"parámetros ilegibles", "x", "$argon2id$v=19$m=a,t=3,p=2$c2FsdHNhbHQ$aGFzaGhhc2hoYXNoaGFzaA", ErrMalformedHash},
-		{"memoria excesiva", "x", "$argon2id$v=19$m=999999999,t=3,p=2$c2FsdHNhbHQ$aGFzaGhhc2hoYXNoaGFzaA", ErrMalformedHash},
-		{"tiempo cero", "x", "$argon2id$v=19$m=65536,t=0,p=2$c2FsdHNhbHQ$aGFzaGhhc2hoYXNoaGFzaA", ErrMalformedHash},
-		{"sal corta", "x", "$argon2id$v=19$m=65536,t=3,p=2$c2Fs$aGFzaGhhc2hoYXNoaGFzaA", ErrMalformedHash},
-		{"sal inválida", "x", "$argon2id$v=19$m=65536,t=3,p=2$!!!!!!!!!!$aGFzaGhhc2hoYXNoaGFzaA", ErrMalformedHash},
-		{"hash inválido", "x", "$argon2id$v=19$m=65536,t=3,p=2$c2FsdHNhbHQ$!!!!", ErrMalformedHash},
-		{"hash de largo raro", "x", "$argon2id$v=19$m=65536,t=3,p=2$c2FsdHNhbHQ$aGFzaA", ErrMalformedHash},
+		{"correcta", "una-contrasena-larga", hash, nil, true},
+		{"incorrecta", "otra-contrasena", hash, nil, false},
+		{"vacía", "", hash, nil, false},
+		{"otro algoritmo", "x", "$argon2i$v=19$m=65536,t=3,p=2$c2FsdHNhbHQ$aGFzaGhhc2hoYXNoaGFzaA", ErrMalformedHash, false},
+		{"otra versión", "x", "$argon2id$v=16$m=65536,t=3,p=2$c2FsdHNhbHQ$aGFzaGhhc2hoYXNoaGFzaA", ErrMalformedHash, false},
+		{"sin partes", "x", "texto", ErrMalformedHash, false},
+		{"parámetros ilegibles", "x", "$argon2id$v=19$m=a,t=3,p=2$c2FsdHNhbHQ$aGFzaGhhc2hoYXNoaGFzaA", ErrMalformedHash, false},
+		{"memoria excesiva", "x", "$argon2id$v=19$m=999999999,t=3,p=2$c2FsdHNhbHQ$aGFzaGhhc2hoYXNoaGFzaA", ErrMalformedHash, false},
+		{"tiempo cero", "x", "$argon2id$v=19$m=65536,t=0,p=2$c2FsdHNhbHQ$aGFzaGhhc2hoYXNoaGFzaA", ErrMalformedHash, false},
+		{"sal corta", "x", "$argon2id$v=19$m=65536,t=3,p=2$c2Fs$aGFzaGhhc2hoYXNoaGFzaA", ErrMalformedHash, false},
+		{"sal inválida", "x", "$argon2id$v=19$m=65536,t=3,p=2$!!!!!!!!!!$aGFzaGhhc2hoYXNoaGFzaA", ErrMalformedHash, false},
+		{"hash inválido", "x", "$argon2id$v=19$m=65536,t=3,p=2$c2FsdHNhbHQ$!!!!", ErrMalformedHash, false},
+		{"hash de largo raro", "x", "$argon2id$v=19$m=65536,t=3,p=2$c2FsdHNhbHQ$aGFzaA", ErrMalformedHash, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := h.Verify(ctx, tt.password, tt.encoded); !errors.Is(err, tt.want) {
-				t.Errorf("Verify = %v, want %v", err, tt.want)
+			ok, err := h.Verify(ctx, tt.password, tt.encoded)
+			if !errors.Is(err, tt.want) || ok != tt.match {
+				t.Errorf("Verify = %v, %v; want %v, %v", ok, err, tt.match, tt.want)
 			}
 		})
 	}
@@ -75,8 +77,8 @@ func TestVerifyAcceptsOtherParameters(t *testing.T) {
 	salt := []byte("sal-de-16-bytes!")
 	key := argonKey(t, "pw", salt, 1, 1024, 1, 16)
 	enc := "$argon2id$v=19$m=1024,t=1,p=1$" + b64.EncodeToString(salt) + "$" + b64.EncodeToString(key)
-	if err := h.Verify(context.Background(), "pw", enc); err != nil {
-		t.Fatalf("Verify = %v, want nil", err)
+	if ok, err := h.Verify(context.Background(), "pw", enc); err != nil || !ok {
+		t.Fatalf("Verify = %v, %v; want true, nil", ok, err)
 	}
 }
 
@@ -89,7 +91,7 @@ func TestHasherRespectsContext(t *testing.T) {
 		t.Errorf("Hash con contexto cancelado = %v, want context.Canceled", err)
 	}
 	enc := "$argon2id$v=19$m=1024,t=1,p=1$c2FsdHNhbHQ$aGFzaGhhc2hoYXNoaGFzaA"
-	if err := h.Verify(ctx, "x", enc); !errors.Is(err, context.Canceled) {
+	if _, err := h.Verify(ctx, "x", enc); !errors.Is(err, context.Canceled) {
 		t.Errorf("Verify con contexto cancelado = %v, want context.Canceled", err)
 	}
 }

@@ -158,3 +158,20 @@ func TestSecretsAreMasked(t *testing.T) {
 		t.Error("Reveal no devuelve el valor real")
 	}
 }
+
+func TestValuesIgnoreBOM(t *testing.T) {
+	e := valid()
+	e["CLOUDINARY_CLOUD_NAME"] = bom + "nube"
+	e["MONGO_DB"] = " " + bom + "vaiven_dev" + bom + " "
+	cfg, err := load(e.lookup)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if cfg.Cloudinary.CloudName != "nube" || cfg.MongoDB != "vaiven_dev" {
+		t.Errorf("BOM no eliminado: %q, %q", cfg.Cloudinary.CloudName, cfg.MongoDB)
+	}
+	e["MONGO_URI"] = bom
+	if _, err := load(e.lookup); err == nil {
+		t.Error("una variable que solo tiene BOM cuenta como vacía")
+	}
+}

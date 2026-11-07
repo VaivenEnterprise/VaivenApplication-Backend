@@ -30,9 +30,6 @@ const (
 	maxTime      = 10
 )
 
-// ErrMismatch indica que la contraseña no coincide con el hash.
-var ErrMismatch = errors.New("security: la contraseña no coincide")
-
 // ErrMalformedHash indica que el hash guardado no tiene formato PHC válido.
 var ErrMalformedHash = errors.New("security: hash de contraseña con formato inválido")
 
@@ -85,24 +82,21 @@ func (h *Hasher) Hash(ctx context.Context, password string) (string, error) {
 		b64.EncodeToString(salt), b64.EncodeToString(key)), nil
 }
 
-// Verify compara password con el hash PHC en tiempo constante. Devuelve nil si
-// coinciden, ErrMismatch si no y ErrMalformedHash si el hash es inválido. Usa
-// los parámetros guardados en el hash, así que admite hashes hechos con
-// parámetros anteriores.
-func (h *Hasher) Verify(ctx context.Context, password, encoded string) error {
+// Verify compara password con el hash PHC en tiempo constante: (true, nil) si
+// coinciden, (false, nil) si no y un error si el hash es inválido
+// (ErrMalformedHash) o se canceló el contexto. Usa los parámetros guardados en
+// el hash, así que admite hashes hechos con parámetros anteriores.
+func (h *Hasher) Verify(ctx context.Context, password, encoded string) (bool, error) {
 	p, err := parsePHC(encoded)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if err := h.acquire(ctx); err != nil {
-		return err
+		return false, err
 	}
 	key := argon2.IDKey([]byte(password), p.salt, p.time, p.memory, p.threads, p.keyLen)
 	h.release()
-	if subtle.ConstantTimeCompare(key, p.key) != 1 {
-		return ErrMismatch
-	}
-	return nil
+	return subtle.ConstantTimeCompare(key, p.key) == 1, nil
 }
 
 type phcParams struct {

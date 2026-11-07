@@ -40,6 +40,7 @@ Pasos manuales adicionales, justificados:
 | `REDIS_PASSWORD` | `/opt/vaiven/base/.env` en la VM | `openssl rand -hex 24` en la VM | Actualizar `.env` y `docker compose up -d redis` (Redis no guarda datos persistentes) |
 | keyFile de MongoDB | `/opt/vaiven/secrets/mongo-keyfile` (999:999, 400) | `deploy/bootstrap.sh` | Detener mongo, regenerar el archivo con los mismos permisos y arrancar |
 | `AZURE_HOST` | `.env` local de despliegue | Etiqueta DNS de la IP pública | No es secreto; no se rota |
+| `JWT_ACCESS_SECRET` | `/opt/vaiven/staging/.env` en la VM (600, dueño `deploy`) | `openssl rand -hex 32` en la VM (spec 003, T014; 64 caracteres) | Generar uno nuevo en la VM, reemplazar la línea y `scripts/deploy.sh staging`: todas las sesiones de acceso vencen (los refresh tokens siguen sirviendo) |
 | Llave SSH `vaiven_azure` | `~/.ssh/vaiven_azure` de quien administra | `ssh-keygen` (T004) | Ver §4 |
 
 Las contraseñas se pasan a los comandos como variables de entorno dentro de la VM; nunca se imprimen ni se pegan en conversaciones con modelos.
@@ -82,8 +83,39 @@ Las contraseñas se pasan por variables de entorno (`process.env`), no en la lí
 ## 7. API de staging (spec 002, T031)
 
 - **URL para el móvil:** `https://vaiven-staging.westus2.cloudapp.azure.com:8443` (solo HTTPS, certificado de Let's Encrypt).
-- Endpoints: `GET /healthz`, `GET /readyz` (`redis: ok|degradado`), `GET /api/v1/meta`. Contrato: `api/openapi.yaml`.
+- Endpoints: `GET /healthz`, `GET /readyz` (`redis: ok|degradado`), `GET /api/v1/meta` y, desde la spec 003, `/api/v1/auth/{register,login,refresh,logout}`, `/api/v1/me`, `/api/v1/users/{id}` y, desde la spec 004, `POST /api/v1/uploads/signature`. Contrato: `api/openapi.yaml` y `api/paths/`.
 - Contenedor `vaiven-staging-api-1` (proyecto de Compose `vaiven-staging`, `/opt/vaiven/staging/`), unido a la red `base_vaiven-net` del stack base; usuario no root, sistema de archivos de solo lectura, 160 MiB.
 - Variables en `/opt/vaiven/staging/.env` (600, dueño `deploy`; plantilla en `deploy/.env.example`), generadas en la VM.
 - Certificado para la API en `/opt/vaiven/certs` (uid 65532); lo renueva el hook `/etc/letsencrypt/renewal-hooks/deploy/vaiven-api.sh` (copia de `deploy/certbot-deploy-hook.sh`) y la API lo recarga sola.
 - Desplegar: `scripts/deploy.sh staging` (con Docker o `ENGINE=podman`); volver atrás: `scripts/deploy.sh staging --rollback`.
+
+## 8. Probar una subida real (spec 004)
+
+El móvil sube cada imagen **directo a Cloudinary** con una firma de un solo uso que da la API; la imagen no pasa por nuestro servidor. El **API secret de Cloudinary nunca se usa del lado del cliente**: solo la API lo tiene y firma con él. Para probarlo a mano (Git Bash o WSL, con `jq`):
+
+```bash
+API=https://vaiven-staging.westus2.cloudapp.azure.com:8443/api/v1
+
+# 1. Iniciar sesión con una cuenta de prueba (las credenciales van en variables, no en el historial).
+TOKEN=$(curl -s "$API/auth/login" -H 'Content-Type: application/json' \
+  -d "{\"email\":\"$VAIVEN_EMAIL\",\"password\":\"$VAIVEN_PASSWORD\"}" | jq -r .tokens.accessToken)
+
+# 2. Pedir la firma (item_photo → pública; evidence → privada). Límite: 30 por hora.
+SIG=$(curl -s "$API/uploads/signature" -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"purpose":"item_photo"}')
+
+# 3. Subir a uploadUrl con los campos tal cual (jpg, jpeg, png o webp, máximo 5 MB).
+curl -s "$(jq -r .uploadUrl <<<"$SIG")" \
+  -F file=@foto.jpg \
+  -F api_key="$(jq -r .apiKey <<<"$SIG")" \
+  -F timestamp="$(jq -r .timestamp <<<"$SIG")" \
+  -F signature="$(jq -r .signature <<<"$SIG")" \
+  -F public_id="$(jq -r .publicId <<<"$SIG")" \
+  -F type="$(jq -r .type <<<"$SIG")" \
+  -F allowed_formats="$(jq -r .allowedFormats <<<"$SIG")" \
+  -F overwrite="$(jq -r .overwrite <<<"$SIG")"
+```
+
+- Si se cambia cualquier campo firmado (`public_id`, `type`, `allowed_formats`, `overwrite`, `timestamp`), Cloudinary responde `401 Invalid Signature`. La firma vence a la hora.
+- Al usarla en otra spec, el cliente manda solo la referencia (`{"photos":[{"publicId":"<publicId>"}]}`) y el servidor llama a `images.Service.Resolve`: comprueba que la imagen es de quien la envía y del propósito correcto, y pide a Cloudinary formato y tamaño. Si no cumple responde `400 validation_failed` con un detalle por imagen; si Cloudinary no responde, `503 service_unavailable`. Las URL (`url`, `thumbUrl`) se calculan al leer con `images.Service.URLs`; las evidencias dan una URL firmada que vence a los 10 minutos.
+- Sin red ni credenciales, el mismo flujo se prueba con `go test -tags integration -run Integration ./internal/images/adapter/http/` (Cloudinary simulado).

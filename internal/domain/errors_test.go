@@ -22,6 +22,7 @@ func TestConstructorsSetCode(t *testing.T) {
 		{"conflicto", NewConflict("ya existe"), CodeConflict},
 		{"no autenticado", NewUnauthorized("inicia sesión"), CodeUnauthorized},
 		{"prohibido", NewForbidden("sin permiso"), CodeForbidden},
+		{"no disponible", NewUnavailable("intenta más tarde"), CodeUnavailable},
 	}
 
 	for _, tt := range tests {
@@ -47,6 +48,7 @@ func TestCodesMatchAPIContract(t *testing.T) {
 		CodeConflict:     "conflict",
 		CodeUnauthorized: "unauthorized",
 		CodeForbidden:    "forbidden",
+		CodeUnavailable:  "service_unavailable",
 	}
 	for code, s := range want {
 		if string(code) != s {
