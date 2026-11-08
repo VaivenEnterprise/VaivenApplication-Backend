@@ -16,7 +16,7 @@ import (
 var innerLayers = []string{
 	"./domain/...", "./usecase/...",
 	"./.../domain/...", "./.../usecase/...",
-	"./users/...", "./notify/...", "./moderation/...",
+	"./users/...", "./notify/...", "./moderation/...", "./images/port/...",
 }
 
 // forbiddenPrefixes cubre net/http (y sus subpaquetes), chi y todo el driver

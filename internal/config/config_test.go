@@ -59,6 +59,7 @@ func TestLoadDefaults(t *testing.T) {
 			RefreshTTL:      720 * time.Hour,
 			RateLimitPerMin: 10,
 		},
+		Images: Images{MaxBytes: 5 * 1024 * 1024, SignaturesPerHour: 30},
 	}
 	if !reflect.DeepEqual(cfg, want) {
 		t.Errorf("load:\n got %+v\nwant %+v", cfg, want)

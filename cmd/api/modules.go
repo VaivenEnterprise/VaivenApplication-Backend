@@ -5,6 +5,7 @@ import (
 
 	apihttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http"
 	authhttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/adapter/http"
+	imageshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/images/adapter/http"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/moderation"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/notify"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/users"
@@ -19,6 +20,8 @@ type moduleDeps struct {
 
 	// Auth es el módulo de la spec 003; Auth.Authenticate() protege rutas.
 	Auth *authhttp.Module
+	// Images es el módulo de la spec 004 (firmas de subida).
+	Images *imageshttp.Module
 	// Users da perfiles públicos por lote y acciones de administración.
 	Users interface {
 		users.Directory
@@ -32,6 +35,7 @@ type moduleDeps struct {
 func modules(deps moduleDeps) []apihttp.Module {
 	return []apihttp.Module{
 		// Una línea por módulo, en orden de spec:
-		deps.Auth, // 003 cuenta y autenticación
+		deps.Auth,   // 003 cuenta y autenticación
+		deps.Images, // 004 imágenes
 	}
 }

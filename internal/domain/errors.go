@@ -6,14 +6,16 @@ package domain
 // códigos del contrato de la API (Art. IV.3); la capa HTTP los traduce a estados.
 type Code string
 
-// Códigos de error de dominio. rate_limited, internal_error y
-// service_unavailable no son de dominio: los produce la capa HTTP.
+// Códigos de error de dominio. rate_limited e internal_error no son de
+// dominio: los produce la capa HTTP. service_unavailable lo usa un caso de uso
+// cuando un servicio externo obligatorio no responde (spec 004, RF-08).
 const (
 	CodeValidation   Code = "validation_failed"
 	CodeNotFound     Code = "not_found"
 	CodeConflict     Code = "conflict"
 	CodeUnauthorized Code = "unauthorized"
 	CodeForbidden    Code = "forbidden"
+	CodeUnavailable  Code = "service_unavailable"
 )
 
 // Detail describe un problema concreto de un campo.
@@ -69,4 +71,10 @@ func NewUnauthorized(message string) *Error {
 // NewForbidden crea un error de permiso insuficiente.
 func NewForbidden(message string) *Error {
 	return &Error{Code: CodeForbidden, Message: message}
+}
+
+// NewUnavailable crea un error de servicio externo caído (503): la operación no
+// se completó y se puede reintentar.
+func NewUnavailable(message string) *Error {
+	return &Error{Code: CodeUnavailable, Message: message}
 }

@@ -21,6 +21,8 @@ import (
 	authmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/adapter/mongo"
 	authusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/usecase"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/config"
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/images"
+	imageshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/images/adapter/http"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/moderation"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/notify"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/platform/logger"
@@ -110,11 +112,17 @@ func run() error {
 		return err
 	}
 
+	imagesModule, err := newImagesModule(cfg, log, authModule, limiter)
+	if err != nil {
+		return err
+	}
+
 	mods := modules(moduleDeps{
 		Log:        log,
 		Notifier:   notify.Noop{},
 		Moderation: moderation.AllowAll{},
 		Auth:       authModule,
+		Images:     imagesModule,
 		Users:      userRepo,
 	})
 	for _, m := range mods {
@@ -204,6 +212,29 @@ func newAuthModule(cfg config.Config, log *slog.Logger, users *authmongo.UserRep
 		Limiter:         limiter,
 		LimiterFallback: redis.NewMemoryLimiter(),
 		LimitPerMinute:  cfg.Auth.RateLimitPerMin,
+	})
+}
+
+// newImagesModule arma el módulo de la spec 004: Cloudinary sin SDK, la
+// fachada images.Service y POST /uploads/signature protegido por auth.
+func newImagesModule(cfg config.Config, log *slog.Logger, authModule *authhttp.Module, limiter ratelimit.Limiter) (*imageshttp.Module, error) {
+	svc, err := images.New(images.Config{
+		CloudName:  cfg.Cloudinary.CloudName,
+		APIKey:     cfg.Cloudinary.APIKey,
+		APISecret:  cfg.Cloudinary.APISecret.Reveal(),
+		BaseFolder: cfg.Cloudinary.BaseFolder,
+		MaxBytes:   cfg.Images.MaxBytes,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("no se pudo configurar Cloudinary: %w", err)
+	}
+	return imageshttp.NewModule(imageshttp.ModuleDeps{
+		Service:           svc,
+		Authenticate:      authModule.Authenticate(),
+		Log:               log,
+		Limiter:           limiter,
+		LimiterFallback:   redis.NewMemoryLimiter(),
+		SignaturesPerHour: cfg.Images.SignaturesPerHour,
 	})
 }
 
