@@ -3,3 +3,5 @@
 
 # T025: constante de prueba que verifica que el API secret NO aparezca en los errores.
 ac1b588358d85e25e540f4f4d8969f70bc2428d7:internal/platform/cloudinary/ping_test.go:generic-api-key:14
+6fe4bc57b8847b84335b0432618d0c26b249b306:internal/images/adapter/cloudinary/admin_client_test.go:generic-api-key:67
+internal/images/adapter/cloudinary/admin_client_test.go:generic-api-key:67
