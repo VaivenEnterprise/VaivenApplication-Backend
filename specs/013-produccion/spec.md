@@ -1,7 +1,7 @@
 # Spec 013 — Entorno de producción (backend)
 
 - **Dueño:** BE-B (con BE-A en revisión) · **Prioridad:** P0 · **Ventana:** fase 1: 6–8 nov · fase 2: 19–22 nov · **Depende de:** 001, 002 (staging), 012
-- **Constitución:** v1.4.0 · **Estado:** Borrador
+- **Constitución:** v2.0.0 · **Estado:** Borrador
 
 ## 1. Objetivo y por qué
 Tener un **entorno de producción separado de staging**, gratuito (en Azure) y operable, desde el **8 de noviembre** (el primer AAB sube el 9 y los testers de Google Play usarán la app contra producción), y dejarlo listo para el público el 23 de noviembre (solicitud de producción): secretos propios, base de datos propia, respaldo manual, monitoreo de disponibilidad y guía de operación.

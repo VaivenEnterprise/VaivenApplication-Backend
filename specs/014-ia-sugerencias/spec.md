@@ -1,7 +1,7 @@
 # Spec 014 — Sugerencias con IA al publicar (backend)
 
 - **Dueño:** BE-A (con BE-B en revisión) · **Prioridad:** P1 · **Ventana:** 23 nov–1 dic · **Depende de:** 004, 005, 011 (filtro), 013
-- **Constitución:** v1.4.0 · **Estado:** Borrador
+- **Constitución:** v2.0.0 · **Estado:** Borrador
 
 ## 1. Objetivo y por qué
 La entrega oficial (1–4 dic) exige que todos los specs estén completos, incluida la función de IA que menciona el documento de idea: **sugerir título y categoría a partir de una fotografía, siempre con revisión de quien publica**. La IA nunca decide: solo propone, y la persona acepta, edita o ignora. Se construye **después** de congelar la 1.0 (22 nov) y sale como actualización v1.1, para no frenar la revisión de Google Play.

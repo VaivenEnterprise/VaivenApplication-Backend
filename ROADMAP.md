@@ -6,8 +6,10 @@
 
 > **Nota (2026-11-02, Azure):** lo **obligatorio** es usar **Azure** (o AWS; se eligió Azure) y **Redis**. El backend (staging y producción) corre en **una VM gratuita de Azure** con Docker Compose: la API en Go (una réplica) con **MongoDB** (replica set de un nodo) y **Redis** (límite de tasa y caché). **HTTPS es forzoso** y lo sirve la propia API con un certificado de Let's Encrypt emitido por `certbot`; **no hay nginx ni balanceador** (decisión del 2 de nov: la VM tiene ~1 GiB de RAM y la app publicada exige HTTPS, no balanceo). Atlas y Render dejan de usarse para el backend; **siguen igual** Cloudinary y la landing en Render. **Principio de trabajo (indicado por el profesor):** la persona solo se registra y hace configuración mínima; **todo lo demás lo ejecuta OpenCode con los MCP** (Azure, Cloudinary, Render, Expo), y `az`/SSH solo para lo que un MCP no cubra. El despliegue no depende del repositorio: la imagen se construye en la máquina de quien despliega y viaja a la VM por SSH. **Costos:** una sola excepción aceptada, la IP pública estándar (≈ 3–4 USD/mes). Constitución del backend v1.4.0 (Art. XIII reescrito y Art. XIV nuevo).
 
+> **Nota (2026-11-08):** la spec **017** (DevSecOps) reintrodujo la CI y el despliegue continuo a staging (constitución backend 2.0.0, enmienda aprobada por Joseph Yañez). Lo que la segunda nota dice sobre «eliminar el pipeline CI/CD» ya no aplica; la spec 017 no tiene fila propia en el calendario porque es transversal.
+
 > Plan maestro: backend y móvil specs `001` a `013`, y el proyecto `landing/` (L001–L002). Si este archivo contradice una constitución, gana la constitución.
-> Última actualización: 2026-11-02 · Constituciones backend v1.4.0, móvil v1.2.1, landing v1.1.0 · Decisiones de producto confirmadas (§8)
+> Última actualización: 2026-11-08 · Constituciones backend v2.0.0, móvil v1.2.1, landing v1.1.0 · Decisiones de producto confirmadas (§8)
 
 ## 1. Fechas
 
@@ -197,7 +199,7 @@ El PDF dice que importes y plazos se fijan en las políticas del servicio. Estos
 - Páginas con servicios o cuentas en la web: la **landing** es solo informativa (no hay registro, ni inicio de sesión, ni panel web). Sin App Store en esta versión.
 - Verificación de correo, recuperación de contraseña, inicio de sesión social.
 - Pasarela de pagos, cobros automáticos, seguros, depósitos y garantías.
-- Panel de administración visual: la administración se hace con endpoints y `scripts/admin.http`.
+- Panel de administración visual: la administración se hace con endpoints y con `go run ./cmd/admin create-admin` (correo y contraseña por la entrada estándar).
 - Apelaciones, escalamiento y etapas extra de incidencias.
 - Tiempo real con WebSockets (el chat usa consulta periódica + push).
 

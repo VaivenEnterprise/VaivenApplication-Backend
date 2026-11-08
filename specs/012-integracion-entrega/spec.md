@@ -1,7 +1,7 @@
 # Spec 012 — Integración, endurecimiento y entrega (backend)
 
 - **Dueño:** todo el equipo (BE-A lidera integración; BE-B lidera despliegue) · **Prioridad:** P0 · **Ventana:** 19–22 nov · **Depende de:** 001–011
-- **Constitución:** v1.4.0 · **Estado:** Borrador
+- **Constitución:** v2.0.0 · **Estado:** Borrador
 
 ## 1. Objetivo y por qué
 Convertir el conjunto de módulos en un backend **entregable**: recorrido de punta a punta automatizado, datos de demostración, endurecimiento básico de seguridad y rendimiento, despliegue verificado y documentación para la presentación. No agrega funcionalidad.
