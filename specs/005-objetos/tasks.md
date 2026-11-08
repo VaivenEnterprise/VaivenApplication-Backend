@@ -27,13 +27,13 @@
   - Aceptación: colección `items`; índices del plan §3 vía `EnsureIndexes`; crear, buscar por id, actualizar con `version`, listar por dueño y estado con cursor; prueba de integración
   - Refs: plan §3 · Art. II
 
-- [ ] **T005** Casos de uso: crear, editar y obtener
+- [x] **T005** Casos de uso: crear, editar y obtener
   - Archivos: `internal/items/usecase/{ports.go, create.go, update.go, get.go, suggest.go, usecase_test.go}`
   - Agente: `dev-go` · Depende de: T003, 004-T007, 003-T002
   - Aceptación: usa `images.Service` y `moderation.Checker` (dobles en pruebas); reglas RF-02, RF-03, RF-05, RF-06, RF-07; conflicto de versión → 409; ≥ 80 %
   - Refs: RF-01…RF-07
 
-- [ ] **T006** Casos de uso: pausar, reanudar, eliminar y listar
+- [x] **T006** Casos de uso: pausar, reanudar, eliminar y listar
   - Archivos: `internal/items/usecase/{pause.go, delete.go, list_mine.go, lifecycle_test.go}`
   - Agente: `dev-go` · Depende de: T005
   - Aceptación: solo el dueño; `delete` consulta `ActiveBookingChecker` (409 si hay compromisos); estados válidos; expone `items.Moderation` con `Block(ctx, itemID)` y `Snapshot(ctx, itemID)` para la moderación de 011; pruebas
