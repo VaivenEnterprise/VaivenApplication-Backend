@@ -27,31 +27,31 @@
   - Aceptación: variables del plan §5; `JWT_ACCESS_SECRET` < 32 caracteres → error; `Load()` con una línea nueva
   - Refs: P-02 · Art. VI
 
-- [ ] **T005** Dominio y repositorio de usuarios
+- [x] **T005** Dominio y repositorio de usuarios
   - Archivos: `internal/auth/domain/user.go`, `internal/auth/domain/errors.go`, `internal/auth/adapter/mongo/user_repo.go`, `internal/auth/adapter/mongo/user_repo_integration_test.go`
   - Agente: `modelador-mongo` · Depende de: T003, 002-T014
   - Aceptación: colección `users` con índice único de correo (`EnsureIndexes`); creación y búsqueda por correo/id; duplicado → error de dominio `conflict`; prueba de integración
   - Refs: plan §3 · Art. II
 
-- [ ] **T006** Repositorio de refresh tokens
+- [x] **T006** Repositorio de refresh tokens
   - Archivos: `internal/auth/adapter/mongo/refresh_repo.go`, `internal/auth/adapter/mongo/refresh_repo_integration_test.go`
   - Agente: `modelador-mongo` · Depende de: T005
   - Aceptación: índices único de hash, por familia y TTL; marcar usado, revocar familia, buscar por hash; prueba de integración
   - Refs: P-03, P-04
 
-- [ ] **T007** Casos de uso: registro y login
+- [x] **T007** Casos de uso: registro y login
   - Archivos: `internal/auth/usecase/ports.go`, `register.go`, `login.go`, `auth_usecase_test.go`
   - Agente: `dev-go` · Depende de: T005, T006
   - Aceptación: validaciones de POL-12; correo normalizado; login con error genérico; emite tokens; pruebas con repos falsos; ≥ 80 %
   - Refs: RF-01…RF-04 · Art. III
 
-- [ ] **T008** Casos de uso: refresh, logout, perfil y baja
+- [x] **T008** Casos de uso: refresh, logout, perfil y baja
   - Archivos: `internal/auth/usecase/refresh.go`, `logout.go`, `profile.go`, `deactivate.go`, `session_usecase_test.go`
   - Agente: `dev-go` · Depende de: T007
   - Aceptación: rotación y detección de reutilización; baja bloqueada si `ActiveBookingChecker` devuelve true; la baja **anonimiza** correo (se sustituye por un valor único no enrutable), nombre («Cuenta eliminada») y teléfono, y revoca todas las familias de refresh tokens (prueba: tras la baja el correo original puede volver a registrarse); perfil público con «Cuenta eliminada»; expone `users.Directory` con `PublicUsers(ctx, ids) → map[id]PublicUser` (lectura por lote que usarán 005, 006, 007, 008 y 010) y `users.Admin` con `Suspend(ctx, userID, until)` y `AddRating(ctx, userID, score)` (`$inc` de `ratingSum`/`ratingCount`; los usan 010 y 011), todo con implementación en Mongo; pruebas
   - Refs: RF-05, RF-06, RF-08, RF-09 · POL-17
 
-- [ ] **T009** Límite de tasa
+- [x] **T009** Límite de tasa
   - Archivos: `internal/platform/ratelimit/limiter.go`, `internal/platform/ratelimit/limiter_test.go`
   - Agente: `dev-go` · Depende de: 002-T011
   - Aceptación: middleware por IP, ventana de 1 min, 429 `rate_limited` con envoltorio; probado con reloj inyectado
