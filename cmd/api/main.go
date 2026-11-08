@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -16,10 +17,16 @@ import (
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/handler"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/middleware"
 	adaptermongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/mongo"
+	authhttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/adapter/http"
+	authmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/adapter/mongo"
+	authusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/usecase"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/config"
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/moderation"
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/notify"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/platform/logger"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/platform/mongodb"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/platform/redis"
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/platform/security"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/usecase/ratelimit"
 )
 
@@ -73,8 +80,10 @@ func run() error {
 		}
 	}()
 
-	// Sin repositorios en esta spec: la lista de ensurers está vacía.
-	if err := adaptermongo.EnsureAll(ctx); err != nil {
+	db := mc.Database(cfg.MongoDB)
+	userRepo := authmongo.NewUserRepo(db)
+	refreshRepo := authmongo.NewRefreshRepo(db)
+	if err := adaptermongo.EnsureAll(ctx, userRepo, refreshRepo); err != nil {
 		return fmt.Errorf("no se pudieron crear los índices: %w", err)
 	}
 
@@ -96,6 +105,22 @@ func run() error {
 		limiter = redis.NewLimiter(rc)
 	}
 
+	authModule, err := newAuthModule(cfg, log, userRepo, refreshRepo, limiter)
+	if err != nil {
+		return err
+	}
+
+	mods := modules(moduleDeps{
+		Log:        log,
+		Notifier:   notify.Noop{},
+		Moderation: moderation.AllowAll{},
+		Auth:       authModule,
+		Users:      userRepo,
+	})
+	for _, m := range mods {
+		log.Info("módulo registrado", "module", m.Name())
+	}
+
 	srv := &http.Server{
 		Addr: cfg.HTTPAddr,
 		Handler: apihttp.NewRouter(apihttp.Deps{
@@ -106,6 +131,7 @@ func run() error {
 			Limiter:         limiter,
 			LimiterFallback: redis.NewMemoryLimiter(),
 			RateLimit:       middleware.RateLimitConfig{Limit: rateLimitPerWindow, Window: rateLimitWindow},
+			Modules:         mods,
 			Meta: handler.MetaInfo{
 				Name:        serviceName,
 				Version:     resolveVersion(version, cfg.AppVersion),
@@ -150,6 +176,35 @@ func run() error {
 	}
 	log.Info("servidor detenido")
 	return nil
+}
+
+// newAuthModule arma el módulo de la spec 003: argon2id, JWT, casos de uso y
+// rutas, con el límite de register, login y refresh sobre el limitador común.
+func newAuthModule(cfg config.Config, log *slog.Logger, users *authmongo.UserRepo, refresh *authmongo.RefreshRepo, limiter ratelimit.Limiter) (*authhttp.Module, error) {
+	jwt, err := security.NewJWT(cfg.Auth.AccessSecret.Reveal(), cfg.Auth.AccessTTL)
+	if err != nil {
+		return nil, fmt.Errorf("no se pudo configurar JWT: %w", err)
+	}
+	svc, err := authusecase.NewService(authusecase.Deps{
+		Users:       users,
+		Refresh:     refresh,
+		Hasher:      security.NewHasher(1),
+		Access:      jwt,
+		NewRefresh:  security.NewRefreshToken,
+		HashRefresh: security.HashToken,
+		RefreshTTL:  cfg.Auth.RefreshTTL,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("no se pudo crear el servicio de auth: %w", err)
+	}
+	return authhttp.NewModule(authhttp.ModuleDeps{
+		Service:         svc,
+		Tokens:          jwt,
+		Log:             log,
+		Limiter:         limiter,
+		LimiterFallback: redis.NewMemoryLimiter(),
+		LimitPerMinute:  cfg.Auth.RateLimitPerMin,
+	})
 }
 
 // resolveVersion prefiere la versión inyectada por -ldflags; si el binario no

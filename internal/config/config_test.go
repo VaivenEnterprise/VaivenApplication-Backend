@@ -25,6 +25,7 @@ func valid() env {
 		"CLOUDINARY_CLOUD_NAME": "nube",
 		"CLOUDINARY_API_KEY":    "clave",
 		"CLOUDINARY_API_SECRET": "secreto",
+		"JWT_ACCESS_SECRET":     jwtSecret,
 	}
 }
 
@@ -51,6 +52,12 @@ func TestLoadDefaults(t *testing.T) {
 			APIKey:     "clave",
 			APISecret:  "secreto",
 			BaseFolder: "vaiven/development",
+		},
+		Auth: Auth{
+			AccessSecret:    Secret(jwtSecret),
+			AccessTTL:       15 * time.Minute,
+			RefreshTTL:      720 * time.Hour,
+			RateLimitPerMin: 10,
 		},
 	}
 	if !reflect.DeepEqual(cfg, want) {

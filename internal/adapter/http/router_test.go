@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/handler"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/middleware"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/platform/redis"
@@ -204,5 +206,38 @@ func TestRateLimitMounted(t *testing.T) {
 	}
 	if codes[0] != http.StatusOK || codes[1] != http.StatusOK || codes[2] != http.StatusTooManyRequests {
 		t.Errorf("códigos = %v, want [200 200 429]", codes)
+	}
+}
+
+// fakeModule registra una ruta para comprobar el montaje bajo /api/v1.
+type fakeModule struct{}
+
+func (fakeModule) Name() string { return "fake" }
+
+func (fakeModule) Register(r chi.Router) {
+	r.Get("/fake", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusTeapot) })
+}
+
+func TestModulesMountUnderAPIv1(t *testing.T) {
+	h := NewRouter(Deps{
+		Log:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Pinger:  fakePinger{},
+		Meta:    handler.MetaInfo{Name: "vaiven-backend"},
+		Modules: []Module{fakeModule{}},
+	})
+	if rec := do(h, http.MethodGet, "/api/v1/fake", nil); rec.Code != http.StatusTeapot {
+		t.Errorf("GET /api/v1/fake = %d, want 418", rec.Code)
+	}
+	if rec := do(h, http.MethodGet, "/fake", nil); rec.Code != http.StatusNotFound {
+		t.Errorf("GET /fake = %d, want 404 (los módulos van bajo /api/v1)", rec.Code)
+	}
+	// 404 y 405 dentro del subrouter conservan el envoltorio único.
+	rec := do(h, http.MethodGet, "/api/v1/no-existe", nil)
+	if rec.Code != http.StatusNotFound || errorBody(t, rec)["code"] != "not_found" {
+		t.Errorf("GET /api/v1/no-existe = %d %q", rec.Code, rec.Body.String())
+	}
+	rec = do(h, http.MethodPost, "/api/v1/fake", nil)
+	if rec.Code != http.StatusMethodNotAllowed || errorBody(t, rec)["code"] != "not_found" {
+		t.Errorf("POST /api/v1/fake = %d %q", rec.Code, rec.Body.String())
 	}
 }

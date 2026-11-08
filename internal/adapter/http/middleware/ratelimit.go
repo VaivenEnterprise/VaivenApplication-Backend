@@ -24,6 +24,10 @@ type RateLimitConfig struct {
 	// UserID devuelve el usuario autenticado de la petición; mientras no haya
 	// autenticación (spec 003) puede ser nil y el límite es por IP.
 	UserID func(r *http.Request) (string, bool)
+	// KeyPrefix separa los contadores de este límite de los demás; por
+	// ejemplo "auth:" para register, login y refresh (spec 003, RF-07), que
+	// así no comparten cuenta con el límite global.
+	KeyPrefix string
 }
 
 // RateLimit aplica el límite con primary (Redis) y, si falla, con fallback
@@ -36,7 +40,7 @@ func RateLimit(primary, fallback ratelimit.Limiter, cfg RateLimitConfig, log *sl
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			key := limitKey(r, cfg.UserID)
+			key := cfg.KeyPrefix + limitKey(r, cfg.UserID)
 
 			allowed, err := primary.Allow(r.Context(), key, cfg.Limit, cfg.Window)
 			if err != nil {
