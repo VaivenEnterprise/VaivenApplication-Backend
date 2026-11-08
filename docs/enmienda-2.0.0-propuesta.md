@@ -1,11 +1,11 @@
 # Propuesta de enmienda 2.0.0 (MAJOR) — despliegue continuo a staging
 
-- **Estado:** propuesta, pendiente de aprobación del equipo (Art. XI.1). `constitution.md` **no** se ha modificado.
+- **Estado:** **APROBADA** por Joseph Yañez el 2026-11-08 (Art. XI.1; registro D-124 en `memoria.md`). Pendiente: aplicar el texto de abajo a `constitution.md` (versión 2.0.0) y la revisión de coherencia de la tabla final, en una PR aparte.
 - **Fecha:** 2026-11-08 · **Origen:** spec 017 (DevSecOps), workflow `.github/workflows/deploy-staging.yml`.
 - **Tipo:** MAJOR (Art. XI.2): cambia dos principios vigentes —quién despliega staging (Art. XIII.2, XIII.4 y XIII.5) y «no hay registro de imágenes» (Art. XIII.7)— además de la frase «no hay pipeline automatizado» (Art. VII.4 y XV.7). Si el equipo lo considera una excepción acotada y no un cambio de principio, puede registrarse como MINOR (1.7.0, o dentro de la 1.6.0 si esta sigue sin aprobarse).
 - **Relación con la 1.6.0** (`docs/enmienda-1.6.0-propuesta.md`, también pendiente): son independientes. Si se aprueban juntas, el texto de Art. VII.4 y XV.7 de abajo reemplaza al de la 1.6.0.
 
-**Mientras no se apruebe, el workflow queda apagado**: fusionar la PR no despliega nada, porque el disparo automático exige la variable de repositorio `STAGING_AUTODEPLOY=true` (sin ella el workflow se omite, sin compilar ni publicar), y sin las variables `AZURE_*` del entorno `staging` el job *Deploy to VM* no puede iniciar sesión en Azure. Ver «Cómo aprobarla».
+**Activación:** con la enmienda aprobada, el disparo automático se enciende con la variable de repositorio `STAGING_AUTODEPLOY=true` (sin ella el workflow se omite, sin compilar ni publicar) y requiere las variables `AZURE_*` del entorno `staging`.
 
 ## Motivo
 

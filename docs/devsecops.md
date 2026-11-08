@@ -80,3 +80,56 @@ Las ramas de spec existentes deben incorporar esta actualizacion desde develop p
 3. Si todo pasa, cambiar el valor por defecto (`default` del input y el respaldo de `runs-on`) en un solo PR hacia `develop`.
 
 **Guardia de `scripts/deploy.sh`.** Antes de cualquier SSH o build exige: arbol limpio en archivos versionados, repositorio no superficial (si lo es, `git fetch --unshallow`) y que HEAD este en `origin/develop` (staging) u `origin/main` (production), tras un `git fetch` no destructivo. `--check` ejecuta solo estas verificaciones y termina con 0 o 1, sin SSH ni despliegue. `--allow-unmerged` es solo para staging y solo para la tarea «Despliegue» de una spec (Art. XIII.5), que despliega la rama de la spec antes de fusionar su PR: sigue exigiendo arbol limpio y que el commit este publicado en alguna rama de `origin`, y muestra un aviso visible. Production nunca lo acepta. `--rollback` omite la guardia porque reutiliza una imagen que ya esta en la VM.
+
+## Despliegue continuo a staging (spec 017)
+
+> **Enmienda 2.0.0 aprobada por Joseph Yañez el 2026-11-08** (`docs/enmienda-2.0.0-propuesta.md`; cubre los Art. VII.4, XIII.2, XIII.4, XIII.5, XIII.7 y XV.7; falta aplicar su texto a `constitution.md`). El disparo automático se enciende con la variable de repositorio `STAGING_AUTODEPLOY=true` y se apaga borrándola. Esta sección reemplaza, para el backend en staging, lo dicho arriba en «Despliegue y recuperacion».
+
+Workflow `.github/workflows/deploy-staging.yml` y script de VM `deploy/remote-deploy.sh`:
+
+| Job | Qué hace | Permisos |
+|---|---|---|
+| Prepare | Corre cuando `CI` termina en verde para un push a `develop` de este repositorio (`workflow_run`), o a mano solo sobre `develop` (comprueba que el commit tiene CI en verde). Omite un commit si `develop` ya avanzó (lo cubre el despliegue del más nuevo) | `actions: read`, `contents: read` |
+| Build image | `docker build --platform linux/amd64 --build-arg APP_VERSION=<commit corto>` con el `Dockerfile` sin cambios; push a `ghcr.io/vaivenenterprise/vaiven-api:<commit corto>`. Si la etiqueta ya existe, no recompila | `packages: write` |
+| Deploy to VM | Entorno `staging`; `azure/login` con OIDC; `az vm run-command invoke … --scripts @archivo` ejecuta `deploy/remote-deploy.sh` como root en la VM, sin SSH | `id-token: write`, `packages: read` |
+| Smoke (HTTPS) | Desde el runner: `/healthz` (`ok`), `/readyz` (`ready`) y `/api/v1/meta` (`staging` y versión = commit) | ninguno |
+
+`concurrency: deploy-staging` sin cancelación: un despliegue a la vez y nunca se corta uno a medias.
+
+**Por qué `workflow_run` y no `needs`:** `needs` obligaría a meter el despliegue dentro de `ci.yml` (y a darle a toda la CI permisos de Azure y de paquetes). Con `workflow_run` el despliegue vive aparte, espera el resultado completo de CI (incluido *Required checks*), corre con el workflow de la rama por defecto y solo para pushes del propio repositorio (nunca para PR de forks).
+
+**En la VM** (`deploy/remote-deploy.sh`, mismos pasos que `scripts/deploy.sh`): descarga la imagen con el token del job (`docker login --password-stdin` en un `DOCKER_CONFIG` temporal), la etiqueta `vaiven-api:<tag>`, instala `deploy/docker-compose.yml` y el hook de certbot, rota `current-tag`/`previous-tag` en `/opt/vaiven/staging` (sin pisar `previous-tag` al repetir el mismo commit), `docker compose up -d --remove-orphans api`, espera hasta 60 s `/healthz` y la versión en `/api/v1/meta` por HTTPS **sin `-k`** (`curl --resolve` a 127.0.0.1 valida el certificado con el nombre real) y, si falla, vuelve a `previous-tag` y restaura las etiquetas. Solo conserva la imagen actual y la anterior. Run Command no propaga el código de salida: el script termina siempre con `VAIVEN_DEPLOY_RESULT=deployed|rolled_back|failed` y el workflow falla salvo con `deployed` (o `rolled_back` en modo rollback).
+
+**Credencial para descargar la imagen.** Se usa el `GITHUB_TOKEN` del job *Deploy to VM* (`packages: read`), que caduca al terminar el job. Alternativa descartada: un token de solo lectura guardado en la VM (vive meses, un PAT clásico con `read:packages` lee todos los paquetes de la cuenta y hay que rotarlo a mano). Riesgo residual del token del job: viaja dentro del script (archivo 600 en el runner, `--scripts @archivo`, nunca en argumentos ni en el log) y queda una copia del script en `/var/lib/waagent/run-command/` de la VM (solo root) con el token ya caducado. Como el repositorio es público, el paquete puede hacerse público y entonces no haría falta ningún token.
+
+**Volver atrás a mano:** *Actions → Deploy staging → Run workflow* (rama `develop`, `action: rollback`) o `scripts/deploy.sh staging --rollback`. No ejecutar `scripts/deploy.sh` mientras corre el workflow (comparten `current-tag`/`previous-tag`).
+
+### Pasos humanos (una sola vez)
+
+1. ~~Aprobar la enmienda 2.0.0~~: aprobada por Joseph Yañez el 2026-11-08 (D-124 en `memoria.md`).
+2. **Azure (OIDC + rol mínimo).** Con `az login` en la cuenta del proyecto, en Git Bash:
+
+   ```bash
+   SUB=$(az account show --query id -o tsv)
+   VM_ID=$(az vm show -g rg-vaiven -n vm-vaiven --query id -o tsv)
+   APP_ID=$(az ad app create --display-name gh-vaiven-deploy-staging --query appId -o tsv)
+   SP_OID=$(az ad sp create --id "$APP_ID" --query id -o tsv)
+   printf '%s' '{"name":"github-env-staging","issuer":"https://token.actions.githubusercontent.com","subject":"repo:VaivenEnterprise/VaivenApplication-Backend:environment:staging","audiences":["api://AzureADTokenExchange"]}' > fic.json
+   az ad app federated-credential create --id "$APP_ID" --parameters @fic.json
+   printf '{"Name":"Vaiven VM Run Command","Description":"Leer la VM y ejecutar Run Command (despliegue a staging desde GitHub Actions)","Actions":["Microsoft.Compute/virtualMachines/read","Microsoft.Compute/virtualMachines/runCommand/action"],"AssignableScopes":["/subscriptions/%s/resourceGroups/rg-vaiven"]}' "$SUB" > role.json
+   az role definition create --role-definition @role.json
+   az role assignment create --assignee-object-id "$SP_OID" --assignee-principal-type ServicePrincipal --role "Vaiven VM Run Command" --scope "$VM_ID"
+   rm -f fic.json role.json
+   echo "AZURE_CLIENT_ID=$APP_ID"; az account show --query "{AZURE_TENANT_ID:tenantId, AZURE_SUBSCRIPTION_ID:id}" -o yaml
+   ```
+
+   El rol se asigna **solo a la VM** (un rol personalizado no admite una VM como ámbito asignable; por eso declara el grupo y se asigna a la VM). Sin secreto de cliente: no hay nada que rotar. Alternativa más amplia, si no se pueden crear roles: `--role "Virtual Machine Contributor" --scope "$VM_ID"` (también permite apagar, cambiar o borrar la VM). La asignación tarda unos minutos en propagarse.
+
+   **Hecho el 2026-11-08** (aplicación `gh-vaiven-deploy-staging`, credencial `github-env-staging`, rol `Vaiven VM Run Command` asignado solo a `vm-vaiven`, 0 secretos de cliente). En Git Bash de Windows: exportar `MSYS_NO_PATHCONV=1` (si no, convierte `/subscriptions/...` en rutas de Windows) y, si `az role definition create` corta la conexión, crear el rol con `az rest --method put` contra `.../providers/Microsoft.Authorization/roleDefinitions/<guid>?api-version=2022-04-01` con el mismo contenido.
+3. **GitHub, entorno `staging`** (*Settings → Environments → New environment*): *Deployment branches and tags* → *Selected branches* → `develop`; *Environment variables* `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` y `AZURE_SUBSCRIPTION_ID` (no son secretos). Opcionales a nivel de repositorio: `AZURE_RESOURCE_GROUP` y `AZURE_VM_NAME` (por defecto `rg-vaiven` y `vm-vaiven`).
+4. **Primera ejecución de prueba** (el botón *Run workflow* aparece cuando el workflow ya está en `develop`): *Actions → Deploy staging → Run workflow* (rama `develop`, `action: deploy`). Esperado: imagen en GHCR, `Resultado en la VM: deployed`, humo OK con la versión del commit. Luego `action: rollback` (vuelve a la imagen anterior) y otra vez `action: deploy`. Si el push a GHCR falla con `permission_denied`, revisar en la organización *Settings → Packages* que los miembros puedan crear paquetes de contenedor; tras el primer push, en el paquete `vaiven-api` comprobar que el repositorio tiene acceso (*Manage Actions access*).
+5. **Encender el despliegue automático:** variable de repositorio `STAGING_AUTODEPLOY=true` (*Settings → Secrets and variables → Actions → Variables*). Para apagarlo, borrarla o cambiar su valor.
+
+### Producción (diseño, no implementado)
+
+`main` no se despliega solo. Diseño propuesto para la spec 013: workflow `deploy-production.yml` solo con `workflow_dispatch` desde `main`; entorno `production` con *Required reviewers* (aprobación humana antes de cada ejecución) y rama `main`; credencial federada aparte (`…:environment:production`) con el mismo rol mínimo; y **promoción sin recompilar** de la imagen ya verificada en staging (misma etiqueta y digest) con `deploy/remote-deploy.sh` en `ENV_NAME=production` y puerto 443 (hoy el script rechaza todo lo que no sea staging, a propósito). Mientras tanto, producción se despliega con `scripts/deploy.sh production`.
