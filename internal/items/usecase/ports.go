@@ -15,7 +15,8 @@ import (
 // Repository guarda los objetos (implementación: adapter/mongo.ItemRepo).
 type Repository interface {
 	Create(ctx context.Context, it domain.Item) (domain.Item, error)
-	// ByID devuelve domain.ErrNotFound si no existe (incluye removed).
+	// ByID devuelve el objeto aunque esté removed (la visibilidad la decide
+	// el caso de uso) y domain.ErrNotFound si no existe o el id es inválido.
 	ByID(ctx context.Context, id string) (domain.Item, error)
 	// Update reemplaza el objeto si su versión guardada es it.Version y
 	// devuelve el objeto con la versión incrementada; si no,

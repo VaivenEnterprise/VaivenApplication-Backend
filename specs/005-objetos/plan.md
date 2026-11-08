@@ -65,3 +65,18 @@ Unitarias: `pricing` (tabla de sugerencias y bordes), validaciones de modalidad/
 | IV, V | Contrato en `api/paths/items.yaml`; dinero en centavos |
 | VI | Ubicación aproximada, moderación, valor declarado privado |
 | XII | `images.Service`, puertos, registro en `modules.go` |
+
+## 7. Ajustes durante la implementación (2026-11-08, BE-B a pedido del responsable; pendientes de visto bueno de BE-A)
+| # | Ajuste | Motivo |
+|---|---|---|
+| A-01 | P-07: puerto propio `usecase.BookingChecker.HasActiveBookings(ctx, itemID)` con `NoActiveBookings` hasta la 007, en lugar del `ActiveBookingChecker` de 003 | El de 003 es por persona; el borrado necesita saber si **el objeto** tiene reservas |
+| A-02 | Préstamo (`loan`) exige `priceSource=manual` | La sugerencia de POL-04 es una tarifa de renta; en préstamo el precio siempre es 0 |
+| A-03 | `paused`/`blocked` responden **404** a terceros (CA-06 admite 404/403) | No revelar que el objeto existe |
+| A-04 | Un objeto `blocked` no se edita, pausa ni reanuda (409); sí se puede eliminar | Solo moderación (011) lo desbloquea; la baja lógica no borra evidencia |
+| A-05 | `PATCH` exige `version` y al menos otro campo; `null` borra `usageRules` y `approxLocation` y es 400 en los demás campos; `photos` reemplaza la lista | P-05 y contrato `ItemUpdate` |
+| A-06 | `items.Moderation` (`Block`, `Snapshot`) vive en `internal/items/port` (como `images/port`); lo implementa `usecase.Service` | Art. III: la 011 lo importa sin depender de adaptadores |
+| A-07 | Archivos además de los listados: `adapter/mongo/schema.go` (validador `$jsonSchema` de items, se crea con la colección, basta `readWrite`), `adapter/mongo/item_doc_test.go`, `port/port.go`, `usecase/moderation.go`; `internal/policy` solo con POL-01, 04, 13 y 14 (POL-16 llega por `moderation.Checker`) | Plan §3 (validación mínima) y T006 |
+| A-08 | `GET /me/items`: `limit` 1–50 (20 por defecto); `nextCursor` opaco = base64url(`createdAt` en ms + id), orden `createdAt` desc y `_id` desc | RF-10 |
+| A-09 | `cmd/api/main.go`: `newImagesModule` devuelve también `images.Service`; `RequireActive(userRepo.ByID)` solo en `POST /items`; una sola instancia de `moderation.Checker` compartida | RF-12 y Art. XII.4 |
+
+[NEEDS CLARIFICATION] (para la spec 007): entre `HasActiveBookings` y la baja del objeto podría aceptarse una reserva. La 007 debe hacerlo atómico: al aceptar una reserva comprobar que el objeto siga `active` (filtro por `status` en la misma escritura) o usar una transacción.

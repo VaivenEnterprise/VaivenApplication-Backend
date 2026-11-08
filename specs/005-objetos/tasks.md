@@ -1,6 +1,6 @@
 # Tareas 005 — Objetos (backend)
 
-- **Dueño:** BE-A · **Estado:** sin ejecutar · `[P]` = paralelizable
+- **Dueño:** BE-A · **Estado:** T001–T009 hechas (BE-B a pedido del responsable) · `[P]` = paralelizable
 - **T001 se integra el primer día** para que MO-A trabaje contra el contrato.
 
 - [x] **T001** Contrato OpenAPI de objetos
@@ -51,7 +51,7 @@
   - Aceptación: crear→leer→editar→pausar→reanudar→eliminar con Mongo real y `images.Service` simulado; CA-01…CA-07 cubiertos (los que dependen de 007/011 con puertos vacíos)
   - Refs: CA-01…CA-07
 
-- [ ] **T009** Memoria y revisión
+- [x] **T009** Memoria y revisión
   - Archivos: `memoria.md` (solo anexar)
   - Agente: `revisor-constitucion` · Depende de: T008
   - Aceptación: veredicto **CONFORME**; hito H2 (backend) marcado

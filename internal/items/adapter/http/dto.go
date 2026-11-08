@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"reflect"
@@ -99,6 +100,9 @@ type nullable[T any] struct {
 	Value *T
 }
 
+// isNull indica si el campo llegó explícitamente en null.
+func (n nullable[T]) isNull() bool { return n.Set && n.Value == nil }
+
 func (n *nullable[T]) UnmarshalJSON(b []byte) error {
 	n.Set = true
 	if bytes.Equal(bytes.TrimSpace(b), []byte("null")) {
@@ -114,57 +118,90 @@ func (n *nullable[T]) UnmarshalJSON(b []byte) error {
 }
 
 // updateRequest es ItemUpdate: version obligatoria y al menos otro campo.
+// Todos los campos son nullable[T] para distinguir «ausente» de «null»: solo
+// usageRules y approxLocation admiten null (los borra); en los demás, null es
+// un error (el contrato no los declara anulables).
 type updateRequest struct {
 	Version            *int64                 `json:"version" validate:"required,min=1"`
-	Title              *string                `json:"title"`
-	Description        *string                `json:"description"`
-	Category           *string                `json:"category"`
-	Condition          *string                `json:"condition"`
-	Modality           *string                `json:"modality"`
-	DeclaredValueCents *int64                 `json:"declaredValueCents"`
-	PricePerDayCents   *int64                 `json:"pricePerDayCents"`
-	PriceSource        *string                `json:"priceSource"`
+	Title              nullable[string]       `json:"title" validate:"-"`
+	Description        nullable[string]       `json:"description" validate:"-"`
+	Category           nullable[string]       `json:"category" validate:"-"`
+	Condition          nullable[string]       `json:"condition" validate:"-"`
+	Modality           nullable[string]       `json:"modality" validate:"-"`
+	DeclaredValueCents nullable[int64]        `json:"declaredValueCents" validate:"-"`
+	PricePerDayCents   nullable[int64]        `json:"pricePerDayCents" validate:"-"`
+	PriceSource        nullable[string]       `json:"priceSource" validate:"-"`
 	UsageRules         nullable[string]       `json:"usageRules" validate:"-"`
-	Zone               *zoneJSON              `json:"zone"`
+	Zone               nullable[zoneJSON]     `json:"zone" validate:"-"`
 	ApproxLocation     nullable[locationJSON] `json:"approxLocation" validate:"-"`
-	Photos             []photoRef             `json:"photos" validate:"omitempty,min=1,max=5,dive"`
+	Photos             nullable[[]photoRef]   `json:"photos" validate:"-"`
 }
 
 func (r updateRequest) empty() bool {
-	return r.Title == nil && r.Description == nil && r.Category == nil && r.Condition == nil &&
-		r.Modality == nil && r.DeclaredValueCents == nil && r.PricePerDayCents == nil &&
-		r.PriceSource == nil && !r.UsageRules.Set && r.Zone == nil && !r.ApproxLocation.Set && r.Photos == nil
+	return !r.Title.Set && !r.Description.Set && !r.Category.Set && !r.Condition.Set &&
+		!r.Modality.Set && !r.DeclaredValueCents.Set && !r.PricePerDayCents.Set &&
+		!r.PriceSource.Set && !r.UsageRules.Set && !r.Zone.Set && !r.ApproxLocation.Set && !r.Photos.Set
+}
+
+// nullDetails lista los campos no anulables que llegaron en null.
+func (r updateRequest) nullDetails() []shared.Detail {
+	var d []shared.Detail
+	for _, f := range []struct {
+		name string
+		null bool
+	}{
+		{"title", r.Title.isNull()}, {"description", r.Description.isNull()},
+		{"category", r.Category.isNull()}, {"condition", r.Condition.isNull()},
+		{"modality", r.Modality.isNull()}, {"declaredValueCents", r.DeclaredValueCents.isNull()},
+		{"pricePerDayCents", r.PricePerDayCents.isNull()}, {"priceSource", r.PriceSource.isNull()},
+		{"zone", r.Zone.isNull()}, {"photos", r.Photos.isNull()},
+	} {
+		if f.null {
+			d = append(d, shared.Detail{Field: f.name, Issue: "no puede ser null"})
+		}
+	}
+	return d
 }
 
 func (r updateRequest) input() (usecase.UpdateInput, error) {
 	in := usecase.UpdateInput{
 		Version:            *r.Version,
-		Title:              r.Title,
-		Description:        r.Description,
-		Category:           r.Category,
-		Condition:          (*domain.Condition)(r.Condition),
-		Modality:           (*domain.Modality)(r.Modality),
-		DeclaredValueCents: r.DeclaredValueCents,
-		PricePerDayCents:   r.PricePerDayCents,
-		PriceSource:        (*domain.PriceSource)(r.PriceSource),
+		Title:              r.Title.Value,
+		Description:        r.Description.Value,
+		Category:           r.Category.Value,
+		Condition:          (*domain.Condition)(r.Condition.Value),
+		Modality:           (*domain.Modality)(r.Modality.Value),
+		DeclaredValueCents: r.DeclaredValueCents.Value,
+		PricePerDayCents:   r.PricePerDayCents.Value,
+		PriceSource:        (*domain.PriceSource)(r.PriceSource.Value),
 		SetUsageRules:      r.UsageRules.Set,
 		UsageRules:         r.UsageRules.Value,
 		SetLocation:        r.ApproxLocation.Set,
-		Photos:             refs(r.Photos),
 	}
-	if r.Photos != nil && len(r.Photos) == 0 {
-		return in, shared.NewValidation(domain.MessageInvalidData, shared.Detail{Field: "photos", Issue: "debe tener de 1 a 5 fotos"})
+	if d := r.nullDetails(); len(d) > 0 {
+		return in, shared.NewValidation(domain.MessageInvalidData, d...)
 	}
-	if r.Zone != nil {
-		if r.Zone.Municipality == "" {
-			return in, shared.NewValidation(domain.MessageInvalidData, shared.Detail{Field: "zone.municipality", Issue: "es obligatorio"})
+	if p := r.Photos.Value; p != nil {
+		if len(*p) < 1 || len(*p) > 5 {
+			return in, invalidParam("photos", "debe tener de 1 a 5 fotos")
 		}
-		z := r.Zone.domain()
-		in.Zone = &z
+		for i, ph := range *p {
+			if ph.PublicID == "" || len(ph.PublicID) > 255 {
+				return in, invalidParam(fmt.Sprintf("photos[%d].publicId", i), "es obligatorio y de máximo 255 caracteres")
+			}
+		}
+		in.Photos = refs(*p)
+	}
+	if z := r.Zone.Value; z != nil {
+		if z.Municipality == "" {
+			return in, invalidParam("zone.municipality", "es obligatorio")
+		}
+		dz := z.domain()
+		in.Zone = &dz
 	}
 	if l := r.ApproxLocation.Value; l != nil {
 		if l.Lat == nil || l.Lng == nil {
-			return in, shared.NewValidation(domain.MessageInvalidData, shared.Detail{Field: "approxLocation", Issue: "lat y lng son obligatorios"})
+			return in, invalidParam("approxLocation", "lat y lng son obligatorios")
 		}
 		in.Location = l.domain()
 	}

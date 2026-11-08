@@ -142,7 +142,11 @@ func run() error {
 		return err
 	}
 
-	itemsModule, err := newItemsModule(log, authModule, userRepo, imagesSvc, itemRepo)
+	// Puerto compartido de moderación (Art. XII.4): AllowAll hasta la spec 011;
+	// todos los módulos reciben la misma instancia.
+	var mod moderation.Checker = moderation.AllowAll{}
+
+	itemsModule, err := newItemsModule(log, authModule, userRepo, imagesSvc, mod, itemRepo)
 	if err != nil {
 		return err
 	}
@@ -150,7 +154,7 @@ func run() error {
 	mods := modules(moduleDeps{
 		Log:        log,
 		Notifier:   notify.Noop{},
-		Moderation: moderation.AllowAll{},
+		Moderation: mod,
 		Auth:       authModule,
 		Images:     imagesModule,
 		Items:      itemsModule,
@@ -281,11 +285,11 @@ func newImagesModule(cfg config.Config, log *slog.Logger, authModule *authhttp.M
 // images.Service, moderación (vacía hasta la 011), perfiles públicos y
 // RequireActive en POST /items (RF-12). Las reservas (spec 007) aún no
 // existen: NoActiveBookings.
-func newItemsModule(log *slog.Logger, authModule *authhttp.Module, userRepo *authmongo.UserRepo, imgs imgport.Service, repo *itemsmongo.ItemRepo) (*itemshttp.Module, error) {
+func newItemsModule(log *slog.Logger, authModule *authhttp.Module, userRepo *authmongo.UserRepo, imgs imgport.Service, mod moderation.Checker, repo *itemsmongo.ItemRepo) (*itemshttp.Module, error) {
 	svc, err := itemsusecase.NewService(itemsusecase.Deps{
 		Items:      repo,
 		Images:     imgs,
-		Moderation: moderation.AllowAll{},
+		Moderation: mod,
 		Users:      userRepo,
 	})
 	if err != nil {

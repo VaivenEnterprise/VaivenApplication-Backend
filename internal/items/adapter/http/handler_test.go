@@ -383,14 +383,17 @@ func TestUpdate(t *testing.T) {
 	}
 
 	bad := map[string]string{
-		`{"title": "x"}`:                               "version",
-		`{"version": 0, "title": "x"}`:                 "version",
-		`{"version": 1}`:                               "",
-		`{"version": 1, "photos": []}`:                 "photos",
-		`{"version": 1, "zone": {}}`:                   "zone.municipality",
-		`{"version": 1, "approxLocation": {"lat": 1}}`: "approxLocation",
-		`{"version": 1, "usageRules": 5}`:              "",
-		`{"version": 1, "photos": [{"publicId": ""}]}`: "photos[0].publicId",
+		`{"title": "x"}`:                                    "version",
+		`{"version": 0, "title": "x"}`:                      "version",
+		`{"version": 1}`:                                    "",
+		`{"version": 1, "photos": []}`:                      "photos",
+		`{"version": 1, "zone": {}}`:                        "zone.municipality",
+		`{"version": 1, "approxLocation": {"lat": 1}}`:      "approxLocation",
+		`{"version": 1, "title": null, "description": "x"}`: "title",
+		`{"version": 1, "photos": null}`:                    "photos",
+		`{"version": 1, "zone": null, "title": "Nuevo"}`:    "zone",
+		`{"version": 1, "usageRules": 5}`:                   "",
+		`{"version": 1, "photos": [{"publicId": ""}]}`:      "photos[0].publicId",
 	}
 	for body, field := range bad {
 		rec, out := e.do(t, http.MethodPatch, "/items/"+itemID, body)
