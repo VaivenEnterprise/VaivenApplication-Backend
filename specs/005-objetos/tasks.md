@@ -45,7 +45,7 @@
   - Aceptación: las 8 rutas cumplen el contrato; `declaredValueCents` oculto a terceros; `RequireActive` en crear; fotos con `url` y `thumbUrl`; ruta estática `price-suggestion` antes de `{id}`; pruebas `httptest`
   - Refs: RF-06, RF-11, RF-12 · RNF-02
 
-- [ ] **T008** Prueba de integración del ciclo de vida
+- [x] **T008** Prueba de integración del ciclo de vida
   - Archivos: `internal/items/adapter/http/items_integration_test.go`
   - Agente: `qa-go` · Depende de: T007
   - Aceptación: crear→leer→editar→pausar→reanudar→eliminar con Mongo real y `images.Service` simulado; CA-01…CA-07 cubiertos (los que dependen de 007/011 con puertos vacíos)
