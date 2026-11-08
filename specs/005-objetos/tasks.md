@@ -9,7 +9,7 @@
   - Aceptación: las 8 rutas del plan §2, esquemas `Item`, `ItemInput`, `Category`; ejemplos con precios en centavos
   - Refs: Art. IV, XII
 
-- [ ] **T002** [P] Políticas como constantes
+- [x] **T002** [P] Políticas como constantes
   - Archivos: `internal/policy/policy.go`, `internal/policy/policy_test.go`
   - Agente: `dev-go` · Depende de: 002-T001
   - Aceptación: constantes con nombre para POL-01…POL-17 del ROADMAP §8 (solo las que el backend usa); prueba que fija los valores provisionales
