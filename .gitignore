@@ -67,5 +67,5 @@ Desktop.ini
 *.swp
 *.swo
 
-# Archivo que deja `podman machine ssh` desde Git Bash (no es un dispositivo NUL real).
-NUL
+# Reportes locales de pruebas de mutación y carga (spec 017, T010)
+reports/

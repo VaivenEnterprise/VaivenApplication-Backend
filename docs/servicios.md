@@ -88,6 +88,15 @@ Las contraseñas se pasan por variables de entorno (`process.env`), no en la lí
 - Variables en `/opt/vaiven/staging/.env` (600, dueño `deploy`; plantilla en `deploy/.env.example`), generadas en la VM.
 - Certificado para la API en `/opt/vaiven/certs` (uid 65532); lo renueva el hook `/etc/letsencrypt/renewal-hooks/deploy/vaiven-api.sh` (copia de `deploy/certbot-deploy-hook.sh`) y la API lo recarga sola.
 - Desplegar: `scripts/deploy.sh staging` (con Docker o `ENGINE=podman`) desde un árbol limpio y un commit ya fusionado en `origin/develop`; comprobar antes sin desplegar: `scripts/deploy.sh staging --check`; en la tarea «Despliegue» de una spec, con la rama ya publicada y sin fusionar: `scripts/deploy.sh staging --allow-unmerged` (nunca en production, que exige `origin/main`); volver atrás: `scripts/deploy.sh staging --rollback`. Reglas en `docs/devsecops.md`.
+- **Despliegue automático (spec 017; enmienda 2.0.0 aprobada por Joseph Yañez el 2026-11-08; se enciende con `STAGING_AUTODEPLOY=true`):** cada push a `develop` con la CI en verde publica `ghcr.io/vaivenenterprise/vaiven-api:<commit corto>` y la despliega con `.github/workflows/deploy-staging.yml` por **Run Command** de Azure (`az vm run-command invoke`), sin SSH ni el puerto 22; en la VM corre `deploy/remote-deploy.sh` (mismas etiquetas `current-tag`/`previous-tag`, vuelta automática a la anterior si `/healthz` falla). La VM conserva solo la imagen actual y la anterior. Identidad: aplicación de Entra ID `gh-vaiven-deploy-staging` con credencial federada (OIDC, sin secreto) y rol personalizado `Vaiven VM Run Command` (solo `virtualMachines/read` y `runCommand/action`) asignado únicamente a `vm-vaiven`. Pasos para activarlo: `docs/devsecops.md` §«Despliegue continuo a staging».
+
+### Variables y credenciales del despliegue automático
+
+| Variable | Dónde vive | Secreto | Cómo se rota |
+|---|---|---|---|
+| `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` | Variables del entorno `staging` de GitHub | No (identificadores) | No hay secreto que rotar (OIDC). Para revocar: quitar la asignación de rol o `az ad app delete --id <AZURE_CLIENT_ID>` |
+| `STAGING_AUTODEPLOY` | Variable de repositorio de GitHub | No | Borrarla apaga el despliegue automático |
+| Token para descargar la imagen | `GITHUB_TOKEN` del job, lo genera GitHub | Sí, de vida corta | Caduca solo al terminar el job |
 
 ## 8. Probar una subida real (spec 004)
 

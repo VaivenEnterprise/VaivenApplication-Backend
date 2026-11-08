@@ -31,12 +31,12 @@ Una VM Linux gratuita de Azure; proyectos de Compose `vaiven-staging` y `vaiven-
 ## B. Despliegue de una spec (tarea final de cada spec)
 1. Confirma que **todas** las tareas anteriores de la spec están `[x]` en `tasks.md`.
 2. `make fmt lint test`; si falla, detente.
-3. `scripts/deploy.sh staging`: compila para la arquitectura de la VM (`amd64`, o `arm64` si es `B2pts_v2`), envía la imagen con `docker save | ssh … docker load`, actualiza el proyecto Compose, reinicia la API y espera su `/healthz` por HTTPS (hay un corte de unos segundos).
+3. Al fusionar la PR en `develop`, `.github/workflows/deploy-staging.yml` despliega solo (imagen en GHCR, Run Command, `/healthz` y vuelta automática a la anterior si falla): revisa que la ejecución termine en verde y sigue con el paso 4. Solo si hay que desplegar antes de fusionar, usa `scripts/deploy.sh staging --allow-unmerged`, que compila para la arquitectura de la VM (`amd64`, o `arm64` si es `B2pts_v2`), envía la imagen con `docker save | ssh … docker load`, actualiza el proyecto Compose, reinicia la API y espera su `/healthz` por HTTPS (hay un corte de unos segundos).
 4. Verifica contra `https://<host>:8443` **sin `-k`** (reintenta hasta 60 s): `/healthz` y `/readyz` → 200; `/api/v1/meta` → 200.
 5. Siempre: el límite de tasa responde 429 al pasarse; Redis detenido no tumba la API (`/readyz` informa `degradado`); no hay respuesta HTTP en claro en el puerto de la API.
 6. Por cada endpoint de `api/paths/<modulo>.yaml` de la spec: una petición válida y una inválida (formato de error del Art. IV, con `X-Request-Id`). Endpoints protegidos: usa una cuenta de prueba (spec 003) y limpia lo que crees.
 7. Registros: `docker compose logs --since 10m api` sin secretos, tokens, correos ni cuerpos de petición.
-8. Si falla: revierte (`scripts/deploy.sh staging --rollback`), reporta y no marques la tarea.
+8. Si falla: revierte (*Actions → Deploy staging → Run workflow* con `rollback`, o `scripts/deploy.sh staging --rollback`), reporta y no marques la tarea.
 9. Anota en `memoria.md` (solo anexar): fecha, spec, versión, resultado de cada verificación. Sin secretos.
 10. La spec queda **cerrada** solo si todo pasó; mientras tanto no se empieza la siguiente.
 
