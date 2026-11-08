@@ -69,7 +69,7 @@ Invocación: `@dev-go implementa la tarea T005 de specs/002-arquitectura-base/ta
 - **Trabajo humano mínimo:** la persona solo se registra (Azure, Cloudinary), hace `az login`, define `CLOUDINARY_URL` y aprueba acciones. **Todo lo demás lo hace `devops-mcp` desde OpenCode**, primero con los MCP y, si no cubren algo, con `az` o SSH.
 - **Solo `devops-mcp` usa los MCP, `az` y SSH a la VM.** Si tu tarea necesita infraestructura, pide `@devops-mcp ...`.
 - La API debe ser **sin estado** (Art. XIV): nada compartido en memoria; límite de tasa y caché en Redis (obligatorio) por los puertos `ratelimit.Limiter` y `cache.Cache`; Redis nunca es fuente de verdad.
-- **Orden de trabajo:** spec 001 (Azure y servicios) → 002 (base) → 003 … Cada spec termina con su tarea «Despliegue» (`@devops-mcp` ejecuta `scripts/deploy.sh staging` y verifica por HTTPS). No empieces la siguiente spec hasta que pase.
+- **Orden de trabajo:** spec 001 (Azure y servicios) → 002 (base) → 003 … Cada spec termina con su tarea «Despliegue»: al fusionar en `develop`, `deploy-staging.yml` despliega staging solo; `@devops-mcp` verifica esa ejecución por HTTPS (o, antes de fusionar, ejecuta `scripts/deploy.sh staging --allow-unmerged`). Art. XIII.5, enmienda 2.0.0. No empieces la siguiente spec hasta que pase.
 
 ## 6. Comandos
 

@@ -88,7 +88,7 @@ Prioridad: **P0** = sin esto no hay app · **P1** = esperado · **P2** = recorta
 | L001 | Landing: base y páginas legales | Sitio estático, privacidad, términos, eliminación de cuenta, publicación gratuita | MO-B | P0 | — | 2–5 nov |
 | L002 | Landing: página principal | Información de la app, cómo funciona, FAQ, botón a Google Play | MO-B | P1 | L001 | 9–16 nov |
 
-**Regla de cierre (todas las specs desde la 002):** una spec está terminada solo cuando su última tarea pasa. Backend: «Despliegue» (`@devops-mcp` ejecuta `scripts/deploy.sh staging` en la VM de Azure y verifica los endpoints por HTTPS). Landing: «Despliegue» en Render (static site). Móvil: «Verificación en Expo Go» (`@probador-expo` recorre los criterios de aceptación contra el staging ya desplegado). Backend 013 y móvil 013 (producción y Google Play) siguen su propio proceso. La spec siguiente no empieza hasta que la anterior esté cerrada.
+**Regla de cierre (todas las specs desde la 002):** una spec está terminada solo cuando su última tarea pasa. Backend: «Despliegue» (al fusionar en `develop` el workflow `deploy-staging.yml` despliega staging solo; `@devops-mcp` verifica los endpoints por HTTPS, o despliega con `scripts/deploy.sh staging --allow-unmerged` antes de fusionar). Landing: «Despliegue» en Render (static site). Móvil: «Verificación en Expo Go» (`@probador-expo` recorre los criterios de aceptación contra el staging ya desplegado). Backend 013 y móvil 013 (producción y Google Play) siguen su propio proceso. La spec siguiente no empieza hasta que la anterior esté cerrada.
 
 Las dependencias "parciales" se resuelven con **puertos vacíos** (§4) y contratos publicados el primer día de cada spec.
 
@@ -158,7 +158,7 @@ Nunca se recorta: cuenta, publicar, buscar, solicitar/reservar, entrega y devolu
 
 1. **Un dueño por spec.** Solo esa persona edita su `tasks.md` y su código.
 2. **Contrato primero.** Día 1 de cada spec: el backend publica `api/paths/<modulo>.yaml`; el móvil empieza a la par.
-3. **Repositorio y revisión:** una rama y una PR por spec, `main` protegida, por el MCP de GitHub (`@gestor-repo`); una persona revisa y fusiona. Sin pipeline automatizado. Los commits, ramas y PR solo los hace `@gestor-repo`, con aprobación.
+3. **Repositorio y revisión:** una rama y una PR por spec, `main` protegida, por el MCP de GitHub (`@gestor-repo`); una persona revisa y fusiona. CI en GitHub Actions (spec 017) y despliegue continuo a staging desde `develop` (enmienda 2.0.0). Los commits, ramas y PR solo los hace `@gestor-repo`, con aprobación.
 4. **Sincronía diaria** de 15 min: qué se integró, qué bloquea, qué contrato cambia.
 5. **Un cambio de contrato** se avisa en el grupo y se actualiza en ambos lados el mismo día.
 6. **`memoria.md` solo-anexar** con tu etiqueta; conflictos: conservar ambas líneas.

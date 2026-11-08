@@ -1,6 +1,6 @@
 # Propuesta de enmienda 2.0.0 (MAJOR) — despliegue continuo a staging
 
-- **Estado:** **APROBADA** por Joseph Yañez el 2026-11-08 (Art. XI.1; registro D-124 en `memoria.md`). Pendiente: aplicar el texto de abajo a `constitution.md` (versión 2.0.0) y la revisión de coherencia de la tabla final, en una PR aparte.
+- **Estado:** **APROBADA** por Joseph Yañez el 2026-11-08 (Art. XI.1; registro D-124 en `memoria.md`). Texto aplicado a `constitution.md` (versión 2.0.0), con la revisión de coherencia de la tabla final (`AGENTS.md`, `ROADMAP.md`, `devops-mcp` y skill `mcp-deploy`), el mismo día.
 - **Fecha:** 2026-11-08 · **Origen:** spec 017 (DevSecOps), workflow `.github/workflows/deploy-staging.yml`.
 - **Tipo:** MAJOR (Art. XI.2): cambia dos principios vigentes —quién despliega staging (Art. XIII.2, XIII.4 y XIII.5) y «no hay registro de imágenes» (Art. XIII.7)— además de la frase «no hay pipeline automatizado» (Art. VII.4 y XV.7). Si el equipo lo considera una excepción acotada y no un cambio de principio, puede registrarse como MINOR (1.7.0, o dentro de la 1.6.0 si esta sigue sin aprobarse).
 - **Relación con la 1.6.0** (`docs/enmienda-1.6.0-propuesta.md`, también pendiente): son independientes. Si se aprueban juntas, el texto de Art. VII.4 y XV.7 de abajo reemplaza al de la 1.6.0.
