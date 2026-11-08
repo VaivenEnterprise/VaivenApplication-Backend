@@ -12,7 +12,7 @@
 - [x] **T002** Firmador de Cloudinary
   - Archivos: `internal/images/adapter/cloudinary/signer.go`, `internal/images/adapter/cloudinary/signer_test.go`
   - Agente: `dev-go` · Depende de: 002-T024
-  - Aceptación: función `Sign(params, secret)` con parámetros ordenados, SHA-1 hex; prueba con vector conocido de la documentación de Cloudinary; no registra el secreto; **una subida de prueba real documentada en `memoria.md`** confirma el algoritmo
+  - Aceptación: función `Sign(params, secret)` con parámetros ordenados, SHA-1 hex (**actualizado: desde la corrección de CodeQL se usa SHA-256, ver plan A-06**); prueba con vector conocido de la documentación de Cloudinary; no registra el secreto; **una subida de prueba real documentada en `memoria.md`** confirma el algoritmo
   - Refs: RF-03 · P-01
 
 - [x] **T003** [P] Dominio de imágenes

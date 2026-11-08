@@ -16,7 +16,7 @@ Este repositorio es **independiente**. Forma parte de VAIVÉN junto con [`vaiven
 | `memoria.md` | Decisiones, estado, modelos asignados, dependencias y aprendizajes. |
 | `opencode.json` | Modelos gratuitos por agente, instrucciones cargadas y permisos. |
 | `.opencode/agents/` y `.opencode/skills/` | Subagentes propios y skills con plantillas y listas de comprobación. |
-| `specs/001…015/` | `spec.md`, `plan.md` y `tasks.md` de cada fase: **001 infraestructura en Azure y servicios**, 002 arquitectura base (incluye Redis, HTTPS y `deploy/`), cuenta, imágenes, objetos, búsqueda, reservas, chat, entrega y pagos, calificaciones, notificaciones, integración, producción, IA y ML. Cada una termina con su tarea «Despliegue». |
+| `specs/001…015/` y `017/` | `spec.md`, `plan.md` y `tasks.md` de cada fase: **001 infraestructura en Azure y servicios**, 002 arquitectura base (incluye Redis, HTTPS y `deploy/`), cuenta, imágenes, objetos, búsqueda, reservas, chat, entrega y pagos, calificaciones, notificaciones, integración, producción, IA y ML; la **017** es DevSecOps (CI, escaneo de seguridad y despliegue continuo a staging). Cada una termina con su tarea «Despliegue». |
 | `ROADMAP.md`, `docs/` | Copia del plan maestro y del documento de idea del proyecto. |
 
 Contrato de API: `api/openapi.yaml` (Art. IV). El móvil (`../vaiven-frontend`) desarrolla contra `api/paths/<modulo>.yaml`.
@@ -33,7 +33,7 @@ Staging en el puerto 8443 y producción en el 443 (proyectos de Compose separado
 1. Inicia sesión con `az login` y define `CLOUDINARY_URL`; reinicia OpenCode y comprueba con `opencode mcp list` que `azure` y los dos MCP de Cloudinary estén conectados.
 2. Spec **001**: `@devops-mcp` elige región y talla gratuitas, crea la VM, la red y el stack base (MongoDB y Redis) y emite el certificado HTTPS.
 3. Desde la **002**: se implementan las tareas con `@dev-go`; la última tarea de cada spec es «Despliegue» (`@devops-mcp` ejecuta `scripts/deploy.sh staging` y verifica). **La spec siguiente no empieza hasta que esa tarea pase.**
-4. El despliegue no depende del repositorio (la imagen viaja por SSH). Repositorio en GitHub con `main` y `develop` protegidas, PR por tarea, fase o spec (formatos en `docs/devsecops.md`) y CI en GitHub Actions (política, calidad, secretos y CodeQL; spec 017).
+4. El despliegue manual no depende del repositorio (la imagen viaja por SSH); desde la enmienda 2.0.0, cada fusión en `develop` con la CI en verde despliega staging por GitHub Actions (OIDC, Run Command e imágenes en GHCR; ver `docs/servicios.md` §7). Repositorio en GitHub con `main` y `develop` protegidas, PR por tarea, fase o spec (formatos en `docs/devsecops.md`) y CI en GitHub Actions (política, calidad, secretos y CodeQL; spec 017).
 
 ## Cómo se usa con OpenCode
 
@@ -155,10 +155,15 @@ Levantan MongoDB 7 con Testcontainers; necesitan Docker o Podman en marcha.
 ```bash
 docker build --build-arg APP_VERSION=$(git rev-parse --short HEAD) -t vaiven-api .
 ```
-Imagen `distroless` de unos 13 MB que corre como usuario no root. El despliegue en la VM (HTTPS, Compose y `scripts/deploy.sh`) llega con la fase 5 de la spec 002.
+Imagen `distroless` de unos 13 MB que corre como usuario no root. El despliegue en la VM (HTTPS, Compose y `scripts/deploy.sh`) está descrito en `docs/servicios.md` §7.
 
 ## Estado
 
-- **Spec 001 (infraestructura en Azure):** T001–T009 cerradas; la VM, MongoDB, Redis, el certificado HTTPS y Cloudinary están en marcha (`docs/servicios.md`).
-- **Spec 002 (arquitectura base):** configuración, MongoDB, errores, logger, capa HTTP, router, `main`, pruebas de integración, Dockerfile y contrato OpenAPI listos; falta la fase 5 (Redis, TLS, Cloudinary, `check-services` y despliegue en staging).
+- **Spec 001 (infraestructura en Azure):** T001–T009 cerradas; la VM, MongoDB, Redis, el certificado HTTPS y Cloudinary están en marcha (`docs/servicios.md`). Falta T010 (revisión de conformidad), que espera dos decisiones humanas.
+- **Spec 002 (arquitectura base):** completa y desplegada en staging (T001–T031).
+- **Spec 003 (cuenta y autenticación):** completa y desplegada; los ajustes del plan esperan el visto bueno de BE-A.
+- **Spec 004 (imágenes):** completa y desplegada.
+- **Spec 005 (objetos):** completa y desplegada en staging; espera el visto bueno de BE-A.
+- **Specs 006 a 015:** sin iniciar; la siguiente es la 006 (búsqueda).
+- **Spec 017 (DevSecOps):** CI, pruebas de humo, carga, mutación y despliegue continuo a staging listos; faltan pasos de administración (ruleset, revisores y `STAGING_AUTODEPLOY`).
 - Detalle de cada tarea en `specs/<spec>/tasks.md` y decisiones en `memoria.md`.

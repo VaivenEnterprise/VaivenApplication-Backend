@@ -1,6 +1,7 @@
 # Propuesta de enmienda 1.6.0 (MINOR) — constitución del backend
 
 - **Estado:** propuesta, pendiente de aprobación humana (Art. XI.1). `constitution.md` **no** se ha modificado.
+- **Actualización 2026-11-08:** la enmienda 2.0.0 (aprobada) ya reescribió los Art. VII.4 y XV.7. Subsiste solo el cambio del Art. XV.2 (rama y PR por spec → por tarea o fase). La versión vigente es 2.0.0, así que esta propuesta, si se aprueba, sería 2.1.0 (MINOR) y no 1.6.0.
 - **Fecha:** 2026-11-04 · **Origen:** revisión T010 de la spec 001.
 - **Tipo:** MINOR (Art. XI.2): se reconoce un proceso que ya existe (CI de la spec 017 y ramas por tarea); no se elimina ningún principio.
 

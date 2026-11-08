@@ -4,7 +4,7 @@ Instrucciones para cualquier agente de OpenCode que trabaje en `vaiven-backend/`
 
 ## 1. Orden de lectura obligatorio
 
-1. `constitution.md` — reglas no negociables (artículos I a XII). Para saber qué spec te toca, quién es el dueño y en qué orden, lee `ROADMAP.md`.
+1. `constitution.md` — reglas no negociables (artículos I a XV). Para saber qué spec te toca, quién es el dueño y en qué orden, lee `ROADMAP.md`.
 2. `memoria.md` — decisiones, estado actual y aprendizajes.
 3. `specs/<spec-activa>/spec.md` → `plan.md` → `tasks.md`.
 4. Solo entonces, el código.
@@ -107,7 +107,7 @@ Si `make` no está disponible en Windows, usar Git Bash o WSL, o ejecutar el com
 
 ## 9. Alcance
 
-Specs `001` a `015` en `specs/`, en el orden y con los dueños de `ROADMAP.md`. Las tareas aún **no se ejecutan** hasta la fecha de arranque del calendario y la aprobación de cada spec.
+Specs `001` a `015` y `017` en `specs/`, en el orden y con los dueños de `ROADMAP.md`. Las specs 001 a 005 están completas (la 005 espera el visto bueno de BE-A) y la siguiente es la 006; ninguna spec se implementa sin su aprobación (Art. I).
 
 ## Repositorio y PR (Art. XV)
 - Una rama de integracion por spec (`spec/SPEC-NN`), creada desde `develop`: implementar sus tareas ahi o en ramas `tipo/SPEC-NN-TNNN` con PR hacia la misma SPEC. Al completar la spec, PR hacia `develop`; publicar con PR `develop` -> `main`. Se conserva tarea -> `develop`. El segmento `SCRUM-NN-` es opcional tras la barra en ambos formatos; los nombres anteriores siguen siendo validos. Titulos de PR libres; completar Resumen, Validación y Seguridad. Solo `@gestor-repo` usa el MCP de GitHub; nunca fusiona ni borra: una persona revisa y fusiona. Nunca se suben secretos.

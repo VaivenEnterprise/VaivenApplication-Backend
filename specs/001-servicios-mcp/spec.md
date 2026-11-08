@@ -1,7 +1,7 @@
 # Spec 001 — Infraestructura en Azure y servicios (backend)
 
 - **Dueño:** BE-B · **Prioridad:** P0 · **Depende de:** — (es la primera spec; no requiere código de la API)
-- **Constitución:** v1.4.0 (Art. XIII y XIV) · **Estado:** Borrador, pendiente de aprobación
+- **Constitución:** v1.4.0 (Art. XIII y XIV) · **Estado:** Implementada y desplegada (T001–T009); T010 pendiente de decisiones humanas (ver `tasks.md`)
 
 ## 1. Objetivo y por qué
 Dejar lista, **antes de escribir código de la API**, la infraestructura gratuita donde correrá todo el backend: una **VM de Azure** con Docker Compose que ejecuta **Redis** y **MongoDB**, con **HTTPS forzoso** (certificado de Let's Encrypt para el nombre DNS de la IP), más la carpeta de imágenes en **Cloudinary**; todo aprovisionado y verificado desde OpenCode con el **MCP de Azure**, la CLI `az` y los MCP de Cloudinary, no con paneles manuales. Así, desde la spec 002 cada spec termina desplegada sin trámites a mano.
