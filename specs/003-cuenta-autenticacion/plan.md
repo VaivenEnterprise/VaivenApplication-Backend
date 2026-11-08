@@ -72,3 +72,16 @@ Unitarias de cada caso de uso con repos falsos; `password` (hash/verify, formato
 | VI | argon2id, sin secretos en logs, límite de intentos |
 | VII | ≥ 80 % en domain/usecase |
 | XII | `modules.go`, puertos vacíos, contrato en `api/paths/` |
+
+## 9. Ajustes durante la implementación (2026-11-06, [BE-B])
+| # | Ajuste | Motivo |
+|---|---|---|
+| A-01 | **P-05 sustituida:** el límite de `register`, `login` y `refresh` usa el middleware `RateLimit` de la spec 002 (Redis con respaldo en memoria) con `KeyPrefix: "auth:"`; no se crea `internal/platform/ratelimit` | Art. XIV.1–2 (constitución 1.5.0) exige API sin estado y límite en Redis; P-05 venía de la v1.4.0 |
+| A-02 | Puertos compartidos `users.Directory` y `users.Admin` en `internal/users/` (implementados por `auth/adapter/mongo.UserRepo`) | T008; los consumen 005–011 sin importar el módulo auth |
+| A-03 | `security.Hasher` calcula como máximo un hash argon2id a la vez (64 MiB cada uno) | La API tiene 160 MiB en la VM (Art. XIV.5) |
+| A-04 | La baja **anonimiza** el correo (`deleted+<id>@vaiven.invalid`) en lugar de conservarlo (P-08) | T008 y RF-08: el correo original debe poder registrarse de nuevo |
+| A-05 | `DELETE /me` con contraseña incorrecta responde **403** `forbidden`, no 401 | Que el móvil no lo confunda con una sesión vencida |
+| A-06 | La prueba de arquitectura cubre `internal/<modulo>/{domain,usecase}` y los puertos compartidos | Art. III y XII.3 |
+| A-07 | **Enmienda de P-01 (pendiente de aprobación de BE-A y del equipo):** argon2id pasa de m=64 MiB, t=3, p=2 a **m=19 MiB, t=2, p=1** (configuración mínima recomendada por OWASP Password Storage Cheat Sheet). Los hashes ya guardados siguen verificando: `Verify` lee los parámetros de cada hash. Los hashes en curso comparten un presupuesto de 40 MiB (2 nuevos a la vez; uno antiguo de 64 MiB se calcula solo) y la espera de turno se corta a los 2 s con 503 `service_unavailable`. El hash señuelo del login se calcula al arrancar | Auditoría 2026-11-07: con los parámetros anteriores un solo hash dejaba el proceso en ~131 MiB de 160 y el login daba ~7 hash/s; con los nuevos, medido con 2 CPU y 160 MiB: ~50 ms por hash, ~39 hash/s con 2 en paralelo y ~103 MiB de pico. Costo: por adivinanza fuera de línea el atacante paga ~5 veces menos (memoria × iteraciones), dentro del mínimo de OWASP; se compensa con el límite por cuenta (A-08) |
+| A-08 | Límite de **20 intentos de login por cuenta cada 15 min** (`LOGIN_ATTEMPTS_PER_ACCOUNT`), además de 10/min por IP. La clave en Redis es el SHA-256 del correo normalizado | Relleno de credenciales desde muchas IP (auditoría 2026-11-07). Riesgo aceptado: alguien puede bloquear 15 min el login de una cuenta ajena con 20 intentos |
+| A-09 | `$jsonSchema` en `users` y `refresh_tokens` (constitución §6.6), nivel `moderate`, sin `additionalProperties: false` (`internal/auth/adapter/mongo/schema.go`). `cmd/api` la aplica al arrancar antes de los índices; si la colección ya existe y el usuario de la app no tiene `collMod` (rol readWrite), avisa en el log y sigue | Integridad de datos; `moderate` no invalida documentos antiguos |

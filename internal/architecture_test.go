@@ -10,8 +10,14 @@ import (
 	"testing"
 )
 
-// innerLayers son las capas que deben quedar libres de infraestructura.
-var innerLayers = []string{"./domain/...", "./usecase/..."}
+// innerLayers son las capas que deben quedar libres de infraestructura: las
+// compartidas y las de cada módulo (internal/<modulo>/{domain,usecase}, Art.
+// XII.3), además de los puertos compartidos entre módulos.
+var innerLayers = []string{
+	"./domain/...", "./usecase/...",
+	"./.../domain/...", "./.../usecase/...",
+	"./users/...", "./notify/...", "./moderation/...", "./images/port/...",
+}
 
 // forbiddenPrefixes cubre net/http (y sus subpaquetes), chi y todo el driver
 // de MongoDB, incluido bson.

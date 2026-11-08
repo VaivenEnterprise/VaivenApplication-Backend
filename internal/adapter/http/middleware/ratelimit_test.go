@@ -177,3 +177,55 @@ func TestLimitKeyWithoutPort(t *testing.T) {
 		t.Errorf("limitKey = %q", got)
 	}
 }
+
+// windowLimiter es una ventana fija con reloj inyectado (spec 003, T009).
+type windowLimiter struct {
+	now    func() time.Time
+	counts map[string]int
+	ends   map[string]time.Time
+}
+
+func (w *windowLimiter) Allow(_ context.Context, key string, limit int, window time.Duration) (bool, error) {
+	now := w.now()
+	if !now.Before(w.ends[key]) {
+		w.counts[key], w.ends[key] = 0, now.Add(window)
+	}
+	w.counts[key]++
+	return w.counts[key] <= limit, nil
+}
+
+func TestRateLimitAuthPerIPWithClock(t *testing.T) { // RF-07, CA-06
+	now := time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC)
+	lim := &windowLimiter{now: func() time.Time { return now }, counts: map[string]int{}, ends: map[string]time.Time{}}
+	cfg := RateLimitConfig{Limit: 10, Window: time.Minute, KeyPrefix: "auth:"}
+	h := RequestID(RateLimit(lim, nil, cfg, slog.New(slog.DiscardHandler))(okHandler()))
+
+	for i := 1; i <= 10; i++ {
+		if rec := request(h, "10.0.0.1:1234"); rec.Code != http.StatusOK {
+			t.Fatalf("petición %d = %d, want 200", i, rec.Code)
+		}
+	}
+	rec := request(h, "10.0.0.1:9999") // otro puerto, misma IP
+	if rec.Code != http.StatusTooManyRequests || rec.Header().Get("Retry-After") != "60" {
+		t.Fatalf("11.ª petición = %d (Retry-After %q), want 429 y 60", rec.Code, rec.Header().Get("Retry-After"))
+	}
+	var env struct {
+		Error struct {
+			Code, Message, RequestID string
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil || env.Error.Code != "rate_limited" || env.Error.RequestID == "" {
+		t.Errorf("cuerpo = %s", rec.Body.String())
+	}
+	if rec := request(h, "10.0.0.2:1"); rec.Code != http.StatusOK {
+		t.Errorf("otra IP = %d, want 200", rec.Code)
+	}
+	if _, ok := lim.counts["auth:ip:10.0.0.1"]; !ok {
+		t.Errorf("la clave no lleva el prefijo: %v", lim.counts)
+	}
+
+	now = now.Add(time.Minute) // nueva ventana
+	if rec := request(h, "10.0.0.1:1234"); rec.Code != http.StatusOK {
+		t.Errorf("tras un minuto = %d, want 200", rec.Code)
+	}
+}

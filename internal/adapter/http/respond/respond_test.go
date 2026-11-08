@@ -49,6 +49,7 @@ func TestErrorMapsDomainCodes(t *testing.T) {
 		{"prohibido", domain.NewForbidden("Sin permiso."), http.StatusForbidden, "forbidden"},
 		{"no encontrado", domain.NewNotFound("No existe."), http.StatusNotFound, "not_found"},
 		{"conflicto", domain.NewConflict("Ya existe."), http.StatusConflict, "conflict"},
+		{"no disponible", domain.NewUnavailable("Intenta más tarde."), http.StatusServiceUnavailable, "service_unavailable"},
 		{"envuelto con %w", fmt.Errorf("get thing: %w", domain.NewNotFound("No existe.")), http.StatusNotFound, "not_found"},
 	}
 

@@ -42,6 +42,8 @@ type Config struct {
 
 	// Autenticación (spec 003, plan §5).
 	Auth Auth
+	// Imágenes (spec 004, plan §5).
+	Images Images
 }
 
 // IsProduction indica si el servicio corre en producción (logs en JSON, plan P-04).
@@ -116,6 +118,7 @@ func load(lookup lookupFunc) (Config, error) {
 	cfg.Redis = loadRedis(&r, cfg.AppEnv)
 	cfg.TLS = loadTLS(&r, cfg.AppEnv)
 	cfg.Auth = loadAuth(&r, cfg.AppEnv)
+	cfg.Images = loadImages(&r)
 
 	if len(r.problems) > 0 {
 		return Config{}, &Error{Problems: r.problems}
@@ -129,10 +132,15 @@ type reader struct {
 	problems []string
 }
 
-// value devuelve el valor sin espacios; una variable vacía cuenta como ausente.
+// bom es la marca de orden de bytes (U+FEFF).
+const bom = string(rune(0xFEFF))
+
+// value devuelve el valor sin espacios ni BOM (U+FEFF, que agregan algunas
+// herramientas de Windows al copiar valores); una variable vacía cuenta como
+// ausente.
 func (r *reader) value(key string) (string, bool) {
 	v, ok := r.lookup(key)
-	v = strings.TrimSpace(v)
+	v = strings.TrimSpace(strings.ReplaceAll(v, bom, ""))
 	return v, ok && v != ""
 }
 
