@@ -15,7 +15,7 @@
   - Aceptación: constantes con nombre para POL-01…POL-17 del ROADMAP §8 (solo las que el backend usa); prueba que fija los valores provisionales
   - Refs: ROADMAP §8 · Art. XII
 
-- [ ] **T003** Dominio: objeto, categorías y precios
+- [x] **T003** Dominio: objeto, categorías y precios
   - Archivos: `internal/items/domain/{item.go, pricing.go, categories.go, errors.go}`, `internal/items/domain/domain_test.go`
   - Agente: `dev-go` · Depende de: T002
   - Aceptación: validación de campos y de modalidad/precio; `SuggestPrice(declaredCents)` cumple CA-02 y bordes (mínimo $10, múltiplos de $5); `RoundCoord`; solo stdlib; ≥ 80 %
