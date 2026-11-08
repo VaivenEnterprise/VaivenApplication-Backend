@@ -1,6 +1,6 @@
 # Tareas 003 — Cuenta y autenticación (backend)
 
-- **Dueño:** BE-A · **Estado:** sin ejecutar · `[P]` = paralelizable
+- **Dueño:** BE-A · **Estado:** desplegada en staging (2026-11-06) · `[P]` = paralelizable
 - **T001 va primero (contrato publicado el mismo día)**, para que MO-A y los demás lean el contrato.
 
 - [x] **T001** Contrato OpenAPI de auth y usuarios
@@ -57,31 +57,31 @@
   - Aceptación: middleware por IP, ventana de 1 min, 429 `rate_limited` con envoltorio; probado con reloj inyectado
   - Refs: RF-07
 
-- [ ] **T010** Handlers, middleware de autenticación y rutas
+- [x] **T010** Handlers, middleware de autenticación y rutas
   - Archivos: `internal/auth/adapter/http/{handler.go, dto.go, middleware.go, routes.go, handler_test.go}`
   - Agente: `dev-go` · Depende de: T001, T002, T008, T009
   - Aceptación: las 8 rutas cumplen el contrato; `Authenticate`, `RequireRole`, `RequireActive`; `auth.UserID(ctx)`; el módulo se registra con **una línea** en `modules.go`; pruebas `httptest` por ruta y por código de error
   - Refs: RF-10, RF-13 · Art. IV, XII
 
-- [ ] **T011** [P] Comando `create-admin`
+- [x] **T011** [P] Comando `create-admin`
   - Archivos: `cmd/admin/create_admin.go`, `cmd/admin/create_admin_test.go`
   - Agente: `dev-go` · Depende de: T005, 002-T029
   - Aceptación: crea usuario `admin` leyendo correo y contraseña por entrada estándar; no acepta la contraseña por argumento; idempotente (existe → mensaje y código ≠ 0)
   - Refs: RF-10
 
-- [ ] **T012** Pruebas de integración del flujo de sesión
+- [x] **T012** Pruebas de integración del flujo de sesión
   - Archivos: `internal/auth/adapter/http/flow_integration_test.go`
   - Agente: `qa-go` · Depende de: T010
   - Aceptación: registro→`/me`→refresh→reutilización revoca familia→logout; CA-01…CA-07 cubiertos (con `-tags integration`)
   - Refs: CA-01…CA-07
 
-- [ ] **T013** Memoria, dependencias y revisión
+- [x] **T013** Memoria, dependencias y revisión
   - Archivos: `memoria.md` (solo anexar)
   - Agente: `revisor-constitucion` · Depende de: T012
   - Aceptación: dependencias registradas; veredicto **CONFORME**; hito H1 (backend) marcado
   - Refs: DoD
 
-- [ ] **T014** Despliegue de la spec en Azure (staging)
+- [x] **T014** Despliegue de la spec en Azure (staging)
   - Archivos: `memoria.md` (solo anexar)
   - Agente: `devops-mcp` · Depende de: T013 (y todas las anteriores `[x]`)
   - Aceptación: `make fmt lint test` en verde; `scripts/deploy.sh staging` (construye, envía a la VM y reinicia la API); `/healthz` y `/readyz` devuelven 200 por HTTPS sin `-k`; cada endpoint nuevo de esta spec (`api/paths/<modulo>.yaml`) responde con una petición correcta y una inválida en el formato de error del Art. IV; registros sin secretos ni datos personales; resultado anotado en `memoria.md`. **La spec siguiente no empieza hasta que esta tarea pase.**
