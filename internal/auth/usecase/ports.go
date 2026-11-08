@@ -19,6 +19,9 @@ type Users interface {
 	UpdateProfile(ctx context.Context, id string, p ProfileChanges, now time.Time) (domain.User, error)
 	// Deactivate da de baja la cuenta y anonimiza correo, nombre y teléfono.
 	Deactivate(ctx context.Context, id, anonymizedEmail string, now time.Time) error
+	// UpdatePasswordHash reemplaza el hash de una cuenta activa (migración de
+	// parámetros de argon2id).
+	UpdatePasswordHash(ctx context.Context, id, passwordHash string, now time.Time) error
 }
 
 // ProfileChanges son los cambios de PATCH /me. Un campo nil no cambia;
@@ -45,6 +48,12 @@ type PasswordHasher interface {
 	Hash(ctx context.Context, password string) (string, error)
 	// Verify devuelve false, nil si la contraseña no coincide.
 	Verify(ctx context.Context, password, encoded string) (bool, error)
+	// DecoyHash es un hash válido de un valor desconocido, con los parámetros
+	// actuales, calculado al crear el hasher (no por petición). Login verifica
+	// contra él cuando el correo no existe.
+	DecoyHash() string
+	// NeedsRehash indica si un hash guardado usa parámetros anteriores.
+	NeedsRehash(encoded string) bool
 }
 
 // AccessTokens emite tokens de acceso (JWT).

@@ -219,11 +219,10 @@ func TestLoginFailures(t *testing.T) {
 		t.Errorf("sesión falla: err = %v", err)
 	}
 
-	// Si el hash señuelo no se puede calcular, el correo inexistente sigue
-	// siendo un error genérico.
+	// Calcular hashes nuevos no interviene en el login: el señuelo ya existe.
 	e = newEnv(t)
 	e.hasher.failHash = errBoom
 	if _, err := e.svc.Login(ctx, LoginInput{Email: "nadie@example.com", Password: "x"}); !domain.Is(err, domain.ErrInvalidCredentials) {
-		t.Errorf("señuelo falla: err = %v", err)
+		t.Errorf("con Hash fallando: err = %v", err)
 	}
 }

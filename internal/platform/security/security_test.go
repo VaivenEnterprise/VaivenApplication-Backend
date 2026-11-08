@@ -2,31 +2,49 @@ package security
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/argon2"
+
+	shared "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/domain"
 )
 
 // testSecret es un valor de prueba de baja entropía (no es un secreto real).
 const testSecret = "clave-de-prueba-clave-de-prueba-0000"
 
+// legacyParams son los parámetros anteriores del plan P-01 (m=64 MiB, t=3,
+// p=2): los hashes ya guardados con ellos deben seguir verificando.
+var legacyParams = Params{MemoryKiB: 64 * 1024, Time: 3, Threads: 2}
+
+func newTestHasher(t *testing.T, budgetKiB int64, wait time.Duration) *Hasher {
+	t.Helper()
+	h, err := NewHasher(budgetKiB, wait)
+	if err != nil {
+		t.Fatalf("NewHasher: %v", err)
+	}
+	return h
+}
+
 func TestHashAndVerify(t *testing.T) {
-	h := NewHasher(1)
+	h := newTestHasher(t, 0, 0)
 	ctx := context.Background()
 
 	hash, err := h.Hash(ctx, "una-contrasena-larga")
 	if err != nil {
 		t.Fatalf("Hash: %v", err)
 	}
-	phc := regexp.MustCompile(`^\$argon2id\$v=19\$m=65536,t=3,p=2\$[A-Za-z0-9+/]{22}\$[A-Za-z0-9+/]{43}$`)
+	phc := regexp.MustCompile(`^\$argon2id\$v=19\$m=19456,t=2,p=1\$[A-Za-z0-9+/]{22}\$[A-Za-z0-9+/]{43}$`)
 	if !phc.MatchString(hash) {
-		t.Fatalf("hash %q no tiene formato PHC con los parámetros del plan P-01", hash)
+		t.Fatalf("hash %q no tiene formato PHC con los parámetros de OWASP (P-01, A-07)", hash)
 	}
 	if strings.Contains(hash, "una-contrasena-larga") {
 		t.Fatal("el hash contiene la contraseña")
@@ -71,28 +89,171 @@ func TestHashAndVerify(t *testing.T) {
 	}
 }
 
-func TestVerifyAcceptsOtherParameters(t *testing.T) {
-	// Un hash con parámetros más bajos (y clave de 16 bytes) sigue verificando.
-	h := NewHasher(0) // se corrige a 1
+func TestVerifyAcceptsLegacyAndOtherParameters(t *testing.T) {
+	ctx := context.Background()
+	h := newTestHasher(t, 0, 0)
+	// Hash antiguo de P-01 (m=64 MiB, t=3, p=2): sigue verificando aunque
+	// supera el presupuesto de memoria (se calcula solo).
+	legacy, err := newHasher(legacyParams, 64*1024, time.Second, rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old, err := legacy.Hash(ctx, "pw-antigua")
+	if err != nil || !strings.Contains(old, "$m=65536,t=3,p=2$") {
+		t.Fatalf("hash antiguo = %q, %v", old, err)
+	}
+	if ok, err := h.Verify(ctx, "pw-antigua", old); err != nil || !ok {
+		t.Errorf("Verify de un hash antiguo = %v, %v; want true", ok, err)
+	}
+	if ok, err := h.Verify(ctx, "otra", old); err != nil || ok {
+		t.Errorf("Verify de un hash antiguo con otra contraseña = %v, %v; want false", ok, err)
+	}
+	// Parámetros más bajos y clave de 16 bytes.
 	salt := []byte("sal-de-16-bytes!")
 	key := argonKey(t, "pw", salt, 1, 1024, 1, 16)
 	enc := "$argon2id$v=19$m=1024,t=1,p=1$" + b64.EncodeToString(salt) + "$" + b64.EncodeToString(key)
-	if ok, err := h.Verify(context.Background(), "pw", enc); err != nil || !ok {
+	if ok, err := h.Verify(ctx, "pw", enc); err != nil || !ok {
 		t.Fatalf("Verify = %v, %v; want true, nil", ok, err)
 	}
 }
 
-func TestHasherRespectsContext(t *testing.T) {
-	h := NewHasher(1)
-	h.slots <- struct{}{} // ocupa el único turno
+func TestDecoyHash(t *testing.T) {
+	h := newTestHasher(t, 0, 0)
+	decoy := h.DecoyHash()
+	if !strings.HasPrefix(decoy, "$argon2id$v=19$m=19456,t=2,p=1$") {
+		t.Fatalf("el señuelo no usa los parámetros actuales: %q", decoy)
+	}
+	if h.DecoyHash() != decoy {
+		t.Error("el señuelo no debe cambiar")
+	}
+	for _, pw := range []string{"", "una-contrasena-larga", "admin"} {
+		if ok, err := h.Verify(context.Background(), pw, decoy); err != nil || ok {
+			t.Errorf("Verify(%q, señuelo) = %v, %v; want false, nil", pw, ok, err)
+		}
+	}
+	if other := newTestHasher(t, 0, 0).DecoyHash(); other == decoy {
+		t.Error("cada Hasher debe tener un señuelo distinto (valor aleatorio)")
+	}
+}
+
+// failingReader simula que no hay fuente de aleatoriedad.
+type failingReader struct{}
+
+func (failingReader) Read([]byte) (int, error) { return 0, errors.New("sin entropía") }
+
+func TestNewHasherFailsWithoutRandomness(t *testing.T) {
+	if _, err := newHasher(DefaultParams(), 0, 0, failingReader{}); err == nil {
+		t.Fatal("sin aleatoriedad NewHasher debe fallar al arrancar")
+	}
+	h := newTestHasher(t, 0, 0)
+	h.rand = failingReader{}
+	if _, err := h.Hash(context.Background(), "x"); err == nil {
+		t.Error("Hash sin aleatoriedad debe fallar")
+	}
+}
+
+func TestHasherRespectsContextAndWait(t *testing.T) {
+	h := newTestHasher(t, 0, 50*time.Millisecond)
+	// Ocupa todo el presupuesto.
+	if err := h.sem.Acquire(context.Background(), h.budgetKiB); err != nil {
+		t.Fatal(err)
+	}
+	enc := h.DecoyHash()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if _, err := h.Hash(ctx, "x"); !errors.Is(err, context.Canceled) {
 		t.Errorf("Hash con contexto cancelado = %v, want context.Canceled", err)
 	}
-	enc := "$argon2id$v=19$m=1024,t=1,p=1$c2FsdHNhbHQ$aGFzaGhhc2hoYXNoaGFzaA"
 	if _, err := h.Verify(ctx, "x", enc); !errors.Is(err, context.Canceled) {
 		t.Errorf("Verify con contexto cancelado = %v, want context.Canceled", err)
+	}
+
+	start := time.Now()
+	_, err := h.Verify(context.Background(), "x", enc)
+	var de *shared.Error
+	if !errors.Is(err, ErrBusy) || !errors.As(err, &de) || de.Code != shared.CodeUnavailable {
+		t.Errorf("sin turno = %v, want ErrBusy (service_unavailable)", err)
+	}
+	if waited := time.Since(start); waited < 40*time.Millisecond || waited > time.Second {
+		t.Errorf("esperó %v, want ≈ maxWait (50 ms)", waited)
+	}
+
+	// Al liberar, vuelve a funcionar: una cancelación no deja estado.
+	h.sem.Release(h.budgetKiB)
+	if ok, err := h.Verify(context.Background(), "x", enc); err != nil || ok {
+		t.Errorf("tras liberar = %v, %v; want false, nil", ok, err)
+	}
+}
+
+func TestHasherBudgetLimitsConcurrency(t *testing.T) {
+	// Presupuesto para dos hashes de 19 MiB: un tercero espera.
+	h := newTestHasher(t, 2*int64(DefaultParams().MemoryKiB), 30*time.Millisecond)
+	w1, err := h.acquire(context.Background(), int64(DefaultParams().MemoryKiB))
+	if err != nil {
+		t.Fatal(err)
+	}
+	w2, err := h.acquire(context.Background(), int64(DefaultParams().MemoryKiB))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.acquire(context.Background(), int64(DefaultParams().MemoryKiB)); !errors.Is(err, ErrBusy) {
+		t.Errorf("tercer hash concurrente = %v, want ErrBusy", err)
+	}
+	h.sem.Release(w1)
+	h.sem.Release(w2)
+	// Un hash más grande que el presupuesto se limita al presupuesto (exclusivo).
+	if w, err := h.acquire(context.Background(), 64*1024); err != nil || w != h.budgetKiB {
+		t.Errorf("hash enorme: peso %d, %v; want %d", w, err, h.budgetKiB)
+	} else {
+		h.sem.Release(w)
+	}
+}
+
+func TestHasherConcurrent(t *testing.T) {
+	h := newTestHasher(t, 0, 5*time.Second)
+	ctx := context.Background()
+	hash, err := h.Hash(ctx, "pw")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	errs := make(chan error, 8)
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			pw := "pw"
+			if i%2 == 1 {
+				pw = "mala"
+			}
+			ok, err := h.Verify(ctx, pw, hash)
+			if err != nil || ok != (i%2 == 0) {
+				errs <- fmt.Errorf("goroutine %d: %v, %v", i, ok, err)
+			}
+		}(i)
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Error(err)
+	}
+}
+
+func BenchmarkHashDefault(b *testing.B) { benchHash(b, DefaultParams()) }
+
+func BenchmarkHashLegacy(b *testing.B) { benchHash(b, legacyParams) }
+
+func benchHash(b *testing.B, p Params) {
+	h, err := newHasher(p, int64(p.MemoryKiB), time.Minute, rand.Reader)
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.ReportAllocs()
+	for b.Loop() {
+		if _, err := h.Hash(context.Background(), "una-contrasena-larga"); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
@@ -202,4 +363,47 @@ func sign(t *testing.T, m jwt.SigningMethod, secret string, c jwt.MapClaims) str
 func argonKey(t *testing.T, pw string, salt []byte, time, memory uint32, threads uint8, keyLen uint32) []byte {
 	t.Helper()
 	return argon2.IDKey([]byte(pw), salt, time, memory, threads, keyLen)
+}
+
+func TestDefaultParamsImmutable(t *testing.T) {
+	p := DefaultParams()
+	p.MemoryKiB = 1
+	if DefaultParams().MemoryKiB != 19*1024 {
+		t.Error("modificar la copia no debe cambiar los parámetros por defecto")
+	}
+}
+
+func TestNeedsRehash(t *testing.T) {
+	ctx := context.Background()
+	h := newTestHasher(t, 0, 0)
+	current, err := h.Hash(ctx, "pw")
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy, err := newHasher(legacyParams, 64*1024, time.Second, rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old, err := legacy.Hash(ctx, "pw")
+	if err != nil {
+		t.Fatal(err)
+	}
+	salt := []byte("sal-de-16-bytes!")
+	short := "$argon2id$v=19$m=19456,t=2,p=1$" + b64.EncodeToString(salt) + "$" +
+		b64.EncodeToString(argonKey(t, "pw", salt, 2, 19*1024, 1, 16))
+	for _, tc := range []struct {
+		name string
+		enc  string
+		want bool
+	}{
+		{"actual", current, false},
+		{"señuelo", h.DecoyHash(), false},
+		{"antiguo 64 MiB", old, true},
+		{"clave de 16 bytes", short, true},
+		{"mal formado", "texto", false},
+	} {
+		if got := h.NeedsRehash(tc.enc); got != tc.want {
+			t.Errorf("%s: NeedsRehash = %v, want %v", tc.name, got, tc.want)
+		}
+	}
 }

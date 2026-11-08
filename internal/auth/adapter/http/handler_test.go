@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -481,5 +482,68 @@ func TestNewModuleRequiresDeps(t *testing.T) {
 	}
 	if issueFor("otra") != "valor inválido" {
 		t.Error("issueFor")
+	}
+}
+
+// errLimiter simula Redis caído.
+type errLimiter struct{}
+
+func (errLimiter) Allow(context.Context, string, int, time.Duration) (bool, error) {
+	return false, errors.New("redis caído")
+}
+
+func TestAccountLoginLimit(t *testing.T) { // auditoría 2026-11-07, hallazgo 2
+	jwt, _ := security.NewJWT(testSecret, time.Minute)
+	m, err := NewModule(ModuleDeps{
+		Service: &fakeService{}, Tokens: jwt, Log: slog.New(slog.DiscardHandler),
+		Limiter: redis.NewMemoryLimiter(), LimitPerMinute: 1000, AccountLoginLimit: 3,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := chi.NewRouter()
+	r.Use(middleware.RequestID)
+	r.Route("/api/v1", m.Register)
+	login := func(email, ip string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login",
+			strings.NewReader(`{"email":"`+email+`","password":"x"}`))
+		req.RemoteAddr = ip + ":1"
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		return rec
+	}
+	// Tres intentos desde IP distintas (y con otras mayúsculas) cuentan para
+	// la misma cuenta.
+	for i, email := range []string{"ana@example.com", "ANA@example.com", " ana@example.com "} {
+		if rec := login(email, fmt.Sprintf("10.0.0.%d", i+1)); rec.Code != http.StatusOK {
+			t.Fatalf("intento %d = %d", i+1, rec.Code)
+		}
+	}
+	rec := login("ana@example.com", "10.0.0.9")
+	if code, _ := errOf(t, rec); rec.Code != http.StatusTooManyRequests || code != "rate_limited" || rec.Header().Get("Retry-After") != "900" {
+		t.Errorf("4.º intento = %d %q (Retry-After %q)", rec.Code, rec.Body.String(), rec.Header().Get("Retry-After"))
+	}
+	if strings.Contains(rec.Body.String(), "ana@example.com") {
+		t.Error("la respuesta repite el correo")
+	}
+	// Otra cuenta no se ve afectada.
+	if rec := login("beto@example.com", "10.0.0.9"); rec.Code != http.StatusOK {
+		t.Errorf("otra cuenta = %d", rec.Code)
+	}
+}
+
+func TestAccountLimiterFallbacks(t *testing.T) {
+	ctx := context.Background()
+	if !(accountLimiter{}).allow(ctx, "a@b.mx") {
+		t.Error("sin limitador debe dejar pasar")
+	}
+	// Redis caído: usa el respaldo en memoria.
+	a := accountLimiter{primary: errLimiter{}, fallback: redis.NewMemoryLimiter(), limit: 1}
+	if !a.allow(ctx, "a@b.mx") || a.allow(ctx, "a@b.mx") {
+		t.Error("con Redis caído debe aplicar el límite con el respaldo")
+	}
+	// Sin ningún limitador que responda, deja pasar.
+	if !(accountLimiter{primary: errLimiter{}, fallback: errLimiter{}, limit: 1}).allow(ctx, "a@b.mx") {
+		t.Error("sin limitadores disponibles debe dejar pasar")
 	}
 }

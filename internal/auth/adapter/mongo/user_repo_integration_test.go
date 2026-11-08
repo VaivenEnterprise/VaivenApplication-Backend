@@ -48,7 +48,9 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// newDB devuelve una base vacía y exclusiva de la prueba.
+// newDB devuelve una base vacía y exclusiva de la prueba, sin validadores;
+// newSchemaDB (schema_integration_test.go) la devuelve con EnsureSchemas
+// aplicado, y es la que usan las pruebas de los repositorios.
 func newDB(t *testing.T) *drv.Database {
 	t.Helper()
 	db := testClient.Database(fmt.Sprintf("auth_it_%d", time.Now().UnixNano()))
@@ -73,7 +75,7 @@ func newUser(email string) domain.User {
 
 func TestIntegrationUserRepo(t *testing.T) {
 	ctx := context.Background()
-	repo := NewUserRepo(newDB(t))
+	repo := NewUserRepo(newSchemaDB(t))
 
 	// Dos veces: EnsureIndexes es idempotente.
 	for i := 0; i < 2; i++ {
@@ -134,7 +136,7 @@ func TestIntegrationUserRepo(t *testing.T) {
 
 func TestIntegrationUserRepoProfileAndAdmin(t *testing.T) {
 	ctx := context.Background()
-	repo := NewUserRepo(newDB(t))
+	repo := NewUserRepo(newSchemaDB(t))
 	if err := repo.EnsureIndexes(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -220,5 +222,41 @@ func TestIntegrationUserRepoProfileAndAdmin(t *testing.T) {
 	}
 	if empty, err := repo.PublicUsers(ctx, []string{"x"}); err != nil || len(empty) != 0 {
 		t.Errorf("PublicUsers sin ids válidos = %v, %v", empty, err)
+	}
+}
+
+func TestIntegrationUpdatePasswordHash(t *testing.T) { // auditoría 2026-11-07, N2
+	ctx := context.Background()
+	repo := NewUserRepo(newSchemaDB(t))
+	if err := repo.EnsureIndexes(ctx); err != nil {
+		t.Fatal(err)
+	}
+	ana, err := repo.Create(ctx, newUser("ana@example.com"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	const newHash = "$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$aGFzaA"
+	if err := repo.UpdatePasswordHash(ctx, ana.ID, newHash, now); err != nil {
+		t.Fatalf("UpdatePasswordHash: %v", err)
+	}
+	got, _ := repo.ByID(ctx, ana.ID)
+	if got.PasswordHash != newHash || got.Version != ana.Version+1 || !got.UpdatedAt.Equal(now) {
+		t.Errorf("tras actualizar = %+v", got)
+	}
+	// Bajo $jsonSchema, un hash vacío se rechaza.
+	if err := repo.UpdatePasswordHash(ctx, ana.ID, "", now); err == nil {
+		t.Error("un hash vacío debe rechazarlo la validación")
+	}
+	for _, id := range []string{"no-es-id", "0123456789abcdef01234567"} {
+		if err := repo.UpdatePasswordHash(ctx, id, newHash, now); !domain.Is(err, domain.ErrUserNotFound) {
+			t.Errorf("UpdatePasswordHash(%s) = %v", id, err)
+		}
+	}
+	if err := repo.Deactivate(ctx, ana.ID, domain.AnonymizedEmail(ana.ID), now); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.UpdatePasswordHash(ctx, ana.ID, newHash, now); !domain.Is(err, domain.ErrUserNotFound) {
+		t.Errorf("cuenta dada de baja = %v, want ErrUserNotFound", err)
 	}
 }

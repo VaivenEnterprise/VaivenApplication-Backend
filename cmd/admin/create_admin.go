@@ -47,14 +47,24 @@ func mongoAdminDeps(ctx context.Context, cfg config.Config) (adminDeps, error) {
 	if err != nil {
 		return adminDeps{}, fmt.Errorf("conectar a MongoDB: %w", err)
 	}
-	repo := authmongo.NewUserRepo(mc.Database(cfg.MongoDB))
+	db := mc.Database(cfg.MongoDB)
+	if _, err := authmongo.EnsureSchemas(ctx, db); err != nil {
+		_ = mc.Disconnect(context.Background())
+		return adminDeps{}, err
+	}
+	repo := authmongo.NewUserRepo(db)
 	if err := repo.EnsureIndexes(ctx); err != nil {
+		_ = mc.Disconnect(context.Background())
+		return adminDeps{}, err
+	}
+	hasher, err := security.NewHasher(security.DefaultMemoryBudgetKiB, security.DefaultMaxWait)
+	if err != nil {
 		_ = mc.Disconnect(context.Background())
 		return adminDeps{}, err
 	}
 	return adminDeps{
 		store:  repo,
-		hasher: security.NewHasher(1),
+		hasher: hasher,
 		close:  func() { _ = mc.Disconnect(context.Background()) },
 	}, nil
 }

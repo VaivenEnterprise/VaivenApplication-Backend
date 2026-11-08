@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/domain"
@@ -27,28 +26,21 @@ type AuthResult struct {
 
 // Deps son las dependencias del Service.
 type Deps struct {
-	Users        Users
-	Refresh      RefreshTokens
-	Hasher       PasswordHasher
-	Access       AccessTokens
-	NewRefresh   RefreshGenerator
-	HashRefresh  RefreshHasher
-	Bookings     ActiveBookingChecker // nil = NoActiveBookings
-	RefreshTTL   time.Duration
-	Now          func() time.Time // nil = time.Now
-	NewFamilyID  func() (string, error)
-	DummyHashPwd string // contraseña con la que se calcula el hash señuelo; vacía = valor fijo
+	Users       Users
+	Refresh     RefreshTokens
+	Hasher      PasswordHasher
+	Access      AccessTokens
+	NewRefresh  RefreshGenerator
+	HashRefresh RefreshHasher
+	Bookings    ActiveBookingChecker // nil = NoActiveBookings
+	RefreshTTL  time.Duration
+	Now         func() time.Time // nil = time.Now
+	NewFamilyID func() (string, error)
 }
 
 // Service implementa los casos de uso de la cuenta.
 type Service struct {
 	d Deps
-
-	// dummyHash es un hash válido con el que se verifica cuando el correo no
-	// existe, para que el tiempo de respuesta no revele si hay cuenta (RF-04).
-	dummyOnce sync.Once
-	dummyHash string
-	dummyErr  error
 }
 
 // NewService crea el servicio. Falla si falta una dependencia obligatoria.
@@ -66,8 +58,10 @@ func NewService(d Deps) (*Service, error) {
 	if d.NewFamilyID == nil {
 		d.NewFamilyID = randomID
 	}
-	if d.DummyHashPwd == "" {
-		d.DummyHashPwd = "contrasena-senuelo-de-tiempo"
+	// El señuelo lo calcula el Hasher al crearse (fuera de cualquier
+	// petición); sin él no se puede igualar el tiempo del login.
+	if d.Hasher.DecoyHash() == "" {
+		return nil, errors.New("auth: el hasher no tiene hash señuelo")
 	}
 	return &Service{d: d}, nil
 }
@@ -108,21 +102,22 @@ func (s *Service) issueSession(ctx context.Context, u domain.User, familyID stri
 	return Tokens{AccessToken: access, RefreshToken: refresh, ExpiresIn: s.d.Access.TTL()}, nil
 }
 
-// checkPassword verifica la contraseña de u. Si u es nil (el correo no existe)
-// verifica contra el hash señuelo y devuelve false, para igualar el tiempo.
+// checkPassword verifica la contraseña de u. Si u es nil (el correo no
+// existe) verifica contra el hash señuelo del Hasher: el mismo cálculo, el
+// mismo turno y los mismos errores que con una cuenta real, y nunca coincide.
+// Así el tiempo y la respuesta no revelan si el correo tiene cuenta (RF-04).
+// El señuelo se calculó al arrancar, no depende del contexto de la petición, y
+// una petición cancelada no deja ningún estado.
 func (s *Service) checkPassword(ctx context.Context, u *domain.User, password string) (bool, error) {
-	if u == nil {
-		s.dummyOnce.Do(func() { s.dummyHash, s.dummyErr = s.d.Hasher.Hash(ctx, s.d.DummyHashPwd) })
-		if s.dummyErr == nil {
-			_, _ = s.d.Hasher.Verify(ctx, password, s.dummyHash)
-		}
-		return false, nil
+	encoded := s.d.Hasher.DecoyHash()
+	if u != nil {
+		encoded = u.PasswordHash
 	}
-	ok, err := s.d.Hasher.Verify(ctx, password, u.PasswordHash)
+	ok, err := s.d.Hasher.Verify(ctx, password, encoded)
 	if err != nil {
 		return false, fmt.Errorf("auth: verificar contraseña: %w", err)
 	}
-	return ok, nil
+	return ok && u != nil, nil
 }
 
 // randomID devuelve 16 bytes aleatorios en hexadecimal.

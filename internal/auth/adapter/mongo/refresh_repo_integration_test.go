@@ -12,7 +12,7 @@ import (
 
 func TestIntegrationRefreshRepo(t *testing.T) {
 	ctx := context.Background()
-	repo := NewRefreshRepo(newDB(t))
+	repo := NewRefreshRepo(newSchemaDB(t))
 	for i := 0; i < 2; i++ {
 		if err := repo.EnsureIndexes(ctx); err != nil {
 			t.Fatalf("EnsureIndexes (vez %d): %v", i+1, err)

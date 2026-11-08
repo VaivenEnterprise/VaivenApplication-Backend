@@ -7,6 +7,8 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -30,9 +32,10 @@ type Service interface {
 }
 
 type handlers struct {
-	svc Service
-	dec decoder
-	log *slog.Logger
+	svc     Service
+	dec     decoder
+	log     *slog.Logger
+	account accountLimiter
 }
 
 // fail responde el error con el envoltorio único y registra solo los fallos
@@ -67,6 +70,12 @@ func (h handlers) login(w http.ResponseWriter, r *http.Request) {
 	var req loginRequest
 	if err := h.dec.decode(r.Body, &req); err != nil {
 		h.fail(w, r, err)
+		return
+	}
+	if !h.account.allow(r.Context(), req.Email) {
+		w.Header().Set("Retry-After", strconv.Itoa(int(AccountLoginWindow/time.Second)))
+		respond.Failure(w, r, http.StatusTooManyRequests, "rate_limited",
+			"Hiciste demasiados intentos de inicio de sesión con esta cuenta. Espera unos minutos e intenta de nuevo.")
 		return
 	}
 	res, err := h.svc.Login(r.Context(), usecase.LoginInput{Email: req.Email, Password: req.Password})

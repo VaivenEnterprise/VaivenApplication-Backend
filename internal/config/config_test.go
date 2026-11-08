@@ -54,10 +54,11 @@ func TestLoadDefaults(t *testing.T) {
 			BaseFolder: "vaiven/development",
 		},
 		Auth: Auth{
-			AccessSecret:    Secret(jwtSecret),
-			AccessTTL:       15 * time.Minute,
-			RefreshTTL:      720 * time.Hour,
-			RateLimitPerMin: 10,
+			AccessSecret:            Secret(jwtSecret),
+			AccessTTL:               15 * time.Minute,
+			RefreshTTL:              720 * time.Hour,
+			RateLimitPerMin:         10,
+			LoginAttemptsPerAccount: 20,
 		},
 		Images: Images{MaxBytes: 5 * 1024 * 1024, SignaturesPerHour: 30},
 	}

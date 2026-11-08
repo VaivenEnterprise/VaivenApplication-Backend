@@ -83,6 +83,17 @@ func run() error {
 	}()
 
 	db := mc.Database(cfg.MongoDB)
+	// Validación $jsonSchema (constitución §6.6) antes de los índices: crear
+	// la colección con el validador solo requiere readWrite; aplicarlo a una
+	// existente (collMod) requiere dbAdmin y, sin permiso, se avisa y se sigue.
+	schemas, err := authmongo.EnsureSchemas(ctx, db)
+	if err != nil {
+		return fmt.Errorf("no se pudo aplicar la validación de MongoDB: %w", err)
+	}
+	log.Info("validación $jsonSchema", "creadas", schemas.Created, "actualizadas", schemas.Updated, "sin_cambios", schemas.Unchanged)
+	for _, s := range schemas.Skipped {
+		log.Warn("validación $jsonSchema no aplicada; aplícala con un usuario dbAdmin (docs/servicios.md)", "detalle", s)
+	}
 	userRepo := authmongo.NewUserRepo(db)
 	refreshRepo := authmongo.NewRefreshRepo(db)
 	if err := adaptermongo.EnsureAll(ctx, userRepo, refreshRepo); err != nil {
@@ -193,10 +204,16 @@ func newAuthModule(cfg config.Config, log *slog.Logger, users *authmongo.UserRep
 	if err != nil {
 		return nil, fmt.Errorf("no se pudo configurar JWT: %w", err)
 	}
+	// argon2id con presupuesto de memoria y espera acotada; el señuelo del
+	// login se calcula aquí, al arrancar (P-01, A-07).
+	hasher, err := security.NewHasher(security.DefaultMemoryBudgetKiB, security.DefaultMaxWait)
+	if err != nil {
+		return nil, fmt.Errorf("no se pudo preparar argon2id: %w", err)
+	}
 	svc, err := authusecase.NewService(authusecase.Deps{
 		Users:       users,
 		Refresh:     refresh,
-		Hasher:      security.NewHasher(1),
+		Hasher:      hasher,
 		Access:      jwt,
 		NewRefresh:  security.NewRefreshToken,
 		HashRefresh: security.HashToken,
@@ -206,12 +223,13 @@ func newAuthModule(cfg config.Config, log *slog.Logger, users *authmongo.UserRep
 		return nil, fmt.Errorf("no se pudo crear el servicio de auth: %w", err)
 	}
 	return authhttp.NewModule(authhttp.ModuleDeps{
-		Service:         svc,
-		Tokens:          jwt,
-		Log:             log,
-		Limiter:         limiter,
-		LimiterFallback: redis.NewMemoryLimiter(),
-		LimitPerMinute:  cfg.Auth.RateLimitPerMin,
+		Service:           svc,
+		Tokens:            jwt,
+		Log:               log,
+		Limiter:           limiter,
+		LimiterFallback:   redis.NewMemoryLimiter(),
+		LimitPerMinute:    cfg.Auth.RateLimitPerMin,
+		AccountLoginLimit: cfg.Auth.LoginAttemptsPerAccount,
 	})
 }
 

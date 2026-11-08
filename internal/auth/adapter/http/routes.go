@@ -22,6 +22,9 @@ type ModuleDeps struct {
 	Limiter         ratelimit.Limiter
 	LimiterFallback ratelimit.Limiter
 	LimitPerMinute  int
+	// AccountLoginLimit son los intentos de login por cuenta en
+	// AccountLoginWindow (15 min); 0 desactiva el límite por cuenta.
+	AccountLoginLimit int
 }
 
 // Module registra las rutas de auth, cuenta y usuarios bajo /api/v1 (RF-11).
@@ -37,7 +40,9 @@ func NewModule(d ModuleDeps) (*Module, error) {
 		return nil, errors.New("auth: faltan dependencias del módulo HTTP")
 	}
 	return &Module{
-		h:            handlers{svc: d.Service, dec: newDecoder(), log: d.Log},
+		h: handlers{svc: d.Service, dec: newDecoder(), log: d.Log, account: accountLimiter{
+			primary: d.Limiter, fallback: d.LimiterFallback, limit: d.AccountLoginLimit,
+		}},
 		authenticate: Authenticate(d.Tokens),
 		limit: middleware.RateLimit(d.Limiter, d.LimiterFallback, middleware.RateLimitConfig{
 			Limit: d.LimitPerMinute, Window: time.Minute, KeyPrefix: "auth:",

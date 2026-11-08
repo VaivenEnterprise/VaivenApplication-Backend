@@ -60,7 +60,6 @@ func TestMain(m *testing.M) {
 type api struct {
 	t   *testing.T
 	srv *httptest.Server
-	ip  string
 }
 
 // newAPI arma la API como cmd/api, con una base nueva. accessTTL permite
@@ -71,6 +70,10 @@ func newAPI(t *testing.T, accessTTL time.Duration) *api {
 	db := flowClient.Database(fmt.Sprintf("flow_it_%d", time.Now().UnixNano()))
 	t.Cleanup(func() { _ = db.Drop(context.Background()) })
 
+	// Como cmd/api: validación $jsonSchema antes de los índices.
+	if _, err := authmongo.EnsureSchemas(ctx, db); err != nil {
+		t.Fatal(err)
+	}
 	users, refresh := authmongo.NewUserRepo(db), authmongo.NewRefreshRepo(db)
 	if err := adaptermongo.EnsureAll(ctx, users, refresh); err != nil {
 		t.Fatal(err)
@@ -79,8 +82,12 @@ func newAPI(t *testing.T, accessTTL time.Duration) *api {
 	if err != nil {
 		t.Fatal(err)
 	}
+	hasher, err := security.NewHasher(0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
 	svc, err := usecase.NewService(usecase.Deps{
-		Users: users, Refresh: refresh, Hasher: security.NewHasher(1), Access: jwt,
+		Users: users, Refresh: refresh, Hasher: hasher, Access: jwt,
 		NewRefresh: security.NewRefreshToken, HashRefresh: security.HashToken, RefreshTTL: 720 * time.Hour,
 	})
 	if err != nil {

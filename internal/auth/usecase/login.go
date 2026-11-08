@@ -44,5 +44,26 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (AuthResult, error) 
 	if err != nil {
 		return AuthResult{}, err
 	}
+	s.upgradeHash(ctx, found, in.Password)
 	return AuthResult{User: *found, Tokens: tokens}, nil
+}
+
+// upgradeHash recalcula con los parámetros actuales el hash de una cuenta que
+// acaba de iniciar sesión con un hash antiguo (auditoría 2026-11-07, N2). Solo
+// ocurre con la contraseña correcta, así que no añade un canal de tiempo para
+// intentos fallidos. Es una mejora oportunista: si falla (sin turno, base de
+// datos), el login ya fue correcto y se reintenta en el próximo inicio de
+// sesión; el hash anterior sigue siendo válido.
+func (s *Service) upgradeHash(ctx context.Context, u *domain.User, password string) {
+	if !s.d.Hasher.NeedsRehash(u.PasswordHash) {
+		return
+	}
+	hash, err := s.d.Hasher.Hash(ctx, password)
+	if err != nil {
+		return
+	}
+	if err := s.d.Users.UpdatePasswordHash(ctx, u.ID, hash, s.now()); err != nil {
+		return
+	}
+	u.PasswordHash = hash
 }

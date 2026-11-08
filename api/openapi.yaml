@@ -483,7 +483,10 @@ components:
               message: Tu sesión no es válida o venció. Inicia sesión de nuevo.
               requestId: 43d4c7dbb802d8b3711c8f4163ffc823
     ServiceUnavailable:
-      description: Una dependencia obligatoria (MongoDB) no responde.
+      description: |
+        Una dependencia obligatoria no responde (MongoDB, Cloudinary) o hay
+        demasiadas solicitudes de contraseña en curso (espera de turno de
+        argon2id agotada, 2 s). Se puede reintentar.
       headers:
         X-Request-Id:
           $ref: '#/components/headers/X-Request-Id'

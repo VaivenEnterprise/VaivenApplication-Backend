@@ -7,20 +7,44 @@ on:
   push:
     branches: [develop, main, 'spec/**']
   workflow_dispatch:
+    inputs:
+      runner:
+        description: Imagen de runner para probar (24.04 es la del pipeline)
+        type: choice
+        default: ubuntu-24.04
+        options:
+          - ubuntu-24.04
+          - ubuntu-26.04
   schedule:
     - cron: '17 12 * * 1'
 
 permissions:
   contents: read
 
+# Concurrencia (ver docs/devsecops.md):
+# - pull_request: un grupo por PR; un push nuevo al PR cancela la ejecucion vieja.
+# - push a develop/main/spec/**: nunca se cancela. El grupo lleva el SHA porque,
+#   sin cancelar, GitHub deja solo UNA ejecucion pendiente por grupo y la nueva
+#   reemplaza (cancela) a la pendiente: con tres pushes seguidos el del medio
+#   quedaria sin validar. Con el SHA cada commit tiene su grupo y siempre corre.
+# - workflow_dispatch: grupo por ejecucion (run_id), para comparar runners en paralelo.
+# - schedule: su propio grupo por rama, sin cancelar.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: >-
+    ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}${{
+    github.event_name == 'push' && format('-{0}', github.sha) ||
+    github.event_name == 'workflow_dispatch' && format('-{0}', github.run_id) || '' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Runners: imagen fija (ubuntu-24.04), no ubuntu-latest. En push/PR/schedule
+# `inputs` esta vacio y se usa 24.04; para probar 26.04 se lanza a mano
+# (Actions > CI > Run workflow > runner). Quality necesita Docker (pruebas de
+# integracion con testcontainers) y gcc para cgo (go test -race): ambos vienen
+# en la imagen ubuntu-24.04 de GitHub.
 jobs:
   policy:
     name: Policy
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner || 'ubuntu-24.04' }}
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -34,7 +58,7 @@ jobs:
 
   quality:
     name: Quality
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner || 'ubuntu-24.04' }}
     timeout-minutes: 20
     outputs:
       ready: ${{ steps.project.outputs.ready }}
@@ -67,7 +91,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -z "$(gofmt -l $(git ls-files '*.go'))"
+          test -z "$(git ls-files -z '*.go' | xargs -0 gofmt -l)"
           go mod download
           go mod verify
           go vet ./...
@@ -87,7 +111,7 @@ jobs:
 
   secrets:
     name: Secrets
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner || 'ubuntu-24.04' }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -114,7 +138,7 @@ jobs:
     name: CodeQL
     needs: quality
     if: needs.quality.outputs.ready == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner || 'ubuntu-24.04' }}
     timeout-minutes: 20
     permissions:
       contents: read
@@ -143,7 +167,7 @@ jobs:
     name: Required checks
     if: always()
     needs: [policy, quality, secrets, sast]
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner || 'ubuntu-24.04' }}
     timeout-minutes: 5
     steps:
       - name: Enforce all results
