@@ -1,0 +1,401 @@
+# Objetos (spec 005, T001; Art. IV, V y XII.2). Se referencia desde
+# api/openapi.yaml; los esquemas compartidos viven allí. Dinero siempre en
+# centavos de MXN (enteros). El listado público y la búsqueda (GET /items) son de
+# la spec 006.
+items:
+  post:
+    tags: [objetos]
+    operationId: createItem
+    summary: Publicar un objeto
+    description: |
+      Crea un objeto `active` del que la persona autenticada es dueña (RF-01).
+
+      - Préstamo (`loan`): `pricePerDayCents` debe ser 0 y `priceSource` `manual` (RF-02).
+      - Renta (`rent`): `pricePerDayCents` entre 1000 ($10) y `declaredValueCents`.
+      - `priceSource: suggested` exige que el precio sea igual a la sugerencia de
+        `GET /items/price-suggestion`; el servidor la recalcula (RF-03).
+      - `approxLocation` se redondea a 2 decimales antes de guardarse (RF-04).
+      - `photos`: 1 a 5 imágenes subidas con propósito `item_photo` por la misma
+        persona (POL-13); el servidor las verifica con Cloudinary.
+      - Título, descripción y reglas pasan por moderación (RF-05).
+      - Una cuenta suspendida recibe 403 (RF-12).
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ItemInput'
+          examples:
+            renta:
+              summary: Renta con el precio sugerido
+              value:
+                title: Taladro percutor 600 W
+                description: Incluye estuche y 5 brocas para concreto.
+                category: herramientas_electricas
+                condition: good
+                modality: rent
+                declaredValueCents: 100000
+                pricePerDayCents: 3000
+                priceSource: suggested
+                usageRules: Devolver limpio. No usar en metal.
+                zone:
+                  municipality: Coyoacán
+                  neighborhood: Del Carmen
+                approxLocation:
+                  lat: 19.349512
+                  lng: -99.162301
+                photos:
+                  - publicId: vaiven/staging/item_photo/6730f1c2a9b3e4d5f6a7b8c9/9b2f6c1e4a7d4c0e8f3b5a2d1c6e7f80
+            prestamo:
+              summary: Préstamo gratuito
+              value:
+                title: Escalera de tijera
+                description: Aluminio, 6 peldaños.
+                category: construccion_jardineria
+                condition: like_new
+                modality: loan
+                declaredValueCents: 150000
+                pricePerDayCents: 0
+                priceSource: manual
+                zone:
+                  municipality: Tlalpan
+                photos:
+                  - publicId: vaiven/staging/item_photo/6730f1c2a9b3e4d5f6a7b8c9/2c6e7f809b2f6c1e4a7d4c0e8f3b5a2d
+    responses:
+      '201':
+        description: Objeto publicado.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/Item'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '403':
+        $ref: '../openapi.yaml#/components/responses/Forbidden'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'
+
+priceSuggestion:
+  get:
+    tags: [objetos]
+    operationId: getPriceSuggestion
+    summary: Precio sugerido por día
+    description: |
+      Calcula la sugerencia de POL-04: 3 % del valor declarado por día, mínimo
+      $10 y redondeado hacia arriba a múltiplos de $5. No publica nada (RF-03).
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+      - name: declaredValueCents
+        in: query
+        required: true
+        description: Valor declarado en centavos, de 5000 ($50) a 10000000 ($100,000).
+        schema:
+          type: integer
+          minimum: 5000
+          maximum: 10000000
+        example: 100000
+    responses:
+      '200':
+        description: Sugerencia en centavos.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/PriceSuggestion'
+            example:
+              suggestedPricePerDayCents: 3000
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+itemById:
+  parameters:
+    - name: id
+      in: path
+      required: true
+      description: Identificador del objeto.
+      schema:
+        type: string
+        pattern: '^[0-9a-f]{24}$'
+    - $ref: '../openapi.yaml#/components/parameters/RequestId'
+  get:
+    tags: [objetos]
+    operationId: getItem
+    summary: Detalle de un objeto
+    description: |
+      Devuelve el objeto con el perfil público de quien lo ofrece (RF-06).
+      `active` lo ve cualquier persona autenticada; `paused` y `blocked`, solo su
+      dueño y admin (404 para los demás); `removed`, nadie (404).
+      `declaredValueCents` es null si quien consulta no es el dueño ni admin.
+    responses:
+      '200':
+        description: Detalle del objeto.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/Item'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+  patch:
+    tags: [objetos]
+    operationId: updateItem
+    summary: Editar un objeto (solo el dueño)
+    description: |
+      Cambia los campos enviados (RF-07). `version` es obligatorio: si no
+      coincide con la guardada responde 409 y hay que volver a leer el objeto
+      (control optimista). El objeto resultante debe cumplir las mismas reglas que
+      al publicarlo (modalidad, precio, sugerencia). `photos` reemplaza la lista
+      completa. `usageRules` y `approxLocation` en null los borran. Cambiar el
+      precio no altera reservas existentes (spec 007). Un objeto `blocked` no se
+      puede editar (409).
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ItemUpdate'
+          example:
+            version: 1
+            pricePerDayCents: 3500
+            priceSource: manual
+    responses:
+      '200':
+        description: Objeto actualizado.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/Item'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '403':
+        $ref: '../openapi.yaml#/components/responses/Forbidden'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '409':
+        $ref: '../openapi.yaml#/components/responses/Conflict'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'
+  delete:
+    tags: [objetos]
+    operationId: deleteItem
+    summary: Eliminar un objeto (solo el dueño)
+    description: |
+      Marca el objeto como `removed`; deja de verse para todos (RF-09). Si tiene
+      reservas aceptadas o en curso responde 409 (CA-07). No hay borrado físico.
+    responses:
+      '204':
+        description: Objeto eliminado.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '403':
+        $ref: '../openapi.yaml#/components/responses/Forbidden'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '409':
+        $ref: '../openapi.yaml#/components/responses/Conflict'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+pauseItem:
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^[0-9a-f]{24}$'
+    - $ref: '../openapi.yaml#/components/parameters/RequestId'
+  post:
+    tags: [objetos]
+    operationId: pauseItem
+    summary: Pausar un objeto (solo el dueño)
+    description: |
+      Pasa de `active` a `paused`: no admite solicitudes nuevas y conserva los
+      compromisos existentes (RF-08). Pausar uno ya pausado no cambia nada (200).
+      Un objeto `blocked` responde 409.
+    responses:
+      '200':
+        description: Objeto pausado.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/Item'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '403':
+        $ref: '../openapi.yaml#/components/responses/Forbidden'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '409':
+        $ref: '../openapi.yaml#/components/responses/Conflict'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+resumeItem:
+  parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^[0-9a-f]{24}$'
+    - $ref: '../openapi.yaml#/components/parameters/RequestId'
+  post:
+    tags: [objetos]
+    operationId: resumeItem
+    summary: Reanudar un objeto (solo el dueño)
+    description: |
+      Pasa de `paused` a `active` (RF-08). Reanudar uno activo no cambia nada
+      (200). Un objeto `blocked` responde 409: solo moderación lo desbloquea.
+    responses:
+      '200':
+        description: Objeto activo.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/Item'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '403':
+        $ref: '../openapi.yaml#/components/responses/Forbidden'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '409':
+        $ref: '../openapi.yaml#/components/responses/Conflict'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+myItems:
+  get:
+    tags: [objetos]
+    operationId: listMyItems
+    summary: Mis objetos
+    description: |
+      Lista los objetos de la persona autenticada, más recientes primero (RF-10).
+      Nunca incluye los `removed`. Sin `status` devuelve todos los demás estados.
+      Para la página siguiente se envía `cursor` con el `nextCursor` recibido
+      (null = no hay más).
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [active, paused, blocked]
+      - name: cursor
+        in: query
+        required: false
+        description: Valor opaco de `nextCursor`.
+        schema:
+          type: string
+          maxLength: 128
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 20
+    responses:
+      '200':
+        description: Página de objetos.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/ItemPage'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+categories:
+  get:
+    tags: [objetos]
+    operationId: listCategories
+    summary: Categorías
+    description: Las categorías de POL-14, en el orden en que se muestran (RF-11).
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+    responses:
+      '200':
+        description: Lista de categorías.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '../openapi.yaml#/components/schemas/Category'
+            example:
+              - key: herramientas_manuales
+                label: Herramientas manuales
+              - key: herramientas_electricas
+                label: Herramientas eléctricas
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'

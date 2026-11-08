@@ -1,13 +1,14 @@
 openapi: 3.1.0
 info:
   title: VAIVÉN API
-  version: 0.4.0
+  version: 0.5.0
   summary: API REST del backend de VAIVÉN (préstamo y renta de objetos en México).
   description: |
     Contrato de la spec 002 (arquitectura base): endpoints de infraestructura y
     el envoltorio único de errores (Art. IV de la constitución). La spec 003
     agrega la cuenta y la autenticación (`api/paths/auth.yaml` y `users.yaml`) y
-    la spec 004 las imágenes (`api/paths/uploads.yaml`).
+    la spec 004 las imágenes (`api/paths/uploads.yaml`) y la spec 005 los objetos
+    (`api/paths/items.yaml`).
 
     - Rutas de negocio bajo `/api/v1`; `/healthz` y `/readyz` fuera del prefijo.
     - JSON en `camelCase`; fechas en ISO-8601 UTC.
@@ -36,6 +37,8 @@ tags:
     description: Perfiles públicos (spec 003).
   - name: imagenes
     description: Subida de imágenes a Cloudinary con firma del servidor (spec 004).
+  - name: objetos
+    description: Publicar, editar y pausar objetos; precio sugerido y categorías (spec 005).
 paths:
   /healthz:
     get:
@@ -141,6 +144,20 @@ paths:
     $ref: './paths/users.yaml#/userById'
   /api/v1/uploads/signature:
     $ref: './paths/uploads.yaml#/signature'
+  /api/v1/items:
+    $ref: './paths/items.yaml#/items'
+  /api/v1/items/price-suggestion:
+    $ref: './paths/items.yaml#/priceSuggestion'
+  /api/v1/items/{id}:
+    $ref: './paths/items.yaml#/itemById'
+  /api/v1/items/{id}/pause:
+    $ref: './paths/items.yaml#/pauseItem'
+  /api/v1/items/{id}/resume:
+    $ref: './paths/items.yaml#/resumeItem'
+  /api/v1/me/items:
+    $ref: './paths/items.yaml#/myItems'
+  /api/v1/categories:
+    $ref: './paths/items.yaml#/categories'
 components:
   securitySchemes:
     bearerAuth:
@@ -402,6 +419,247 @@ components:
         thumbUrl:
           type: string
           format: uri
+    CategoryKey:
+      type: string
+      description: Categorías de POL-14.
+      enum: [herramientas_manuales, herramientas_electricas, construccion_jardineria, movilidad, deportes, hogar, otros]
+    Category:
+      type: object
+      required: [key, label]
+      properties:
+        key:
+          $ref: '#/components/schemas/CategoryKey'
+        label:
+          type: string
+    ItemCondition:
+      type: string
+      enum: [new, like_new, good, fair, worn]
+    ItemModality:
+      type: string
+      enum: [loan, rent]
+      description: loan = préstamo gratuito; rent = renta por día.
+    PriceSource:
+      type: string
+      enum: [manual, suggested]
+    ItemStatus:
+      type: string
+      enum: [active, paused, blocked]
+      description: blocked lo pone moderación (spec 011). Los objetos eliminados nunca se devuelven.
+    Zone:
+      type: object
+      required: [municipality]
+      properties:
+        municipality:
+          type: string
+          minLength: 2
+          maxLength: 60
+        neighborhood:
+          type: [string, 'null']
+          maxLength: 60
+    ApproxLocation:
+      type: object
+      description: Ubicación aproximada; el servidor la redondea a 2 decimales (~1 km, RF-04).
+      required: [lat, lng]
+      properties:
+        lat:
+          type: number
+          minimum: -90
+          maximum: 90
+        lng:
+          type: number
+          minimum: -180
+          maximum: 180
+    ItemInput:
+      type: object
+      required: [title, description, category, condition, modality, declaredValueCents, pricePerDayCents, priceSource, zone, photos]
+      properties:
+        title:
+          type: string
+          minLength: 3
+          maxLength: 80
+        description:
+          type: string
+          maxLength: 1000
+        category:
+          $ref: '#/components/schemas/CategoryKey'
+        condition:
+          $ref: '#/components/schemas/ItemCondition'
+        modality:
+          $ref: '#/components/schemas/ItemModality'
+        declaredValueCents:
+          type: integer
+          minimum: 5000
+          maximum: 10000000
+          description: Valor declarado en centavos ($50 a $100,000). Solo lo ven el dueño y admin.
+        pricePerDayCents:
+          type: integer
+          minimum: 0
+          description: 0 en préstamo; en renta de 1000 ($10) al valor declarado.
+        priceSource:
+          $ref: '#/components/schemas/PriceSource'
+        usageRules:
+          type: [string, 'null']
+          maxLength: 500
+        zone:
+          $ref: '#/components/schemas/Zone'
+        approxLocation:
+          oneOf:
+            - $ref: '#/components/schemas/ApproxLocation'
+            - type: 'null'
+        photos:
+          type: array
+          minItems: 1
+          maxItems: 5
+          items:
+            $ref: '#/components/schemas/ImageInput'
+    ItemUpdate:
+      type: object
+      description: Campos a cambiar más la versión leída (control optimista). Al menos un campo además de version.
+      required: [version]
+      minProperties: 2
+      properties:
+        version:
+          type: integer
+          minimum: 1
+        title:
+          type: string
+          minLength: 3
+          maxLength: 80
+        description:
+          type: string
+          maxLength: 1000
+        category:
+          $ref: '#/components/schemas/CategoryKey'
+        condition:
+          $ref: '#/components/schemas/ItemCondition'
+        modality:
+          $ref: '#/components/schemas/ItemModality'
+        declaredValueCents:
+          type: integer
+          minimum: 5000
+          maximum: 10000000
+          description: Valor declarado en centavos ($50 a $100,000). Solo lo ven el dueño y admin.
+        pricePerDayCents:
+          type: integer
+          minimum: 0
+          description: 0 en préstamo; en renta de 1000 ($10) al valor declarado.
+        priceSource:
+          $ref: '#/components/schemas/PriceSource'
+        usageRules:
+          type: [string, 'null']
+          maxLength: 500
+        zone:
+          $ref: '#/components/schemas/Zone'
+        approxLocation:
+          oneOf:
+            - $ref: '#/components/schemas/ApproxLocation'
+            - type: 'null'
+        photos:
+          type: array
+          minItems: 1
+          maxItems: 5
+          items:
+            $ref: '#/components/schemas/ImageInput'
+    Item:
+      type: object
+      required: [id, owner, title, description, category, condition, modality, declaredValueCents, pricePerDayCents, priceSource, usageRules, zone, approxLocation, photos, status, createdAt, updatedAt, version]
+      properties:
+        id:
+          type: string
+        owner:
+          $ref: '#/components/schemas/PublicUser'
+        title:
+          type: string
+        description:
+          type: string
+        category:
+          $ref: '#/components/schemas/CategoryKey'
+        condition:
+          $ref: '#/components/schemas/ItemCondition'
+        modality:
+          $ref: '#/components/schemas/ItemModality'
+        declaredValueCents:
+          type: [integer, 'null']
+          description: null si quien consulta no es el dueño ni admin.
+        pricePerDayCents:
+          type: integer
+        priceSource:
+          $ref: '#/components/schemas/PriceSource'
+        usageRules:
+          type: [string, 'null']
+        zone:
+          $ref: '#/components/schemas/Zone'
+        approxLocation:
+          oneOf:
+            - $ref: '#/components/schemas/ApproxLocation'
+            - type: 'null'
+        photos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Image'
+        status:
+          $ref: '#/components/schemas/ItemStatus'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+      example:
+        id: 6731a2b3c4d5e6f7a8b9c0d1
+        owner:
+          id: 6730f1c2a9b3e4d5f6a7b8c9
+          displayName: Ana
+          ratingAverage: null
+          ratingCount: 0
+          memberSince: '2026-11-06T18:00:00Z'
+        title: Taladro percutor 600 W
+        description: Incluye estuche y 5 brocas para concreto.
+        category: herramientas_electricas
+        condition: good
+        modality: rent
+        declaredValueCents: 100000
+        pricePerDayCents: 3000
+        priceSource: suggested
+        usageRules: Devolver limpio. No usar en metal.
+        zone:
+          municipality: Coyoacán
+          neighborhood: Del Carmen
+        approxLocation:
+          lat: 19.35
+          lng: -99.16
+        photos:
+          - publicId: vaiven/staging/item_photo/6730f1c2a9b3e4d5f6a7b8c9/9b2f6c1e4a7d4c0e8f3b5a2d1c6e7f80
+            width: 1200
+            height: 900
+            format: jpg
+            bytes: 245000
+            delivery: public
+            url: https://res.cloudinary.com/vaiven/image/upload/vaiven/staging/item_photo/6730f1c2a9b3e4d5f6a7b8c9/9b2f6c1e4a7d4c0e8f3b5a2d1c6e7f80.jpg
+            thumbUrl: https://res.cloudinary.com/vaiven/image/upload/c_fill,w_320,h_320/vaiven/staging/item_photo/6730f1c2a9b3e4d5f6a7b8c9/9b2f6c1e4a7d4c0e8f3b5a2d1c6e7f80.jpg
+        status: active
+        createdAt: '2026-11-08T16:00:00Z'
+        updatedAt: '2026-11-08T16:00:00Z'
+        version: 1
+    ItemPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Item'
+        nextCursor:
+          type: [string, 'null']
+    PriceSuggestion:
+      type: object
+      required: [suggestedPricePerDayCents]
+      properties:
+        suggestedPricePerDayCents:
+          type: integer
+          minimum: 1000
     ErrorCode:
       type: string
       description: Códigos permitidos por el Art. IV.3 de la constitución.
@@ -498,6 +756,48 @@ components:
             error:
               code: service_unavailable
               message: El servicio no está disponible por ahora. Intenta de nuevo en unos minutos.
+              requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+    Forbidden:
+      description: La persona no tiene permiso (no es la dueña o su cuenta está suspendida).
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: forbidden
+              message: No tienes permiso para esta acción.
+              requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+    NotFound:
+      description: El recurso no existe o la persona no puede verlo.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: not_found
+              message: No encontramos lo que buscas.
+              requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+    Conflict:
+      description: El estado actual no permite la acción (versión desactualizada, objeto bloqueado o con reservas activas).
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: conflict
+              message: El objeto cambió mientras lo editabas. Vuelve a cargarlo.
               requestId: 43d4c7dbb802d8b3711c8f4163ffc823
     MethodNotAllowed:
       description: Método no permitido para la ruta; usa el código not_found.
