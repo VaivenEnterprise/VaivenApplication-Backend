@@ -39,7 +39,7 @@
   - Aceptación: solo el dueño; `delete` consulta `ActiveBookingChecker` (409 si hay compromisos); estados válidos; expone `items.Moderation` con `Block(ctx, itemID)` y `Snapshot(ctx, itemID)` para la moderación de 011; pruebas
   - Refs: RF-08…RF-10 · CA-05, CA-07
 
-- [ ] **T007** Handlers, DTO y rutas
+- [x] **T007** Handlers, DTO y rutas
   - Archivos: `internal/items/adapter/http/{handler.go, dto.go, routes.go, handler_test.go}`, `cmd/api/modules.go` (una línea)
   - Agente: `dev-go` · Depende de: T001, T006, 003-T010
   - Aceptación: las 8 rutas cumplen el contrato; `declaredValueCents` oculto a terceros; `RequireActive` en crear; fotos con `url` y `thumbUrl`; ruta estática `price-suggestion` antes de `{id}`; pruebas `httptest`

@@ -23,6 +23,10 @@ import (
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/config"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/images"
 	imageshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/images/adapter/http"
+	imgport "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/images/port"
+	itemshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/items/adapter/http"
+	itemsmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/items/adapter/mongo"
+	itemsusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/items/usecase"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/moderation"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/notify"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/platform/logger"
@@ -94,9 +98,19 @@ func run() error {
 	for _, s := range schemas.Skipped {
 		log.Warn("validación $jsonSchema no aplicada; aplícala con un usuario dbAdmin (docs/servicios.md)", "detalle", s)
 	}
+	itemsSchema, err := itemsmongo.EnsureSchema(ctx, db)
+	if err != nil {
+		return fmt.Errorf("no se pudo aplicar la validación de items: %w", err)
+	}
+	if itemsSchema == itemsmongo.SchemaSkipped {
+		log.Warn("validación $jsonSchema de items no aplicada; aplícala con un usuario dbAdmin (docs/servicios.md)")
+	} else {
+		log.Info("validación $jsonSchema de items", "resultado", string(itemsSchema))
+	}
 	userRepo := authmongo.NewUserRepo(db)
 	refreshRepo := authmongo.NewRefreshRepo(db)
-	if err := adaptermongo.EnsureAll(ctx, userRepo, refreshRepo); err != nil {
+	itemRepo := itemsmongo.NewItemRepo(db)
+	if err := adaptermongo.EnsureAll(ctx, userRepo, refreshRepo, itemRepo); err != nil {
 		return fmt.Errorf("no se pudieron crear los índices: %w", err)
 	}
 
@@ -123,7 +137,12 @@ func run() error {
 		return err
 	}
 
-	imagesModule, err := newImagesModule(cfg, log, authModule, limiter)
+	imagesModule, imagesSvc, err := newImagesModule(cfg, log, authModule, limiter)
+	if err != nil {
+		return err
+	}
+
+	itemsModule, err := newItemsModule(log, authModule, userRepo, imagesSvc, itemRepo)
 	if err != nil {
 		return err
 	}
@@ -134,6 +153,7 @@ func run() error {
 		Moderation: moderation.AllowAll{},
 		Auth:       authModule,
 		Images:     imagesModule,
+		Items:      itemsModule,
 		Users:      userRepo,
 	})
 	for _, m := range mods {
@@ -235,7 +255,7 @@ func newAuthModule(cfg config.Config, log *slog.Logger, users *authmongo.UserRep
 
 // newImagesModule arma el módulo de la spec 004: Cloudinary sin SDK, la
 // fachada images.Service y POST /uploads/signature protegido por auth.
-func newImagesModule(cfg config.Config, log *slog.Logger, authModule *authhttp.Module, limiter ratelimit.Limiter) (*imageshttp.Module, error) {
+func newImagesModule(cfg config.Config, log *slog.Logger, authModule *authhttp.Module, limiter ratelimit.Limiter) (*imageshttp.Module, imgport.Service, error) {
 	svc, err := images.New(images.Config{
 		CloudName:  cfg.Cloudinary.CloudName,
 		APIKey:     cfg.Cloudinary.APIKey,
@@ -244,15 +264,38 @@ func newImagesModule(cfg config.Config, log *slog.Logger, authModule *authhttp.M
 		MaxBytes:   cfg.Images.MaxBytes,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("no se pudo configurar Cloudinary: %w", err)
+		return nil, nil, fmt.Errorf("no se pudo configurar Cloudinary: %w", err)
 	}
-	return imageshttp.NewModule(imageshttp.ModuleDeps{
+	mod, err := imageshttp.NewModule(imageshttp.ModuleDeps{
 		Service:           svc,
 		Authenticate:      authModule.Authenticate(),
 		Log:               log,
 		Limiter:           limiter,
 		LimiterFallback:   redis.NewMemoryLimiter(),
 		SignaturesPerHour: cfg.Images.SignaturesPerHour,
+	})
+	return mod, svc, err
+}
+
+// newItemsModule arma el módulo de la spec 005: casos de uso de objetos con
+// images.Service, moderación (vacía hasta la 011), perfiles públicos y
+// RequireActive en POST /items (RF-12). Las reservas (spec 007) aún no
+// existen: NoActiveBookings.
+func newItemsModule(log *slog.Logger, authModule *authhttp.Module, userRepo *authmongo.UserRepo, imgs imgport.Service, repo *itemsmongo.ItemRepo) (*itemshttp.Module, error) {
+	svc, err := itemsusecase.NewService(itemsusecase.Deps{
+		Items:      repo,
+		Images:     imgs,
+		Moderation: moderation.AllowAll{},
+		Users:      userRepo,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return itemshttp.NewModule(itemshttp.ModuleDeps{
+		Service:       svc,
+		Authenticate:  authModule.Authenticate(),
+		RequireActive: authhttp.RequireActive(userRepo.ByID, nil),
+		Log:           log,
 	})
 }
 

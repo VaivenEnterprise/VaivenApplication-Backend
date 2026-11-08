@@ -222,13 +222,14 @@ func rentInput() ItemInput {
 	}
 }
 
-func assertCode(t *testing.T, err error, code shared.Code) *shared.Error {
+// assertCode comprueba el código del error de dominio y devuelve sus detalles.
+func assertCode(t *testing.T, err error, code shared.Code) []shared.Detail {
 	t.Helper()
 	var de *shared.Error
 	if !errors.As(err, &de) || de.Code != code {
 		t.Fatalf("err = %v, want %s", err, code)
 	}
-	return de
+	return de.Details
 }
 
 // --- pruebas ---
@@ -279,8 +280,8 @@ func TestCreateLoanCA01(t *testing.T) {
 	in := rentInput()
 	in.Modality, in.PriceSource = domain.ModalityLoan, domain.PriceManual
 	de := assertCode(t, mustErr(e.svc.Create(context.Background(), owner, in)), shared.CodeValidation)
-	if de.Details[0].Field != "pricePerDayCents" {
-		t.Errorf("detalles = %+v", de.Details)
+	if de[0].Field != "pricePerDayCents" {
+		t.Errorf("detalles = %+v", de)
 	}
 	if e.images.calls != 0 {
 		t.Error("no debe llamar a Cloudinary si los datos son inválidos")
@@ -302,9 +303,9 @@ func TestCreateErrors(t *testing.T) {
 	in.Title = "algo prohibido"
 	in.Description = "raro"
 	de := assertCode(t, mustErr(e.svc.Create(ctx, owner, in)), shared.CodeValidation)
-	if len(de.Details) != 2 || de.Details[0].Field != "title" || de.Details[0].Issue != "contiene una palabra prohibida" ||
-		de.Details[1].Issue != "contiene contenido no permitido" {
-		t.Errorf("detalles = %+v", de.Details)
+	if len(de) != 2 || de[0].Field != "title" || de[0].Issue != "contiene una palabra prohibida" ||
+		de[1].Issue != "contiene contenido no permitido" {
+		t.Errorf("detalles = %+v", de)
 	}
 
 	e.mod.err = errors.New("caído")
@@ -377,8 +378,8 @@ func TestSuggestPriceAndCategories(t *testing.T) {
 		t.Errorf("SuggestPrice = %d %v", got, err)
 	}
 	de := assertCode(t, func() error { _, err := e.svc.SuggestPrice(10); return err }(), shared.CodeValidation)
-	if de.Details[0].Field != "declaredValueCents" {
-		t.Errorf("detalle = %+v", de.Details)
+	if de[0].Field != "declaredValueCents" {
+		t.Errorf("detalle = %+v", de)
 	}
 	if len(e.svc.Categories()) != 7 {
 		t.Error("categorías")
