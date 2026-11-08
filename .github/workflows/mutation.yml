@@ -1,0 +1,60 @@
+# Pruebas de mutación de Go con gremlins (spec 017, T010).
+# Mide si las pruebas detectan cambios en el código de domain, usecase y
+# platform/security. Reporte en el resumen del job y como artefacto.
+name: Mutation
+
+on:
+  workflow_dispatch:
+    inputs:
+      efficacy:
+        description: 'Umbral de eficacia (%): eliminados / (eliminados + vivos)'
+        required: false
+        default: '75'
+      mcover:
+        description: 'Umbral de cobertura de mutantes (%)'
+        required: false
+        default: '70'
+  schedule:
+    - cron: '41 9 * * 0' # semanal, domingo
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mutation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mutation:
+    name: Gremlins
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Install gremlins
+        run: go install github.com/go-gremlins/gremlins/cmd/gremlins@v0.6.0
+      - name: Run mutation tests
+        env:
+          MUTATION_EFFICACY: ${{ inputs.efficacy || '75' }}
+          MUTATION_MCOVER: ${{ inputs.mcover || '70' }}
+          MUTATION_OUT: reports/mutation
+        shell: bash
+        run: |
+          status=0
+          bash scripts/mutation.sh || status=$?
+          cat reports/mutation/summary.md >>"$GITHUB_STEP_SUMMARY"
+          exit "$status"
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mutation-report
+          path: reports/mutation/
+          if-no-files-found: warn
+          retention-days: 30
