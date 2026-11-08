@@ -2,6 +2,7 @@ package mongo
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -39,6 +40,8 @@ type SchemaResult struct {
 	// Updated son las colecciones existentes a las que se aplicó el
 	// validador con collMod.
 	Updated []string
+	// Unchanged son las colecciones que ya tenían el validador esperado.
+	Unchanged []string
 	// Skipped son las colecciones existentes cuyo validador no se pudo
 	// aplicar por falta de permisos (collMod exige el rol dbAdmin); cada
 	// elemento es "<colección>: <motivo>". El llamador lo registra como
@@ -136,11 +139,17 @@ func EnsureSchemas(ctx context.Context, db *drv.Database) (SchemaResult, error) 
 	for _, c := range collectionSchemas() {
 		validator := bson.M{"$jsonSchema": c.schema}
 
-		names, err := db.ListCollectionNames(ctx, bson.D{{Key: "name", Value: c.name}})
+		specs, err := db.ListCollectionSpecifications(ctx, bson.D{{Key: "name", Value: c.name}})
 		if err != nil {
 			return res, fmt.Errorf("%s: listar colecciones: %w", c.name, err)
 		}
-		if len(names) == 0 {
+		if len(specs) == 1 && sameValidation(specs[0].Options, validator) {
+			// Ya tiene este validador (p. ej. lo aplicó un dbAdmin): no hace
+			// falta collMod, que el usuario de la app no puede ejecutar.
+			res.Unchanged = append(res.Unchanged, c.name)
+			continue
+		}
+		if len(specs) == 0 {
 			err := db.CreateCollection(ctx, c.name, options.CreateCollection().
 				SetValidator(validator).
 				SetValidationLevel(schemaValidationLevel).
@@ -171,6 +180,42 @@ func EnsureSchemas(ctx context.Context, db *drv.Database) (SchemaResult, error) 
 		}
 	}
 	return res, nil
+}
+
+// sameValidation indica si las opciones de una colección ya tienen el
+// validador, el nivel y la acción esperados. Compara el contenido normalizado
+// (el orden de las claves de un bson.M no es estable).
+func sameValidation(opts bson.Raw, validator bson.M) bool {
+	var current struct {
+		Validator        bson.M `bson:"validator"`
+		ValidationLevel  string `bson:"validationLevel"`
+		ValidationAction string `bson:"validationAction"`
+	}
+	if len(opts) == 0 || bson.Unmarshal(opts, &current) != nil {
+		return false
+	}
+	if current.ValidationLevel != schemaValidationLevel || current.ValidationAction != schemaValidationAction {
+		return false
+	}
+	a, errA := canonicalJSON(current.Validator)
+	b, errB := canonicalJSON(validator)
+	return errA == nil && errB == nil && a == b
+}
+
+// canonicalJSON serializa v (bson.M anidados) a JSON con las claves ordenadas
+// y los números como float64, para comparar contenido sin depender del orden
+// ni del tipo entero (int32 del servidor frente a int del código).
+func canonicalJSON(v any) (string, error) {
+	b, err := bson.MarshalExtJSON(bson.M{"v": v}, false, false)
+	if err != nil {
+		return "", err
+	}
+	var generic any
+	if err := json.Unmarshal(b, &generic); err != nil {
+		return "", err
+	}
+	out, err := json.Marshal(generic)
+	return string(out), err
 }
 
 // isUnauthorized indica si err es un error del servidor por falta de

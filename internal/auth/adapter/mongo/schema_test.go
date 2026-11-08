@@ -50,3 +50,28 @@ func TestSchemasRequiredFieldsHaveProperties(t *testing.T) {
 		t.Error("collectionSchemas debe cubrir users y refresh_tokens")
 	}
 }
+
+func TestSameValidation(t *testing.T) {
+	validator := bson.M{"$jsonSchema": UsersSchema()}
+	opts := func(v bson.M, level, action string) bson.Raw {
+		raw, err := bson.Marshal(bson.M{"validator": v, "validationLevel": level, "validationAction": action})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return raw
+	}
+	if !sameValidation(opts(validator, "moderate", "error"), validator) {
+		t.Error("el mismo validador debe considerarse igual")
+	}
+	for name, raw := range map[string]bson.Raw{
+		"otro esquema": opts(bson.M{"$jsonSchema": bson.M{"bsonType": "object"}}, "moderate", "error"),
+		"otro nivel":   opts(validator, "strict", "error"),
+		"otra acción":  opts(validator, "moderate", "warn"),
+		"sin opciones": nil,
+		"basura":       {0x01},
+	} {
+		if sameValidation(raw, validator) {
+			t.Errorf("%s: no debe considerarse igual", name)
+		}
+	}
+}

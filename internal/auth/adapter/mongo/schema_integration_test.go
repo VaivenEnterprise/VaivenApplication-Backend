@@ -93,8 +93,27 @@ func TestIntegrationEnsureSchemasFreshDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EnsureSchemas (2): %v", err)
 	}
-	if len(second.Created) != 0 || !slices.Equal(second.Updated, []string{UsersCollection, RefreshTokensCollection}) || len(second.Skipped) != 0 {
+	// La segunda vez el validador ya es el esperado: no se ejecuta collMod
+	// (que el usuario de la app no puede ejecutar en staging).
+	if len(second.Created) != 0 || len(second.Updated) != 0 || len(second.Skipped) != 0 ||
+		!slices.Equal(second.Unchanged, []string{UsersCollection, RefreshTokensCollection}) {
 		t.Errorf("segunda vez = %+v", second)
+	}
+	// Un validador distinto (versión anterior del esquema) se reemplaza.
+	if err := db.RunCommand(ctx, bson.D{
+		{Key: "collMod", Value: UsersCollection},
+		{Key: "validator", Value: bson.M{"$jsonSchema": bson.M{"bsonType": "object", "required": bson.A{"email"}}}},
+		{Key: "validationLevel", Value: "moderate"},
+		{Key: "validationAction", Value: "error"},
+	}).Err(); err != nil {
+		t.Fatal(err)
+	}
+	third, err := EnsureSchemas(ctx, db)
+	if err != nil {
+		t.Fatalf("EnsureSchemas (3): %v", err)
+	}
+	if !slices.Equal(third.Updated, []string{UsersCollection}) || !slices.Equal(third.Unchanged, []string{RefreshTokensCollection}) {
+		t.Errorf("con un validador viejo = %+v", third)
 	}
 	assertValidated(t, db, UsersCollection, "users")
 	assertValidated(t, db, RefreshTokensCollection, "refresh_tokens")

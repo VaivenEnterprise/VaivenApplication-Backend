@@ -90,6 +90,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("no se pudo aplicar la validación de MongoDB: %w", err)
 	}
+	log.Info("validación $jsonSchema", "creadas", schemas.Created, "actualizadas", schemas.Updated, "sin_cambios", schemas.Unchanged)
 	for _, s := range schemas.Skipped {
 		log.Warn("validación $jsonSchema no aplicada; aplícala con un usuario dbAdmin (docs/servicios.md)", "detalle", s)
 	}
