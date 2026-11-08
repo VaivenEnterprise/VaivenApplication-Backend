@@ -290,3 +290,10 @@ func (it Item) WithStatus(pause bool) (Status, bool) {
 	}
 	return target, it.Status != target
 }
+
+// Cursor marca la posición de una página de GET /me/items: el último objeto
+// devuelto (orden createdAt descendente y, a igual fecha, id descendente).
+type Cursor struct {
+	CreatedAt time.Time
+	ID        string
+}

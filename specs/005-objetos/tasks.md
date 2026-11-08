@@ -21,7 +21,7 @@
   - Aceptación: validación de campos y de modalidad/precio; `SuggestPrice(declaredCents)` cumple CA-02 y bordes (mínimo $10, múltiplos de $5); `RoundCoord`; solo stdlib; ≥ 80 %
   - Refs: RF-01…RF-04 · POL-04
 
-- [ ] **T004** Repositorio de objetos en MongoDB
+- [x] **T004** Repositorio de objetos en MongoDB
   - Archivos: `internal/items/adapter/mongo/{item_doc.go, item_repo.go, item_repo_integration_test.go}`
   - Agente: `modelador-mongo` · Depende de: T003, 002-T014
   - Aceptación: colección `items`; índices del plan §3 vía `EnsureIndexes`; crear, buscar por id, actualizar con `version`, listar por dueño y estado con cursor; prueba de integración
