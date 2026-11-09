@@ -94,6 +94,14 @@ func (m *Module) reply(w http.ResponseWriter, r *http.Request, status int, v use
 	respond.JSON(w, status, toBooking(v))
 }
 
+// WriteBooking responde con la reserva actual de quien consulta, igual que GET
+// /bookings/{id}. Los módulos de entrega y de pagos (spec 009) lo usan para
+// devolver el Booking sin repetir su mapeo (Art. XII.4).
+func (m *Module) WriteBooking(w http.ResponseWriter, r *http.Request, id string) {
+	v, err := m.svc.Get(r.Context(), viewer(r), id)
+	m.reply(w, r, http.StatusOK, v, err)
+}
+
 func (m *Module) quote(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	var d []shared.Detail

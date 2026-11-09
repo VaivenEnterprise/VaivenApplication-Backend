@@ -52,6 +52,8 @@ type BookingPayment struct {
 	Status      PaymentStatus
 	ReportedAt  *time.Time
 	ConfirmedAt *time.Time
+	// ReportedNote es la nota opcional del reporte de pago (spec 009).
+	ReportedNote *string
 }
 
 // HistoryEntry es un cambio de estado.
@@ -95,9 +97,17 @@ type Booking struct {
 	CancelledBy    *Role
 	RejectReason   *string
 	ConversationID *string
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	Version        int64
+	// Delivery y Return los llena la spec 009; nil hasta que se registra algo.
+	Delivery    *Handover
+	Return      *Handover
+	IsLate      bool
+	LateAt      *time.Time
+	Adjustments []Adjustment
+	// AffectedBy es la reserva tardía que retrasa esta (spec 009, RF-09).
+	AffectedBy *string
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+	Version    int64
 }
 
 // ItemForBooking son los datos del objeto que necesita una solicitud.

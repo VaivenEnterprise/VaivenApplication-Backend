@@ -230,15 +230,84 @@ type bookingPaymentResponse struct {
 	AmountCents int64      `json:"amountCents"`
 	Status      string     `json:"status"`
 	ReportedAt  *time.Time `json:"reportedAt"`
+	// Note es la nota opcional del reporte de pago (spec 009).
+	Note        *string    `json:"note"`
 	ConfirmedAt *time.Time `json:"confirmedAt"`
+}
+
+// imageResponse, qrStateResponse y stageResponse son Image y Stage
+// (api/openapi.yaml): la etapa de entrega o devolución de la spec 009. Nunca
+// llevan el hash del token (RNF-01).
+type imageResponse struct {
+	PublicID string `json:"publicId"`
+	Width    int    `json:"width"`
+	Height   int    `json:"height"`
+	Format   string `json:"format"`
+	Bytes    int64  `json:"bytes"`
+	Delivery string `json:"delivery"`
+	URL      string `json:"url"`
+	ThumbURL string `json:"thumbUrl"`
+}
+
+type qrStateResponse struct {
+	State     string     `json:"state"`
+	ExpiresAt *time.Time `json:"expiresAt"`
+}
+
+type stageResponse struct {
+	RecordedAt      *time.Time      `json:"recordedAt"`
+	RecordedByID    *string         `json:"recordedById"`
+	ConditionNotes  string          `json:"conditionNotes"`
+	Photos          []imageResponse `json:"photos"`
+	EvidenceVersion int             `json:"evidenceVersion"`
+	QR              qrStateResponse `json:"qr"`
+	ConfirmedAt     *time.Time      `json:"confirmedAt"`
+	ConfirmedByID   *string         `json:"confirmedById"`
+}
+
+// adjustmentResponse es Adjustment: un ajuste registrado, nunca cobrado.
+type adjustmentResponse struct {
+	Type        string `json:"type"`
+	LateDays    int    `json:"lateDays"`
+	AmountCents int64  `json:"amountCents"`
+	Status      string `json:"status"`
+}
+
+func toStage(v *usecase.HandoverView) *stageResponse {
+	if v == nil {
+		return nil
+	}
+	s := v.Stage
+	out := &stageResponse{
+		RecordedAt: utcPtr(s.RecordedAt), RecordedByID: s.RecordedByID, ConditionNotes: s.ConditionNotes,
+		Photos: make([]imageResponse, 0, len(s.Photos)), EvidenceVersion: s.EvidenceVersion,
+		QR:          qrStateResponse{State: string(v.QR), ExpiresAt: utcPtr(v.QRExpiresAt)},
+		ConfirmedAt: utcPtr(s.ConfirmedAt), ConfirmedByID: s.ConfirmedByID,
+	}
+	for i, p := range s.Photos {
+		img := imageResponse{PublicID: p.PublicID, Width: p.Width, Height: p.Height, Format: p.Format, Bytes: p.Bytes, Delivery: string(p.Delivery)}
+		if i < len(v.URLs) {
+			img.URL, img.ThumbURL = v.URLs[i].URL, v.URLs[i].ThumbURL
+		}
+		out.Photos = append(out.Photos, img)
+	}
+	return out
+}
+
+func utcPtr(t *time.Time) *time.Time {
+	if t == nil {
+		return nil
+	}
+	u := t.UTC()
+	return &u
 }
 
 type meetingPointResponse struct {
 	Description string `json:"description"`
 }
 
-// bookingResponse es Booking (api/openapi.yaml). delivery, return, isLate y
-// adjustments los completa la spec 009.
+// bookingResponse es Booking (api/openapi.yaml). delivery, return, isLate,
+// adjustments y affectedBy los completa la spec 009.
 type bookingResponse struct {
 	ID             string                   `json:"id"`
 	Item           bookingItemResponse      `json:"item"`
@@ -258,10 +327,11 @@ type bookingResponse struct {
 	CancelledBy    *string                  `json:"cancelledBy"`
 	RejectReason   *string                  `json:"rejectReason"`
 	ConversationID *string                  `json:"conversationId"`
-	Delivery       *struct{}                `json:"delivery"`
-	Return         *struct{}                `json:"return"`
+	Delivery       *stageResponse           `json:"delivery"`
+	Return         *stageResponse           `json:"return"`
 	IsLate         bool                     `json:"isLate"`
-	Adjustments    []struct{}               `json:"adjustments"`
+	Adjustments    []adjustmentResponse     `json:"adjustments"`
+	AffectedBy     *string                  `json:"affectedBy"`
 	ViewerRole     string                   `json:"viewerRole"`
 	CreatedAt      time.Time                `json:"createdAt"`
 	UpdatedAt      time.Time                `json:"updatedAt"`
@@ -288,7 +358,11 @@ func toBooking(v usecase.BookingView) bookingResponse {
 		CancelReason:   b.CancelReason,
 		RejectReason:   b.RejectReason,
 		ConversationID: b.ConversationID,
-		Adjustments:    []struct{}{},
+		Delivery:       toStage(v.Delivery),
+		Return:         toStage(v.Return),
+		IsLate:         b.IsLate,
+		Adjustments:    make([]adjustmentResponse, 0, len(b.Adjustments)),
+		AffectedBy:     b.AffectedBy,
 		ViewerRole:     string(v.ViewerRole),
 		CreatedAt:      b.CreatedAt.UTC(),
 		UpdatedAt:      b.UpdatedAt.UTC(),
@@ -304,8 +378,11 @@ func toBooking(v usecase.BookingView) bookingResponse {
 	for _, p := range b.Payments {
 		out.Payments = append(out.Payments, bookingPaymentResponse{
 			Stage: string(p.Stage), AmountCents: p.AmountCents, Status: string(p.Status),
-			ReportedAt: p.ReportedAt, ConfirmedAt: p.ConfirmedAt,
+			ReportedAt: p.ReportedAt, Note: p.ReportedNote, ConfirmedAt: p.ConfirmedAt,
 		})
+	}
+	for _, a := range b.Adjustments {
+		out.Adjustments = append(out.Adjustments, adjustmentResponse{Type: a.Type, LateDays: a.LateDays, AmountCents: a.AmountCents, Status: a.Status})
 	}
 	return out
 }

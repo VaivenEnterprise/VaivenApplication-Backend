@@ -31,6 +31,9 @@ import (
 	chatmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/chat/adapter/mongo"
 	chatusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/chat/usecase"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/config"
+	handoverhttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/handover/adapter/http"
+	handovermongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/handover/adapter/mongo"
+	handoverusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/handover/usecase"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/images"
 	imageshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/images/adapter/http"
 	imgport "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/images/port"
@@ -39,6 +42,11 @@ import (
 	itemsusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/items/usecase"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/moderation"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/notify"
+	paymentshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/payments/adapter/http"
+	paymentsmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/payments/adapter/mongo"
+	paymentsdomain "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/payments/domain"
+	paymentsjobs "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/payments/jobs"
+	paymentsusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/payments/usecase"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/platform/logger"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/platform/mongodb"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/platform/redis"
@@ -126,7 +134,8 @@ func run() error {
 	// Los índices de búsqueda (006) van después de los de items (005).
 	bookingRepo := bookingsmongo.NewRepo(db)
 	convRepo, msgRepo := chatmongo.NewConversationRepo(db), chatmongo.NewMessageRepo(db)
-	if err := adaptermongo.EnsureAll(ctx, userRepo, refreshRepo, itemRepo, searchmongo.NewIndexes(db), bookingRepo, convRepo, msgRepo); err != nil {
+	paymentsRepo := paymentsmongo.NewRepo(db)
+	if err := adaptermongo.EnsureAll(ctx, userRepo, refreshRepo, itemRepo, searchmongo.NewIndexes(db), bookingRepo, convRepo, msgRepo, paymentsRepo); err != nil {
 		return fmt.Errorf("no se pudieron crear los índices: %w", err)
 	}
 
@@ -208,11 +217,53 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	// Entrega y devolución (spec 009): evidencia, QR de un solo uso y cambio de
+	// estado atómico. Responde con el mismo Booking que el módulo de reservas.
+	// Las reglas de retraso viven en payments/domain y se inyectan aquí para que
+	// el módulo de entrega no importe al de pagos.
+	lateness, err := paymentsdomain.NewLateness()
+	if err != nil {
+		return err
+	}
+	handoverSvc, err := handoverusecase.NewService(handoverusecase.Deps{
+		Repo: handovermongo.NewStageRepo(db), Bookings: bookingRepo,
+		Images: imagesSvc, Notifier: notifier, Log: log, Lateness: lateness,
+	})
+	if err != nil {
+		return err
+	}
+	handoverModule, err := handoverhttp.NewModule(handoverhttp.ModuleDeps{
+		Service: handoverSvc, Authenticate: authModule.Authenticate(),
+		WriteBooking: bookingsModule.WriteBooking, Log: log,
+	})
+	if err != nil {
+		return err
+	}
+	// Pagos registrados y detección de retrasos (spec 009).
+	paymentsSvc, err := paymentsusecase.NewService(paymentsusecase.Deps{
+		Repo: paymentsRepo, Bookings: bookingRepo, Notifier: notifier, Log: log,
+	})
+	if err != nil {
+		return err
+	}
+	paymentsModule, err := paymentshttp.NewModule(paymentshttp.ModuleDeps{
+		Service: paymentsSvc, Authenticate: authModule.Authenticate(),
+		WriteBooking: bookingsModule.WriteBooking, Log: log,
+	})
+	if err != nil {
+		return err
+	}
 	// Vencimiento de solicitudes cada 60 s (plan 007 P-04); termina con ctx.
 	expirerDone := make(chan struct{})
 	go func() {
 		jobs.RunExpirer(ctx, bookingsSvc, nil, log)
 		close(expirerDone)
+	}()
+	// Devoluciones tardías cada 5 min (plan 009 P-05); termina con ctx.
+	lateDone := make(chan struct{})
+	go func() {
+		paymentsjobs.RunLateDetector(ctx, paymentsSvc, nil, log)
+		close(lateDone)
 	}()
 
 	mods := modules(moduleDeps{
@@ -225,6 +276,8 @@ func run() error {
 		Search:     searchModule,
 		Bookings:   bookingsModule,
 		Chat:       chatModule,
+		Handover:   handoverModule,
+		Payments:   paymentsModule,
 		Users:      userRepo,
 	})
 	for _, m := range mods {
@@ -286,6 +339,7 @@ func run() error {
 		return fmt.Errorf("el servidor se detuvo: %w", err)
 	}
 	<-expirerDone // la tarea termina con ctx; se espera antes de cerrar MongoDB
+	<-lateDone
 	log.Info("servidor detenido")
 	return nil
 }
