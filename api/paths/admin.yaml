@@ -1,0 +1,198 @@
+# Administración de incidencias y sanciones (spec 010, T001; Art. IV, VI y
+# XII.2). Se referencia desde api/openapi.yaml. TODAS las rutas exigen la
+# cuenta con rol `admin` (security `adminAuth`, el mismo JWT de acceso); para
+# cualquier otra persona responden 403 (RF-11, CA-05). No hay panel visual: se
+# usan con scripts/admin.http. Sin apelaciones, escalamiento ni cobros
+# automáticos (spec 010 §5).
+adminIncidents:
+  get:
+    tags: [administracion]
+    operationId: adminListIncidents
+    summary: Cola de incidencias (administración)
+    description: |
+      Lista incidencias para revisarlas (RF-08), las más antiguas primero. `status`
+      filtra por `open` o `closed`; sin él se listan las `open`. Cada incidencia
+      incluye todas sus notas con `visibleToParties`.
+    security:
+      - adminAuth: []
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+      - name: status
+        in: query
+        required: false
+        schema:
+          $ref: '../openapi.yaml#/components/schemas/IncidentStatus'
+      - $ref: '../openapi.yaml#/components/parameters/CursorQuery'
+      - $ref: '../openapi.yaml#/components/parameters/LimitQuery'
+    responses:
+      '200':
+        description: Página de incidencias (vista de administración).
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/IncidentPage'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '403':
+        $ref: '../openapi.yaml#/components/responses/Forbidden'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+adminIncidentNotes:
+  post:
+    tags: [administracion]
+    operationId: adminAddIncidentNote
+    summary: Agregar una nota a una incidencia
+    description: |
+      Agrega una nota (máximo 10 por incidencia; la undécima responde 409). Si
+      `visibleToParties` es verdadero, ambas partes la ven y reciben aviso (evento
+      `incident.note`); si no, es interna. Una incidencia cerrada no admite notas
+      (409).
+    security:
+      - adminAuth: []
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+      - $ref: '../openapi.yaml#/components/parameters/IncidentIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/AddIncidentNoteRequest'
+          example:
+            text: Por favor envía una foto del objeto antes de la entrega.
+            visibleToParties: true
+    responses:
+      '200':
+        description: La incidencia con la nota agregada (vista de administración).
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/Incident'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '403':
+        $ref: '../openapi.yaml#/components/responses/Forbidden'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '409':
+        $ref: '../openapi.yaml#/components/responses/Conflict'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+adminIncidentClose:
+  post:
+    tags: [administracion]
+    operationId: adminCloseIncident
+    summary: Cerrar una incidencia con respuesta final
+    description: |
+      Pasa la incidencia de `open` a `closed` con una respuesta final
+      (`finalResponse`, 5 a 1000 caracteres) y un `outcome` (`none`,
+      `monetary_adjustment` o `restriction`), que solo registra la decisión: no
+      cobra ni restringe nada por sí mismo (la sanción es aparte). Ambas partes
+      ven la respuesta final y reciben aviso (evento `incident.closed`). Cerrar una
+      incidencia ya cerrada responde 409.
+    security:
+      - adminAuth: []
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+      - $ref: '../openapi.yaml#/components/parameters/IncidentIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/CloseIncidentRequest'
+          example:
+            finalResponse: Revisamos la evidencia y acordamos un ajuste con ambas partes.
+            outcome: monetary_adjustment
+    responses:
+      '200':
+        description: La incidencia cerrada (vista de administración).
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/Incident'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '403':
+        $ref: '../openapi.yaml#/components/responses/Forbidden'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '409':
+        $ref: '../openapi.yaml#/components/responses/Conflict'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+adminUserSanctions:
+  post:
+    tags: [administracion]
+    operationId: adminApplySanction
+    summary: Registrar una advertencia o suspensión
+    description: |
+      Registra una sanción a una persona (RF-09). `warning` solo avisa;
+      `suspension` exige `endsAt` (futuro) y suspende la cuenta hasta esa fecha:
+      mientras dure no puede **crear** objetos ni solicitudes (403), pero sigue
+      pudiendo consultar y cerrar lo que ya tiene. Las sanciones no modifican las
+      calificaciones. `incidentId` es opcional y debe existir. La persona recibe
+      aviso (evento `sanction.applied`). Si ya había una suspensión, la última
+      fecha registrada es la que rige.
+    security:
+      - adminAuth: []
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+      - $ref: '../openapi.yaml#/components/parameters/UserIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/SanctionInput'
+          example:
+            type: suspension
+            reason: Daño reiterado a objetos de otras personas.
+            endsAt: '2026-12-09T00:00:00Z'
+            incidentId: 6731c0000000000000000001
+    responses:
+      '201':
+        description: La sanción registrada.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/Sanction'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '403':
+        $ref: '../openapi.yaml#/components/responses/Forbidden'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'

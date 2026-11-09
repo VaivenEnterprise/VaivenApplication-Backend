@@ -9,10 +9,13 @@ import (
 	chathttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/chat/adapter/http"
 	handoverhttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/handover/adapter/http"
 	imageshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/images/adapter/http"
+	incidentshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/incidents/adapter/http"
 	itemshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/items/adapter/http"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/moderation"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/notify"
 	paymentshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/payments/adapter/http"
+	ratingshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ratings/adapter/http"
+	sanctionshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/sanctions/adapter/http"
 	searchhttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/search/adapter/http"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/users"
 )
@@ -40,6 +43,12 @@ type moduleDeps struct {
 	Handover *handoverhttp.Module
 	// Payments es el módulo de pagos y retrasos de la spec 009.
 	Payments *paymentshttp.Module
+	// Ratings es el módulo de calificaciones de la spec 010.
+	Ratings *ratingshttp.Module
+	// Incidents es el módulo de incidencias de la spec 010.
+	Incidents *incidentshttp.Module
+	// Sanctions es el módulo de sanciones de la spec 010.
+	Sanctions *sanctionshttp.Module
 	// Users da perfiles públicos por lote y acciones de administración.
 	Users interface {
 		users.Directory
@@ -53,13 +62,16 @@ type moduleDeps struct {
 func modules(deps moduleDeps) []apihttp.Module {
 	return []apihttp.Module{
 		// Una línea por módulo, en orden de spec:
-		deps.Auth,     // 003 cuenta y autenticación
-		deps.Images,   // 004 imágenes
-		deps.Items,    // 005 objetos
-		deps.Search,   // 006 búsqueda
-		deps.Bookings, // 007 solicitudes y reservas
-		deps.Chat,     // 008 chat privado
-		deps.Handover, // 009 entrega y devolución
-		deps.Payments, // 009 pagos y retrasos
+		deps.Auth,      // 003 cuenta y autenticación
+		deps.Images,    // 004 imágenes
+		deps.Items,     // 005 objetos
+		deps.Search,    // 006 búsqueda
+		deps.Bookings,  // 007 solicitudes y reservas
+		deps.Chat,      // 008 chat privado
+		deps.Handover,  // 009 entrega y devolución
+		deps.Payments,  // 009 pagos y retrasos
+		deps.Ratings,   // 010 calificaciones
+		deps.Incidents, // 010 incidencias
+		deps.Sanctions, // 010 sanciones
 	}
 }

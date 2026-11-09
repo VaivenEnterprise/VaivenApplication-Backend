@@ -65,6 +65,23 @@ const (
 	POL09NoShowNotice           = "Si no te presentas a la entrega o la devolución puede registrarse una incidencia y una advertencia o suspensión."
 )
 
+// POL-08 — Reporte tras devolver: una incidencia se puede abrir hasta 72 h
+// después de completada la reserva, y cada reserva admite como máximo 3
+// incidencias abiertas a la vez (spec 010, RF-05).
+const (
+	POL08IncidentWindowHours = 72
+	POL08MaxOpenIncidents    = 3
+)
+
+// POL-10 — Calificaciones: puntaje de 1 a 5, comentario de hasta 300
+// caracteres y hasta 14 días después de completar la reserva (spec 010, RF-01).
+const (
+	POL10MinScore         = 1
+	POL10MaxScore         = 5
+	POL10MaxCommentChars  = 300
+	POL10RatingWindowDays = 14
+)
+
 // POL-11 — Chat: texto de hasta 1000 caracteres y 30 mensajes por minuto por
 // persona; sin borrado en esta versión (spec 008).
 const (

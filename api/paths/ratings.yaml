@@ -1,0 +1,139 @@
+# Calificaciones entre las partes de una reserva (spec 010, T001; Art. IV y
+# XII.2). Se referencia desde api/openapi.yaml; los esquemas compartidos viven
+# allí. Reglas (POL-10): solo reservas `completed`, solo las dos partes, una
+# calificación por persona y reserva (puntaje 1 a 5, comentario de hasta 300
+# caracteres) dentro de los 14 días siguientes a completarse. La calificada es
+# la otra parte. No se edita ni se borra una calificación.
+bookingRatings:
+  post:
+    tags: [calificaciones]
+    operationId: rateBooking
+    summary: Calificar a la otra parte de una reserva
+    description: |
+      Guarda la calificación y actualiza de forma atómica el promedio y la
+      cantidad del perfil de la persona calificada (RF-01, RF-02).
+
+      - La reserva debe estar `completed` (si no, 409) y la ventana de 14 días
+        desde que se completó no debe haber vencido (si no, 409).
+      - Quien no es parte de la reserva recibe 404.
+      - Una segunda calificación propia a la misma reserva responde 409, también
+        si llegan dos iguales a la vez: solo una se guarda (RNF-01).
+      - `score` es un entero de 1 a 5; `comment` es opcional (hasta 300
+        caracteres; vacío = sin comentario).
+      - Avisa a la persona calificada (RF-10, evento `rating.received`).
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+      - $ref: '../openapi.yaml#/components/parameters/BookingIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/RateRequest'
+          example:
+            score: 5
+            comment: Todo salió muy bien, llegó puntual.
+    responses:
+      '201':
+        description: La calificación guardada.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/Rating'
+            example:
+              id: 6731b0000000000000000010
+              bookingId: 6731a0000000000000000001
+              score: 5
+              comment: Todo salió muy bien, llegó puntual.
+              ratedRole: owner
+              rater:
+                id: 6730f1c2a9b3e4d5f6a7b8c9
+                displayName: Ana
+              createdAt: '2026-11-21T16:00:00Z'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '409':
+        $ref: '../openapi.yaml#/components/responses/Conflict'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+ratingStatus:
+  get:
+    tags: [calificaciones]
+    operationId: getRatingStatus
+    summary: Si puedo calificar esta reserva
+    description: |
+      `canRate` es verdadero si la reserva está `completed`, soy parte, aún no la
+      calificé y estoy dentro de la ventana de 14 días (RF-03). `myRating` es mi
+      calificación o `null`; `expiresAt` es cuándo vence la ventana (`null` si la
+      reserva aún no se completó). Quien no es parte recibe 404.
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+      - $ref: '../openapi.yaml#/components/parameters/BookingIdPath'
+    responses:
+      '200':
+        description: Estado de mi calificación.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/RatingStatus'
+            example:
+              canRate: true
+              myRating: null
+              expiresAt: '2026-12-05T16:00:00Z'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+userRatings:
+  get:
+    tags: [calificaciones]
+    operationId: listUserRatings
+    summary: Calificaciones recibidas por una persona
+    description: |
+      Puntaje, comentario, quién califica (nombre visible) y fecha; las más
+      recientes primero (RF-04). `nextCursor` null = no hay más. Un usuario que
+      no existe responde 404. El promedio y la cantidad están en el perfil público
+      (`GET /api/v1/users/{id}`).
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+      - $ref: '../openapi.yaml#/components/parameters/UserIdPath'
+      - $ref: '../openapi.yaml#/components/parameters/CursorQuery'
+      - $ref: '../openapi.yaml#/components/parameters/LimitQuery'
+    responses:
+      '200':
+        description: Página de calificaciones.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/RatingPage'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
