@@ -1,6 +1,6 @@
 # Tareas 008 — Chat privado (backend)
 
-- **Dueño:** BE-B · **Estado:** sin ejecutar · `[P]` = paralelizable
+- **Dueño:** BE-B · **Estado:** T001–T010 hechas; verificada en staging · `[P]` = paralelizable
 - Puede empezar con el contrato y el dominio antes de que 007 esté integrada.
 
 - [x] **T001** Contrato OpenAPI del chat
@@ -57,7 +57,7 @@
   - Aceptación: veredicto **CONFORME** (revisar que no se expone lectura de la otra parte); hito H3 (backend) marcado
   - Refs: DoD
 
-- [ ] **T010** Despliegue de la spec en Azure (staging)
+- [x] **T010** Despliegue de la spec en Azure (staging)
   - Archivos: `memoria.md` (solo anexar)
   - Agente: `devops-mcp` · Depende de: T009 (y todas las anteriores `[x]`)
   - Aceptación: `make fmt lint test` en verde; `scripts/deploy.sh staging` (construye, envía a la VM y reinicia la API); `/healthz` y `/readyz` devuelven 200 por HTTPS sin `-k`; cada endpoint nuevo de esta spec (`api/paths/<modulo>.yaml`) responde con una petición correcta y una inválida en el formato de error del Art. IV; registros sin secretos ni datos personales; resultado anotado en `memoria.md`. **La spec siguiente no empieza hasta que esta tarea pase.**

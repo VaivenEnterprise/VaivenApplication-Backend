@@ -1,7 +1,7 @@
 # Spec 008 — Chat privado (backend)
 
 - **Dueño:** BE-B · **Prioridad:** P1 · **Ventana:** 10–13 nov · **Depende de:** 007 (puerto `chat.Opener`)
-- **Constitución:** v2.0.0 · **Políticas:** POL-11, POL-16 · **Estado:** Borrador
+- **Constitución:** v2.0.0 · **Políticas:** POL-11, POL-16 · **Estado:** Implementada y verificada en staging (2026-11-09; desviación del Art. I.1 registrada en memoria)
 
 ## 1. Objetivo y por qué
 Que propietario y solicitante coordinen hora, punto de encuentro y medio de pago por una conversación privada ligada a la reserva. Solo texto: sin adjuntos, audios, llamadas, indicadores de escritura ni confirmaciones de lectura.
