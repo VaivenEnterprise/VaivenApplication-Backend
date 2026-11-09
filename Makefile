@@ -8,7 +8,7 @@ LDFLAGS     := -s -w -X main.version=$(APP_VERSION)
 # -race necesita cgo (un compilador de C). Sin él (p. ej. Windows): make test RACE=
 RACE        ?= -race
 
-.PHONY: run up down test test-integration lint fmt build
+.PHONY: run up down test test-integration lint fmt build docs-bundle
 
 run: ## Levanta la API (requiere MongoDB en marcha)
 	go run ./cmd/api
@@ -33,3 +33,9 @@ fmt: ## Formatea el codigo
 
 build: ## Compila bin/api inyectando APP_VERSION
 	go build -ldflags "$(LDFLAGS)" -o $(BIN) ./cmd/api
+
+# Versión fija de Redocly; la misma que usa el CI para detectar desfases.
+REDOCLY := npx --yes @redocly/cli@1.34.5
+
+docs-bundle: ## Empaqueta api/ en internal/adapter/http/docs/openapi.yaml (Swagger UI en /docs)
+	$(REDOCLY) bundle api/openapi.yaml -o internal/adapter/http/docs/openapi.yaml

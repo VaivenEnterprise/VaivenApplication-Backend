@@ -60,7 +60,8 @@ func TestLoadDefaults(t *testing.T) {
 			RateLimitPerMin:         10,
 			LoginAttemptsPerAccount: 20,
 		},
-		Images: Images{MaxBytes: 5 * 1024 * 1024, SignaturesPerHour: 30},
+		Images:      Images{MaxBytes: 5 * 1024 * 1024, SignaturesPerHour: 30},
+		DocsEnabled: true,
 	}
 	if !reflect.DeepEqual(cfg, want) {
 		t.Errorf("load:\n got %+v\nwant %+v", cfg, want)
