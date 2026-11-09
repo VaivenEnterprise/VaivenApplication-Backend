@@ -119,7 +119,7 @@ func (r *memRepo) ListByParty(_ context.Context, userID string, role domain.Role
 		if party != userID || (status != nil && b.Status != *status) {
 			continue
 		}
-		if after != nil && !(b.CreatedAt.Before(after.CreatedAt) || (b.CreatedAt.Equal(after.CreatedAt) && b.ID < after.ID)) {
+		if after != nil && !b.CreatedAt.Before(after.CreatedAt) && (!b.CreatedAt.Equal(after.CreatedAt) || b.ID >= after.ID) {
 			continue
 		}
 		out = append(out, b)
@@ -136,7 +136,7 @@ func (r *memRepo) ListByParty(_ context.Context, userID string, role domain.Role
 	return out, nil
 }
 
-func (r *memRepo) DuePending(_ context.Context, now time.Time, limit int) ([]domain.Booking, error) {
+func (r *memRepo) DuePending(_ context.Context, now time.Time, _ int) ([]domain.Booking, error) {
 	if err := r.fail["DuePending"]; err != nil {
 		return nil, err
 	}

@@ -28,7 +28,7 @@ var (
 	ErrVersionConflict = shared.NewConflict("La solicitud cambió mientras la procesabas. Vuelve a cargarla.")
 )
 
-// ErrQuoteChanged: el total cambió desde la cotización (RF-02, CA-03). Es
+// ErrQuoteChanged indica que el total cambió desde la cotización (RF-02, CA-03). Es
 // 409 conflict con el detalle acceptedTotalCents: quote_changed.
 var ErrQuoteChanged = &shared.Error{
 	Code:    shared.CodeConflict,
@@ -36,10 +36,10 @@ var ErrQuoteChanged = &shared.Error{
 	Details: []shared.Detail{{Field: "acceptedTotalCents", Issue: "quote_changed"}},
 }
 
-// ErrReasonRequired: cancelar una reserva aceptada exige motivo (RF-08).
+// ErrReasonRequired indica que cancelar una reserva aceptada exige motivo (RF-08).
 var ErrReasonRequired = shared.NewValidation(MessageInvalidData,
 	shared.Detail{Field: "reason", Issue: "es obligatorio (3 a 200 caracteres) al cancelar una reserva aceptada"})
 
-// ErrMeetingPointRequired: el punto de encuentro no puede quedar vacío.
+// ErrMeetingPointRequired indica que el punto de encuentro no puede quedar vacío.
 var ErrMeetingPointRequired = shared.NewValidation(MessageInvalidData,
 	shared.Detail{Field: "description", Issue: "es obligatorio (3 a 200 caracteres)"})

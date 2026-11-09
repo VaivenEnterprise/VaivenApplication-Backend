@@ -38,8 +38,8 @@ const (
 	POL02MaxDays = 7
 )
 
-// POL-03 — Vencimiento de una solicitud: 48 h o al llegar la fecha de
-// inicio, lo primero (spec 007).
+// POL03RequestExpiryHours es el vencimiento de una solicitud (POL-03): 48 h o
+// al llegar la fecha de inicio, lo primero (spec 007).
 const POL03RequestExpiryHours = 48
 
 // POL-05 — Modalidades de pago de una renta: todo en la entrega o 50/50

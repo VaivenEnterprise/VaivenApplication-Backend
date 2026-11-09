@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"fmt"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -41,7 +42,7 @@ type PriceSnapshot struct {
 // PaymentStatus es el estado de un pago (lo avanza la spec 009).
 type PaymentStatus string
 
-// Estados de pago.
+// PaymentPending es un pago aún no reportado.
 const PaymentPending PaymentStatus = "pending"
 
 // BookingPayment es un pago esperado de la reserva.
@@ -155,12 +156,13 @@ func NewRequest(id, requesterID string, it ItemForBooking, q Quote, now time.Tim
 
 // RoleOf devuelve el papel de userID, si es parte.
 func (b Booking) RoleOf(userID string) (Role, bool) {
-	switch {
-	case userID == "":
+	if userID == "" {
 		return "", false
-	case userID == b.OwnerID:
+	}
+	switch userID {
+	case b.OwnerID:
 		return RoleOwner, true
-	case userID == b.RequesterID:
+	case b.RequesterID:
 		return RoleRequester, true
 	}
 	return "", false
@@ -195,9 +197,9 @@ func NormalizeText(field string, s *string, minLen, maxLen int) (*string, error)
 
 func lengthIssue(minLen, maxLen int) string {
 	if minLen <= 1 {
-		return "debe tener como máximo 200 caracteres"
+		return fmt.Sprintf("debe tener como máximo %d caracteres", maxLen)
 	}
-	return "debe tener entre 3 y 200 caracteres"
+	return fmt.Sprintf("debe tener entre %d y %d caracteres", minLen, maxLen)
 }
 
 // Cursor marca la posición de una página de GET /me/bookings (createdAt
