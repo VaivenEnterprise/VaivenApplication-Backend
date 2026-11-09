@@ -15,7 +15,7 @@
   - Aceptación: validación de parámetros (RF-08, P-02); cursor codifica/decodifica y rechaza basura; solo stdlib; ≥ 80 %
   - Refs: RF-01, RF-07, RF-08
 
-- [ ] **T003** Constructor de pipelines
+- [x] **T003** Constructor de pipelines
   - Archivos: `internal/search/adapter/mongo/pipelines.go`, `internal/search/adapter/mongo/pipelines_test.go`
   - Agente: `modelador-mongo` · Depende de: T002
   - Aceptación: función pura que genera los 3 modos del plan §3 con cursor y disponibilidad; pruebas *golden* por modo; regex escapado
