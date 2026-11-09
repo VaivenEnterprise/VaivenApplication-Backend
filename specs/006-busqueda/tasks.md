@@ -1,6 +1,6 @@
 # Tareas 006 — Búsqueda (backend)
 
-- **Dueño:** BE-B · **Estado:** T001–T009 hechas · `[P]` = paralelizable
+- **Dueño:** BE-B · **Estado:** T001–T010 hechas; verificada en staging · `[P]` = paralelizable
 - Puede arrancar con documentos de `items` sembrados a mano según el modelo de 005 plan §3; se cierra cuando 005 esté desplegada.
 
 - [x] **T001** Contrato OpenAPI de búsqueda
@@ -57,7 +57,7 @@
   - Aceptación: veredicto **CONFORME**; hito H2 (backend) marcado
   - Refs: DoD
 
-- [ ] **T010** Despliegue de la spec en Azure (staging)
+- [x] **T010** Despliegue de la spec en Azure (staging)
   - Archivos: `memoria.md` (solo anexar)
   - Agente: `devops-mcp` · Depende de: T009 (y todas las anteriores `[x]`)
   - Aceptación: `make fmt lint test` en verde; `scripts/deploy.sh staging` (construye, envía a la VM y reinicia la API); `/healthz` y `/readyz` devuelven 200 por HTTPS sin `-k`; cada endpoint nuevo de esta spec (`api/paths/<modulo>.yaml`) responde con una petición correcta y una inválida en el formato de error del Art. IV; registros sin secretos ni datos personales; resultado anotado en `memoria.md`. **La spec siguiente no empieza hasta que esta tarea pase.**
