@@ -9,7 +9,7 @@
   - Aceptación: las 5 rutas del plan §2, esquemas `Conversation` y `Message`, ejemplos de `before` y `after`
   - Refs: Art. IV, XII
 
-- [ ] **T002** [P] Dominio del chat
+- [x] **T002** [P] Dominio del chat
   - Archivos: `internal/chat/domain/{conversation.go, message.go, errors.go}`, `internal/chat/domain/domain_test.go`
   - Agente: `dev-go` · Depende de: 002-T006
   - Aceptación: `NewMessage` valida cuerpo (1–1000 runas, no solo espacios); `Conversation.CanWrite(bookingStatus, counterpartActive)`; solo stdlib; ≥ 80 %
