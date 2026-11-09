@@ -38,6 +38,25 @@ const (
 	POL02MaxDays = 7
 )
 
+// POL03RequestExpiryHours es el vencimiento de una solicitud (POL-03): 48 h o
+// al llegar la fecha de inicio, lo primero (spec 007).
+const POL03RequestExpiryHours = 48
+
+// POL-05 — Modalidades de pago de una renta: todo en la entrega o 50/50
+// (entrega = ceil(total/2), devolución = floor(total/2)). El cálculo vive en
+// bookings/domain.SplitPayments.
+const (
+	POL05FullOnDelivery = "full_on_delivery"
+	POL05Split5050      = "split_50_50"
+)
+
+// POL-09 — Cancelación tardía y ausencia: sin monto automático; se informa
+// antes de solicitar (spec 007, RF-01).
+const (
+	POL09LateCancellationNotice = "Cancelar tarde no tiene cargo automático, pero puede registrarse una incidencia."
+	POL09NoShowNotice           = "Si no te presentas a la entrega o la devolución puede registrarse una incidencia y una advertencia o suspensión."
+)
+
 // POL-13 — Fotos: de 1 a 5 por objeto.
 const (
 	POL13MinItemPhotos = 1

@@ -5,6 +5,7 @@ import (
 
 	apihttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http"
 	authhttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/adapter/http"
+	bookingshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/bookings/adapter/http"
 	imageshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/images/adapter/http"
 	itemshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/items/adapter/http"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/moderation"
@@ -28,6 +29,8 @@ type moduleDeps struct {
 	Items *itemshttp.Module
 	// Search es el módulo de la spec 006 (búsqueda).
 	Search *searchhttp.Module
+	// Bookings es el módulo de la spec 007 (solicitudes y reservas).
+	Bookings *bookingshttp.Module
 	// Users da perfiles públicos por lote y acciones de administración.
 	Users interface {
 		users.Directory
@@ -41,9 +44,10 @@ type moduleDeps struct {
 func modules(deps moduleDeps) []apihttp.Module {
 	return []apihttp.Module{
 		// Una línea por módulo, en orden de spec:
-		deps.Auth,   // 003 cuenta y autenticación
-		deps.Images, // 004 imágenes
-		deps.Items,  // 005 objetos
-		deps.Search, // 006 búsqueda
+		deps.Auth,     // 003 cuenta y autenticación
+		deps.Images,   // 004 imágenes
+		deps.Items,    // 005 objetos
+		deps.Search,   // 006 búsqueda
+		deps.Bookings, // 007 solicitudes y reservas
 	}
 }

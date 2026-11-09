@@ -1,14 +1,15 @@
 openapi: 3.1.0
 info:
   title: VAIVÉN API
-  version: 0.6.0
+  version: 0.7.0
   summary: API REST del backend de VAIVÉN (préstamo y renta de objetos en México).
   description: |
     Contrato de la spec 002 (arquitectura base): endpoints de infraestructura y
     el envoltorio único de errores (Art. IV de la constitución). La spec 003
     agrega la cuenta y la autenticación (`api/paths/auth.yaml` y `users.yaml`) y
     la spec 004 las imágenes (`api/paths/uploads.yaml`) y la spec 005 los objetos
-    (`api/paths/items.yaml`); la spec 006 la búsqueda (`api/paths/search.yaml`).
+    (`api/paths/items.yaml`); la spec 006 la búsqueda (`api/paths/search.yaml`) y la
+    spec 007 las solicitudes y reservas (`api/paths/bookings.yaml`).
 
     - Rutas de negocio bajo `/api/v1`; `/healthz` y `/readyz` fuera del prefijo.
     - JSON en `camelCase`; fechas en ISO-8601 UTC.
@@ -41,6 +42,8 @@ tags:
     description: Publicar, editar y pausar objetos; precio sugerido y categorías (spec 005).
   - name: busqueda
     description: Buscar objetos por texto, categoría, zona, cercanía y fechas (spec 006).
+  - name: reservas
+    description: Cotizar, solicitar, aceptar, rechazar y cancelar reservas (spec 007).
 paths:
   /healthz:
     get:
@@ -1111,6 +1114,357 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+  /api/v1/items/{id}/quote:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Identificador del objeto.
+        schema:
+          type: string
+          pattern: ^[0-9a-f]{24}$
+      - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+        - reservas
+      operationId: quoteBooking
+      summary: Cotizar un periodo
+      description: |
+        Devuelve días, tarifa, total, desglose de pagos (POL-05) y los textos de
+        política (POL-03, POL-09) **antes** de solicitar. No crea nada (RF-01).
+
+        - `days = (endDate − startDate) + 1`, de 1 a 7 (POL-02); `startDate` no puede
+          ser anterior a hoy en Ciudad de México.
+        - Préstamo: total 0 y `paymentMode=none`. Renta: `full_on_delivery` o
+          `split_50_50` (entrega `ceil(total/2)`, devolución `floor(total/2)`).
+        - El objeto debe estar `active` y no ser de quien cotiza.
+      parameters:
+        - name: startDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          example: '2026-11-10'
+        - name: endDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          example: '2026-11-12'
+        - name: paymentMode
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/PaymentMode'
+      responses:
+        '200':
+          description: Cotización.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quote'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/bookings:
+    post:
+      tags:
+        - reservas
+      operationId: createBooking
+      summary: Solicitar un objeto
+      description: |
+        Crea una solicitud `pending` (RF-02). Se envía el `acceptedTotalCents` que
+        mostró la cotización: si el total actual es otro responde 409 con el detalle
+        `acceptedTotalCents: quote_changed` (CA-03) y hay que volver a cotizar.
+
+        - No se solicita un objeto propio (403); el objeto debe estar `active`; sin
+          cruce con reservas aceptadas o en curso; no se repite una solicitud
+          pendiente propia que se cruce (409).
+        - Guarda una instantánea (título, reglas, primera foto, tarifa y total): un
+          cambio posterior del objeto no la altera (RF-04).
+        - Vence a las 48 h o al empezar el día de `startDate`, lo primero (POL-03).
+        - Abre la conversación de la reserva y notifica al propietario (RF-12).
+        - Una cuenta suspendida recibe 403.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookingRequest'
+            example:
+              itemId: 6731a2b3c4d5e6f7a8b9c0d1
+              startDate: '2026-11-10'
+              endDate: '2026-11-12'
+              paymentMode: split_50_50
+              acceptedTotalCents: 9000
+      responses:
+        '201':
+          description: Solicitud creada.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/bookings/{id}:
+    parameters:
+      - $ref: '#/components/parameters/BookingId'
+      - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+        - reservas
+      operationId: getBooking
+      summary: Detalle de una solicitud o reserva
+      description: |
+        Solo las dos partes y admin (404 para los demás). El punto de encuentro solo
+        lo ven las dos partes. Una pendiente ya vencida se muestra `expired` (RF-06).
+      responses:
+        '200':
+          $ref: '#/components/responses/BookingOk'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/me/bookings:
+    get:
+      tags:
+        - reservas
+      operationId: listMyBookings
+      summary: Mis solicitudes y reservas
+      description: |
+        Por rol (`owner`: las que recibo como propietario; `requester`: las que
+        envié) y estado opcional, más recientes primero (RF-10). `nextCursor` null =
+        no hay más.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: role
+          in: query
+          required: true
+          schema:
+            type: string
+            enum:
+              - owner
+              - requester
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/BookingStatus'
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 128
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        '200':
+          description: Página de solicitudes y reservas.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingPage'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/bookings/{id}/accept:
+    parameters:
+      - $ref: '#/components/parameters/BookingId'
+      - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+        - reservas
+      operationId: acceptBooking
+      summary: Aceptar (propietario)
+      description: |
+        Reserva el periodo de forma atómica (RF-07): si otra reserva aceptada o en
+        curso se cruza responde 409 y no cambia nada (CA-05). Las demás solicitudes
+        pendientes que se cruzan pasan a `rejected` con motivo `no_disponible`.
+        Solo una solicitud `pending` y no vencida.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcceptBookingRequest'
+            example:
+              meetingPoint:
+                description: Entrada principal del metro Coyoacán.
+      responses:
+        '200':
+          $ref: '#/components/responses/BookingOk'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/bookings/{id}/reject:
+    parameters:
+      - $ref: '#/components/parameters/BookingId'
+      - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+        - reservas
+      operationId: rejectBooking
+      summary: Rechazar (propietario)
+      description: Rechaza una solicitud `pending`; `reason` es opcional (≤ 200 caracteres).
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RejectBookingRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/BookingOk'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/bookings/{id}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/BookingId'
+      - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+        - reservas
+      operationId: cancelBooking
+      summary: Cancelar
+      description: |
+        `pending`: solo quien solicitó. `accepted`: cualquiera de las partes, con
+        `reason` obligatorio (3 a 200 caracteres). Libera el periodo (CA-08) y
+        conserva el motivo y el historial (RF-08). Sin cargo automático (POL-09).
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelBookingRequest'
+            example:
+              reason: Ya no lo necesito, gracias.
+      responses:
+        '200':
+          $ref: '#/components/responses/BookingOk'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/bookings/{id}/meeting-point:
+    parameters:
+      - $ref: '#/components/parameters/BookingId'
+      - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+        - reservas
+      operationId: setBookingMeetingPoint
+      summary: Punto de encuentro (propietario)
+      description: Fija o cambia el punto de encuentro de una reserva `accepted` o `in_progress` (RF-09). Solo lo ven las dos partes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MeetingPoint'
+      responses:
+        '200':
+          $ref: '#/components/responses/BookingOk'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
 components:
   securitySchemes:
     bearerAuth:
@@ -1128,6 +1482,14 @@ components:
         type: string
         maxLength: 64
         pattern: ^[A-Za-z0-9-]{1,64}$
+    BookingId:
+      name: id
+      in: path
+      required: true
+      description: Identificador de la solicitud o reserva.
+      schema:
+        type: string
+        pattern: ^[0-9a-f]{24}$
   headers:
     X-Request-Id:
       description: Identificador de la petición (el recibido si era válido o uno nuevo).
@@ -1844,6 +2206,363 @@ components:
           type:
             - string
             - 'null'
+    CalendarDate:
+      type: string
+      format: date
+      description: Fecha de calendario YYYY-MM-DD en America/Mexico_City (excepción documentada al Art. V).
+    PaymentMode:
+      type: string
+      enum:
+        - none
+        - full_on_delivery
+        - split_50_50
+      description: none solo en préstamo; en renta full_on_delivery o split_50_50 (POL-05).
+    BookingStatus:
+      type: string
+      enum:
+        - pending
+        - accepted
+        - rejected
+        - expired
+        - cancelled
+        - in_progress
+        - completed
+    PaymentStage:
+      type: string
+      enum:
+        - delivery
+        - return
+    QuotePayment:
+      type: object
+      required:
+        - stage
+        - amountCents
+      properties:
+        stage:
+          $ref: '#/components/schemas/PaymentStage'
+        amountCents:
+          type: integer
+          minimum: 0
+    Quote:
+      type: object
+      required:
+        - itemId
+        - startDate
+        - endDate
+        - days
+        - modality
+        - pricePerDayCents
+        - totalCents
+        - currency
+        - paymentMode
+        - payments
+        - policy
+      properties:
+        itemId:
+          type: string
+        startDate:
+          $ref: '#/components/schemas/CalendarDate'
+        endDate:
+          $ref: '#/components/schemas/CalendarDate'
+        days:
+          type: integer
+          minimum: 1
+          maximum: 7
+        modality:
+          $ref: '#/components/schemas/ItemModality'
+        pricePerDayCents:
+          type: integer
+        totalCents:
+          type: integer
+        currency:
+          type: string
+          const: MXN
+        paymentMode:
+          $ref: '#/components/schemas/PaymentMode'
+        payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuotePayment'
+        policy:
+          type: object
+          required:
+            - requestExpiresInHours
+            - lateCancellationNotice
+            - noShowNotice
+          properties:
+            requestExpiresInHours:
+              type: integer
+              const: 48
+            lateCancellationNotice:
+              type: string
+            noShowNotice:
+              type: string
+      example:
+        itemId: 6731a2b3c4d5e6f7a8b9c0d1
+        startDate: '2026-11-10'
+        endDate: '2026-11-12'
+        days: 3
+        modality: rent
+        pricePerDayCents: 3000
+        totalCents: 9000
+        currency: MXN
+        paymentMode: split_50_50
+        payments:
+          - stage: delivery
+            amountCents: 4500
+          - stage: return
+            amountCents: 4500
+        policy:
+          requestExpiresInHours: 48
+          lateCancellationNotice: Cancelar tarde no tiene cargo automático, pero puede registrarse una incidencia.
+          noShowNotice: Si no te presentas a la entrega o la devolución puede registrarse una incidencia y una advertencia o suspensión.
+    BookingRequest:
+      type: object
+      required:
+        - itemId
+        - startDate
+        - endDate
+        - paymentMode
+        - acceptedTotalCents
+      properties:
+        itemId:
+          type: string
+          pattern: ^[0-9a-f]{24}$
+        startDate:
+          $ref: '#/components/schemas/CalendarDate'
+        endDate:
+          $ref: '#/components/schemas/CalendarDate'
+        paymentMode:
+          $ref: '#/components/schemas/PaymentMode'
+        acceptedTotalCents:
+          type: integer
+          minimum: 0
+          description: Total que mostró la cotización; si cambió, 409 con detalle quote_changed.
+    MeetingPoint:
+      type: object
+      required:
+        - description
+      properties:
+        description:
+          type: string
+          minLength: 3
+          maxLength: 200
+    AcceptBookingRequest:
+      type: object
+      properties:
+        meetingPoint:
+          $ref: '#/components/schemas/MeetingPoint'
+    RejectBookingRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 200
+    CancelBookingRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 200
+          description: Obligatorio al cancelar una reserva accepted.
+    BookingPayment:
+      type: object
+      required:
+        - stage
+        - amountCents
+        - status
+        - reportedAt
+        - confirmedAt
+      properties:
+        stage:
+          $ref: '#/components/schemas/PaymentStage'
+        amountCents:
+          type: integer
+        status:
+          type: string
+          enum:
+            - pending
+            - reported
+            - confirmed
+          description: La spec 009 registra y confirma los pagos.
+        reportedAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        confirmedAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+    Stage:
+      type:
+        - object
+        - 'null'
+      description: Marcador de entrega o devolución; la spec 009 define su contenido. Hoy siempre null.
+    Booking:
+      type: object
+      required:
+        - id
+        - item
+        - owner
+        - requester
+        - startDate
+        - endDate
+        - days
+        - usageRules
+        - priceSnapshot
+        - paymentMode
+        - payments
+        - status
+        - expiresAt
+        - meetingPoint
+        - cancelReason
+        - cancelledBy
+        - rejectReason
+        - conversationId
+        - delivery
+        - return
+        - isLate
+        - adjustments
+        - viewerRole
+        - createdAt
+        - updatedAt
+        - version
+      properties:
+        id:
+          type: string
+        item:
+          type: object
+          required:
+            - id
+            - title
+            - thumbUrl
+            - modality
+          properties:
+            id:
+              type: string
+            title:
+              type: string
+              description: Título de la instantánea (RF-04).
+            thumbUrl:
+              type:
+                - string
+                - 'null'
+              format: uri
+            modality:
+              $ref: '#/components/schemas/ItemModality'
+        owner:
+          $ref: '#/components/schemas/PublicUser'
+        requester:
+          $ref: '#/components/schemas/PublicUser'
+        startDate:
+          $ref: '#/components/schemas/CalendarDate'
+        endDate:
+          $ref: '#/components/schemas/CalendarDate'
+        days:
+          type: integer
+        usageRules:
+          type:
+            - string
+            - 'null'
+          description: Reglas de uso de la instantánea.
+        priceSnapshot:
+          type: object
+          required:
+            - modality
+            - pricePerDayCents
+            - totalCents
+            - currency
+          properties:
+            modality:
+              $ref: '#/components/schemas/ItemModality'
+            pricePerDayCents:
+              type: integer
+            totalCents:
+              type: integer
+            currency:
+              type: string
+              const: MXN
+        paymentMode:
+          $ref: '#/components/schemas/PaymentMode'
+        payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookingPayment'
+        status:
+          $ref: '#/components/schemas/BookingStatus'
+        expiresAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+          description: Solo en pending.
+        meetingPoint:
+          oneOf:
+            - $ref: '#/components/schemas/MeetingPoint'
+            - type: 'null'
+        cancelReason:
+          type:
+            - string
+            - 'null'
+        cancelledBy:
+          type:
+            - string
+            - 'null'
+          enum:
+            - owner
+            - requester
+            - null
+        rejectReason:
+          type:
+            - string
+            - 'null'
+          description: Motivo del rechazo; no_disponible si se aceptó otra solicitud que se cruzaba (RF-07).
+        conversationId:
+          type:
+            - string
+            - 'null'
+        delivery:
+          $ref: '#/components/schemas/Stage'
+        return:
+          $ref: '#/components/schemas/Stage'
+        isLate:
+          type: boolean
+        adjustments:
+          type: array
+          description: Ajustes por retraso (spec 009). Hoy vacío.
+          items:
+            type: object
+        viewerRole:
+          type: string
+          enum:
+            - owner
+            - requester
+            - admin
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+    BookingPage:
+      type: object
+      required:
+        - items
+        - nextCursor
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Booking'
+        nextCursor:
+          type:
+            - string
+            - 'null'
     ErrorCode:
       type: string
       description: Códigos permitidos por el Art. IV.3 de la constitución.
@@ -2035,3 +2754,12 @@ components:
               code: internal_error
               message: Ocurrió un error inesperado. Intenta de nuevo.
               requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+    BookingOk:
+      description: Solicitud o reserva.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Booking'
