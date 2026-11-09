@@ -1,6 +1,6 @@
 # Tareas 006 — Búsqueda (backend)
 
-- **Dueño:** BE-B · **Estado:** sin ejecutar · `[P]` = paralelizable
+- **Dueño:** BE-B · **Estado:** T001–T009 hechas · `[P]` = paralelizable
 - Puede arrancar con documentos de `items` sembrados a mano según el modelo de 005 plan §3; se cierra cuando 005 esté desplegada.
 
 - [x] **T001** Contrato OpenAPI de búsqueda
@@ -51,7 +51,7 @@
   - Aceptación: con 5,000 objetos sembrados, p95 < 500 ms en los 3 modos; resultado anotado en `memoria.md`
   - Refs: RF-09
 
-- [ ] **T009** Memoria y revisión
+- [x] **T009** Memoria y revisión
   - Archivos: `memoria.md` (solo anexar)
   - Agente: `revisor-constitucion` · Depende de: T006, T007
   - Aceptación: veredicto **CONFORME**; hito H2 (backend) marcado

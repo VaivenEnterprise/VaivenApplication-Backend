@@ -272,6 +272,9 @@ func TestIntegrationExclusionsCA05(t *testing.T) {
 	if got := ids(s.search(domain.Query{ViewerID: yo, Municipality: "COYOACÁN"})); len(got) != 3 {
 		t.Errorf("municipio sin mayúsculas = %v", got)
 	}
+	if got := ids(s.search(domain.Query{ViewerID: yo, Municipality: "coyoacan"})); len(got) != 3 {
+		t.Errorf("municipio sin acentos = %v", got)
+	}
 	if got := ids(s.search(domain.Query{ViewerID: yo, Municipality: "Coyo"})); len(got) != 0 {
 		t.Errorf("municipio parcial = %v", got)
 	}
@@ -305,8 +308,10 @@ func TestIntegrationSearchIndexes(t *testing.T) {
 	if err := bson.Unmarshal(raw, &w); err != nil || w.Title != 5 || w.Description != 1 {
 		t.Errorf("pesos = %v", text["weights"])
 	}
-	if _, ok := found[FiltersIndexName]; !ok {
-		t.Errorf("falta %s", FiltersIndexName)
+	for _, n := range []string{FiltersIndexName, RecentIndexName} {
+		if _, ok := found[n]; !ok {
+			t.Errorf("falta %s", n)
+		}
 	}
 	// Una búsqueda de texto sin índice falla con error (no en silencio).
 	empty := testClient.Database(fmt.Sprintf("search_noidx_%d", time.Now().UnixNano()))

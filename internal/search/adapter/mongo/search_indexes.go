@@ -14,6 +14,7 @@ import (
 const (
 	TextIndexName    = "search_text"
 	FiltersIndexName = "search_filters"
+	RecentIndexName  = "search_recent"
 )
 
 // Indexes crea los índices de búsqueda en items. Es propio de esta spec: no
@@ -44,6 +45,12 @@ func (ix *Indexes) EnsureIndexes(ctx context.Context) error {
 				{Key: "zone.municipality", Value: 1}, {Key: "createdAt", Value: -1},
 			},
 			Options: options.Index().SetName(FiltersIndexName),
+		},
+		{
+			// Orden del modo reciente (createdAt desc, _id desc) sin ordenar
+			// en memoria cuando solo se filtra por status.
+			Keys:    bson.D{{Key: "status", Value: 1}, {Key: "createdAt", Value: -1}, {Key: "_id", Value: -1}},
+			Options: options.Index().SetName(RecentIndexName),
 		},
 	})
 	if err != nil {

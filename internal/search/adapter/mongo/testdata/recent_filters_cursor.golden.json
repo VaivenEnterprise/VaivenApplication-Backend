@@ -9,7 +9,7 @@
       "modality": "rent",
       "zone.municipality": {
         "$regularExpression": {
-          "pattern": "^Coyoacán \\(Centro\\)$",
+          "pattern": "^c[oóòöôOÓÒÖÔ]y[oóòöôOÓÒÖÔ][aáàäâAÁÀÄÂ]c[aáàäâAÁÀÄÂ][nñNÑ] \\(c[eéèëêEÉÈËÊ][nñNÑ]tr[oóòöôOÓÒÖÔ]\\)$",
           "options": "i"
         }
       },

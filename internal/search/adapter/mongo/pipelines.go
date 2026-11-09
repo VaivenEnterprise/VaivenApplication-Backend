@@ -62,9 +62,10 @@ func baseFilter(q domain.Query) bson.D {
 		f = append(f, bson.E{Key: "modality", Value: q.Modality})
 	}
 	if q.Municipality != "" {
-		// Igualdad sin importar mayúsculas: regex anclada y escapada.
+		// Igualdad sin importar acentos ni mayúsculas: regex anclada y
+		// escapada («Coyoacan» encuentra «Coyoacán»).
 		f = append(f, bson.E{Key: "zone.municipality", Value: bson.Regex{
-			Pattern: "^" + regexp.QuoteMeta(q.Municipality) + "$", Options: "i",
+			Pattern: "^" + AccentInsensitive(q.Municipality) + "$", Options: "i",
 		}})
 	}
 	return f

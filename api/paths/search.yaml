@@ -15,8 +15,12 @@ items:
       - **Texto** (`q` sin ubicación): por relevancia en título y descripción, en
         español, sin importar acentos ni mayúsculas (RF-04).
       - **Cercanía** (`lat` y `lng`): por `distanceKm` ascendente dentro de
-        `radiusKm` (25 km por defecto). Si además hay `q`, se filtra por el texto
-        sin ordenar por relevancia.
+        `radiusKm` (25 km por defecto). Si además hay `q`, cada palabra (hasta 8)
+        debe aparecer en el título o la descripción, sin importar acentos ni
+        mayúsculas, y el orden sigue siendo por distancia. En el modo texto basta
+        con que aparezca alguna palabra (orden por relevancia).
+
+      `municipality` es igualdad exacta sin importar acentos ni mayúsculas.
 
       Con `from` y `to` excluye objetos con una reserva aceptada o en curso que se
       cruce con el periodo; una solicitud pendiente no bloquea (RF-03). Las fechas
@@ -138,7 +142,7 @@ items:
                     ratingAverage: 4.8
                     ratingCount: 12
                   createdAt: '2026-11-08T16:00:00Z'
-              nextCursor: eyJrIjoxLjQsImlkIjoiNjczMWEyYjNjNGQ1ZTZmN2E4YjljMGQxIn0
+              nextCursor: eyJtIjoibmVhciIsImsiOjE0MDAuNSwiaWQiOiI2NzMxYTJiM2M0ZDVlNmY3YThiOWMwZDEifQ
       '400':
         $ref: '../openapi.yaml#/components/responses/ValidationFailed'
       '401':
