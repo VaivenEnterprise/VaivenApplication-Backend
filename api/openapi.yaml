@@ -10,7 +10,8 @@ info:
     la spec 004 las imágenes (`api/paths/uploads.yaml`) y la spec 005 los objetos
     (`api/paths/items.yaml`); la spec 006 la búsqueda (`api/paths/search.yaml`) y la
     spec 007 las solicitudes y reservas (`api/paths/bookings.yaml`) y la spec
-    008 el chat privado (`api/paths/chat.yaml`).
+    008 el chat privado (`api/paths/chat.yaml`) y la spec 009 la entrega, la
+    devolución y los pagos (`api/paths/handover.yaml` y `payments.yaml`).
 
     - Rutas de negocio bajo `/api/v1`; `/healthz` y `/readyz` fuera del prefijo.
     - JSON en `camelCase`; fechas en ISO-8601 UTC.
@@ -47,6 +48,10 @@ tags:
     description: Cotizar, solicitar, aceptar, rechazar y cancelar reservas (spec 007).
   - name: chat
     description: Conversación privada de texto de cada reserva (spec 008).
+  - name: entrega
+    description: Evidencia, QR de un solo uso y confirmación de la entrega y la devolución (spec 009).
+  - name: pagos
+    description: Reporte y confirmación del pago acordado, sin cobro (spec 009).
 paths:
   /healthz:
     get:
@@ -191,6 +196,26 @@ paths:
     $ref: './paths/chat.yaml#/messages'
   /api/v1/conversations/{id}/read:
     $ref: './paths/chat.yaml#/read'
+  /api/v1/bookings/{id}/delivery/evidence:
+    $ref: './paths/handover.yaml#/deliveryEvidence'
+  /api/v1/bookings/{id}/delivery/qr:
+    $ref: './paths/handover.yaml#/deliveryQr'
+  /api/v1/bookings/{id}/delivery/confirm:
+    $ref: './paths/handover.yaml#/deliveryConfirm'
+  /api/v1/bookings/{id}/delivery:
+    $ref: './paths/handover.yaml#/deliveryStage'
+  /api/v1/bookings/{id}/return/evidence:
+    $ref: './paths/handover.yaml#/returnEvidence'
+  /api/v1/bookings/{id}/return/qr:
+    $ref: './paths/handover.yaml#/returnQr'
+  /api/v1/bookings/{id}/return/confirm:
+    $ref: './paths/handover.yaml#/returnConfirm'
+  /api/v1/bookings/{id}/return:
+    $ref: './paths/handover.yaml#/returnStage'
+  /api/v1/bookings/{id}/payments/{stage}/report:
+    $ref: './paths/payments.yaml#/paymentReport'
+  /api/v1/bookings/{id}/payments/{stage}/confirm:
+    $ref: './paths/payments.yaml#/paymentConfirm'
 components:
   securitySchemes:
     bearerAuth:
@@ -878,7 +903,7 @@ components:
           description: Obligatorio al cancelar una reserva accepted.
     BookingPayment:
       type: object
-      required: [stage, amountCents, status, reportedAt, confirmedAt]
+      required: [stage, amountCents, status, reportedAt, note, confirmedAt]
       properties:
         stage:
           $ref: '#/components/schemas/PaymentStage'
@@ -887,19 +912,123 @@ components:
         status:
           type: string
           enum: [pending, reported, confirmed]
-          description: La spec 009 registra y confirma los pagos.
+          description: |
+            `pending` → `reported` (lo informa el solicitante) → `confirmed` (lo
+            confirma el propietario). VAIVÉN no cobra ni verifica el pago (spec 009).
         reportedAt:
           type: [string, 'null']
           format: date-time
+        note:
+          type: [string, 'null']
+          description: Nota opcional del reporte de pago (hasta 200 caracteres).
         confirmedAt:
           type: [string, 'null']
           format: date-time
     Stage:
-      type: [object, 'null']
-      description: Marcador de entrega o devolución; la spec 009 define su contenido. Hoy siempre null.
+      type: object
+      description: |
+        Etapa presencial de la reserva: la entrega o la devolución (spec 009). Las
+        fotografías son privadas y traen URL firmadas de 10 minutos. Nunca incluye
+        el token ni su hash.
+      required: [recordedAt, recordedById, conditionNotes, photos, evidenceVersion, qr, confirmedAt, confirmedById]
+      properties:
+        recordedAt:
+          type: [string, 'null']
+          format: date-time
+        recordedById:
+          type: [string, 'null']
+        conditionNotes:
+          type: string
+          description: Estado del objeto; vacío mientras no haya evidencia.
+        photos:
+          type: array
+          maxItems: 5
+          items:
+            $ref: '#/components/schemas/Image'
+        evidenceVersion:
+          type: integer
+          description: 0 sin evidencia; sube al reemplazarla.
+        qr:
+          type: object
+          required: [state, expiresAt]
+          properties:
+            state:
+              type: string
+              enum: [none, active, expired, used]
+            expiresAt:
+              type: [string, 'null']
+              format: date-time
+              description: Solo con QR activo o vencido.
+        confirmedAt:
+          type: [string, 'null']
+          format: date-time
+        confirmedById:
+          type: [string, 'null']
+    EvidenceRequest:
+      type: object
+      required: [conditionNotes, photos]
+      properties:
+        conditionNotes:
+          type: string
+          minLength: 3
+          maxLength: 500
+        photos:
+          type: array
+          minItems: 1
+          maxItems: 5
+          items:
+            type: object
+            required: [publicId]
+            properties:
+              publicId:
+                type: string
+                description: Imagen subida con propósito `evidence` (spec 004).
+    QrToken:
+      type: object
+      required: [token, qrPayload, expiresAt]
+      properties:
+        token:
+          type: string
+          description: 32 bytes aleatorios en base64url. Solo se devuelve aquí.
+        qrPayload:
+          type: string
+          description: Texto que codifica el QR, `vaiven://qr?b=<reserva>&s=<delivery|return>&t=<token>`.
+        expiresAt:
+          type: string
+          format: date-time
+          description: 15 minutos después de generarlo (POL-06).
+    ConfirmHandoverRequest:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+    ReportPaymentRequest:
+      type: object
+      properties:
+        note:
+          type: [string, 'null']
+          maxLength: 200
+    Adjustment:
+      type: object
+      description: Ajuste por devolución tardía. Se registra, no se cobra (RF-10).
+      required: [type, lateDays, amountCents, status]
+      properties:
+        type:
+          type: string
+          const: late_return
+        lateDays:
+          type: integer
+          minimum: 1
+        amountCents:
+          type: integer
+          description: Días de retraso × tarifa diaria, en centavos de MXN.
+        status:
+          type: string
+          const: recorded
     Booking:
       type: object
-      required: [id, item, owner, requester, startDate, endDate, days, usageRules, priceSnapshot, paymentMode, payments, status, expiresAt, meetingPoint, cancelReason, cancelledBy, rejectReason, conversationId, delivery, return, isLate, adjustments, viewerRole, createdAt, updatedAt, version]
+      required: [id, item, owner, requester, startDate, endDate, days, usageRules, priceSnapshot, paymentMode, payments, status, expiresAt, meetingPoint, cancelReason, cancelledBy, rejectReason, conversationId, delivery, return, isLate, adjustments, affectedBy, viewerRole, createdAt, updatedAt, version]
       properties:
         id:
           type: string
@@ -970,16 +1099,26 @@ components:
         conversationId:
           type: [string, 'null']
         delivery:
-          $ref: '#/components/schemas/Stage'
+          description: Etapa de entrega; null si no hay datos o quien consulta es administrador (RF-05).
+          oneOf:
+            - $ref: '#/components/schemas/Stage'
+            - type: 'null'
         return:
-          $ref: '#/components/schemas/Stage'
+          description: Etapa de devolución; null si no hay datos o quien consulta es administrador (RF-05).
+          oneOf:
+            - $ref: '#/components/schemas/Stage'
+            - type: 'null'
         isLate:
           type: boolean
+          description: La devolución pasó la fecha de fin más la tolerancia de 2 h (POL-07).
         adjustments:
           type: array
-          description: Ajustes por retraso (spec 009). Hoy vacío.
+          description: Ajustes por retraso (spec 009); a lo más uno.
           items:
-            type: object
+            $ref: '#/components/schemas/Adjustment'
+        affectedBy:
+          type: [string, 'null']
+          description: Id de la reserva tardía del mismo objeto que retrasa esta (spec 009, RF-09).
         viewerRole:
           type: string
           enum: [owner, requester, admin]

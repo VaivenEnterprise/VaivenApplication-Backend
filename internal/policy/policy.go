@@ -50,6 +50,14 @@ const (
 	POL05Split5050      = "split_50_50"
 )
 
+// POL06QRValidityMinutes es POL-06: el QR de entrega o devolución dura 15
+// minutos y se usa una sola vez.
+const POL06QRValidityMinutes = 15
+
+// POL07LateToleranceHours es POL-07: tolerancia de 2 horas después del fin de
+// la reserva antes de marcar la devolución como tardía.
+const POL07LateToleranceHours = 2
+
 // POL-09 — Cancelación tardía y ausencia: sin monto automático; se informa
 // antes de solicitar (spec 007, RF-01).
 const (

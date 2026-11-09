@@ -58,11 +58,91 @@ type priceSnapshotDoc struct {
 }
 
 type paymentDoc struct {
-	Stage       string     `bson:"stage"`
-	AmountCents int64      `bson:"amountCents"`
-	Status      string     `bson:"status"`
-	ReportedAt  *time.Time `bson:"reportedAt"`
-	ConfirmedAt *time.Time `bson:"confirmedAt"`
+	Stage        string     `bson:"stage"`
+	AmountCents  int64      `bson:"amountCents"`
+	Status       string     `bson:"status"`
+	ReportedAt   *time.Time `bson:"reportedAt"`
+	ReportedNote *string    `bson:"reportedNote"`
+	ConfirmedAt  *time.Time `bson:"confirmedAt"`
+}
+
+// qrDoc, handoverDoc y adjustmentDoc son los campos que escribe la spec 009
+// (plan 009 §3). La 007 los lee y los vuelve a escribir tal cual cuando guarda
+// la reserva completa, para no borrarlos.
+type qrDoc struct {
+	TokenHash       string     `bson:"tokenHash"`
+	ExpiresAt       time.Time  `bson:"expiresAt"`
+	UsedAt          *time.Time `bson:"usedAt"`
+	EvidenceVersion int        `bson:"evidenceVersion"`
+}
+
+type handoverDoc struct {
+	RecordedAt      *time.Time `bson:"recordedAt"`
+	RecordedByID    *string    `bson:"recordedById"`
+	ConditionNotes  string     `bson:"conditionNotes"`
+	Photos          []imageDoc `bson:"photos"`
+	EvidenceVersion int        `bson:"evidenceVersion"`
+	QR              *qrDoc     `bson:"qr"`
+	ConfirmedAt     *time.Time `bson:"confirmedAt"`
+	ConfirmedByID   *string    `bson:"confirmedById"`
+}
+
+// EncodeHandover y EncodeQR dan a los repositorios de la spec 009 la misma
+// representación BSON que usa la 007, para escribir sus campos con $set sin
+// duplicar el modelo (plan 009, P-09).
+func EncodeHandover(h domain.Handover) any { return handoverToDoc(&h) }
+
+// EncodeQR es la representación BSON de un QR (sin el token, solo su hash).
+func EncodeQR(q domain.QR) any {
+	return &qrDoc{TokenHash: q.TokenHash, ExpiresAt: q.ExpiresAt.UTC(), UsedAt: utcPtr(q.UsedAt), EvidenceVersion: q.EvidenceVersion}
+}
+
+// EncodeAdjustment es la representación BSON de un ajuste por retraso.
+func EncodeAdjustment(a domain.Adjustment) any {
+	return &adjustmentDoc{Type: a.Type, LateDays: a.LateDays, AmountCents: a.AmountCents, Status: a.Status}
+}
+
+type adjustmentDoc struct {
+	Type        string `bson:"type"`
+	LateDays    int    `bson:"lateDays"`
+	AmountCents int64  `bson:"amountCents"`
+	Status      string `bson:"status"`
+}
+
+func handoverToDoc(h *domain.Handover) *handoverDoc {
+	if h == nil {
+		return nil
+	}
+	d := &handoverDoc{
+		RecordedAt: utcPtr(h.RecordedAt), RecordedByID: h.RecordedByID, ConditionNotes: h.ConditionNotes,
+		Photos: make([]imageDoc, 0, len(h.Photos)), EvidenceVersion: h.EvidenceVersion,
+		ConfirmedAt: utcPtr(h.ConfirmedAt), ConfirmedByID: h.ConfirmedByID,
+	}
+	for i := range h.Photos {
+		d.Photos = append(d.Photos, *imageToDoc(&h.Photos[i]))
+	}
+	if h.QR != nil {
+		d.QR = &qrDoc{TokenHash: h.QR.TokenHash, ExpiresAt: h.QR.ExpiresAt.UTC(), UsedAt: utcPtr(h.QR.UsedAt), EvidenceVersion: h.QR.EvidenceVersion}
+	}
+	return d
+}
+
+func (d *handoverDoc) toDomain() *domain.Handover {
+	if d == nil {
+		return nil
+	}
+	h := &domain.Handover{
+		RecordedAt: utcPtr(d.RecordedAt), RecordedByID: d.RecordedByID, ConditionNotes: d.ConditionNotes,
+		Photos: make([]images.Image, 0, len(d.Photos)), EvidenceVersion: d.EvidenceVersion,
+		ConfirmedAt: utcPtr(d.ConfirmedAt), ConfirmedByID: d.ConfirmedByID,
+	}
+	for i := range d.Photos {
+		h.Photos = append(h.Photos, *d.Photos[i].toDomain())
+	}
+	if d.QR != nil {
+		h.QR = &domain.QR{TokenHash: d.QR.TokenHash, ExpiresAt: d.QR.ExpiresAt.UTC(), UsedAt: utcPtr(d.QR.UsedAt), EvidenceVersion: d.QR.EvidenceVersion}
+	}
+	return h
 }
 
 type historyDoc struct {
@@ -94,6 +174,12 @@ type bookingDoc struct {
 	CancelledBy    *string          `bson:"cancelledBy"`
 	RejectReason   *string          `bson:"rejectReason"`
 	ConversationID *string          `bson:"conversationId"`
+	Delivery       *handoverDoc     `bson:"delivery"`
+	Return         *handoverDoc     `bson:"return"`
+	IsLate         bool             `bson:"isLate"`
+	LateAt         *time.Time       `bson:"lateAt"`
+	Adjustments    []adjustmentDoc  `bson:"adjustments"`
+	AffectedBy     *string          `bson:"affectedBy"`
 	CreatedAt      time.Time        `bson:"createdAt"`
 	UpdatedAt      time.Time        `bson:"updatedAt"`
 	Version        int64            `bson:"version"`
@@ -124,6 +210,12 @@ func toDoc(b domain.Booking) (bookingDoc, error) {
 		CancelReason:   b.CancelReason,
 		RejectReason:   b.RejectReason,
 		ConversationID: b.ConversationID,
+		Delivery:       handoverToDoc(b.Delivery),
+		Return:         handoverToDoc(b.Return),
+		IsLate:         b.IsLate,
+		LateAt:         utcPtr(b.LateAt),
+		Adjustments:    make([]adjustmentDoc, 0, len(b.Adjustments)),
+		AffectedBy:     b.AffectedBy,
 		CreatedAt:      b.CreatedAt.UTC(),
 		UpdatedAt:      b.UpdatedAt.UTC(),
 		Version:        b.Version,
@@ -135,8 +227,11 @@ func toDoc(b domain.Booking) (bookingDoc, error) {
 	for _, p := range b.Payments {
 		d.Payments = append(d.Payments, paymentDoc{
 			Stage: string(p.Stage), AmountCents: p.AmountCents, Status: string(p.Status),
-			ReportedAt: utcPtr(p.ReportedAt), ConfirmedAt: utcPtr(p.ConfirmedAt),
+			ReportedAt: utcPtr(p.ReportedAt), ReportedNote: p.ReportedNote, ConfirmedAt: utcPtr(p.ConfirmedAt),
 		})
+	}
+	for _, a := range b.Adjustments {
+		d.Adjustments = append(d.Adjustments, adjustmentDoc{Type: a.Type, LateDays: a.LateDays, AmountCents: a.AmountCents, Status: a.Status})
 	}
 	for _, h := range b.History {
 		d.StatusHistory = append(d.StatusHistory, historyDoc{Status: string(h.Status), At: h.At.UTC(), By: string(h.By)})
@@ -165,6 +260,12 @@ func (d bookingDoc) toDomain() domain.Booking {
 		CancelReason:   d.CancelReason,
 		RejectReason:   d.RejectReason,
 		ConversationID: d.ConversationID,
+		Delivery:       d.Delivery.toDomain(),
+		Return:         d.Return.toDomain(),
+		IsLate:         d.IsLate,
+		LateAt:         utcPtr(d.LateAt),
+		Adjustments:    make([]domain.Adjustment, 0, len(d.Adjustments)),
+		AffectedBy:     d.AffectedBy,
 		CreatedAt:      d.CreatedAt.UTC(),
 		UpdatedAt:      d.UpdatedAt.UTC(),
 		Version:        d.Version,
@@ -176,8 +277,11 @@ func (d bookingDoc) toDomain() domain.Booking {
 	for _, p := range d.Payments {
 		b.Payments = append(b.Payments, domain.BookingPayment{
 			Stage: domain.Stage(p.Stage), AmountCents: p.AmountCents, Status: domain.PaymentStatus(p.Status),
-			ReportedAt: utcPtr(p.ReportedAt), ConfirmedAt: utcPtr(p.ConfirmedAt),
+			ReportedAt: utcPtr(p.ReportedAt), ReportedNote: p.ReportedNote, ConfirmedAt: utcPtr(p.ConfirmedAt),
 		})
+	}
+	for _, a := range d.Adjustments {
+		b.Adjustments = append(b.Adjustments, domain.Adjustment{Type: a.Type, LateDays: a.LateDays, AmountCents: a.AmountCents, Status: a.Status})
 	}
 	for _, h := range d.StatusHistory {
 		b.History = append(b.History, domain.HistoryEntry{Status: domain.Status(h.Status), At: h.At.UTC(), By: domain.Role(h.By)})

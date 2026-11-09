@@ -8,6 +8,7 @@ import (
 
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/bookings/domain"
 	shared "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/domain"
+	images "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/images/domain"
 )
 
 func TestGet(t *testing.T) {
@@ -145,4 +146,39 @@ func TestExpireDueCA06(t *testing.T) {
 		t.Error("error al buscar")
 	}
 	_ = c
+}
+
+// Spec 009: las etapas de entrega y devolución se muestran con URL firmadas
+// solo a las partes (RF-05); admin no las recibe.
+func TestGetShowsHandoverStagesOnlyToParties(t *testing.T) {
+	ctx := context.Background()
+	e := newEnv(t)
+	a := create(t, e, req, "2026-11-10", "2026-11-12")
+	b := e.repo.bookings[a.Booking.ID]
+	exp := t0.Add(10 * time.Minute)
+	b.Delivery = &domain.Handover{
+		ConditionNotes: "Sin daños", EvidenceVersion: 1,
+		Photos: []images.Image{{PublicID: "ev1", Delivery: images.DeliveryAuthenticated}},
+		QR:     &domain.QR{TokenHash: "h", ExpiresAt: exp, EvidenceVersion: 1},
+	}
+	e.repo.bookings[b.ID] = b
+
+	for _, v := range []Viewer{owner, req} {
+		got, err := e.svc.Get(ctx, v, b.ID)
+		if err != nil || got.Delivery == nil || len(got.Delivery.URLs) != 1 || got.Delivery.QR != domain.QRActive ||
+			got.Delivery.QRExpiresAt == nil || !got.Delivery.QRExpiresAt.Equal(exp) {
+			t.Errorf("%s: %+v %v", v.ID, got.Delivery, err)
+		}
+		if got.Return != nil {
+			t.Errorf("%s: sin devolución registrada debe ser nil", v.ID)
+		}
+	}
+	adm, err := e.svc.Get(ctx, Viewer{ID: "adm", Admin: true}, b.ID)
+	if err != nil || adm.Delivery != nil || adm.Return != nil {
+		t.Errorf("admin no recibe la evidencia: %+v %v", adm.Delivery, err)
+	}
+	*e.now = t0.Add(time.Hour)
+	if got, _ := e.svc.Get(ctx, req, b.ID); got.Delivery.QR != domain.QRExpired {
+		t.Errorf("QR vencido = %s", got.Delivery.QR)
+	}
 }

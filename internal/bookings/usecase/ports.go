@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/bookings/domain"
+	images "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/images/domain"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/users"
 )
 
@@ -45,6 +46,21 @@ type BookingView struct {
 	ViewerRole domain.Role
 	// ShowMeetingPoint: el punto de encuentro solo lo ven las partes (RF-09).
 	ShowMeetingPoint bool
+	// Delivery y Return son las etapas de la spec 009 con sus URL firmadas. Solo
+	// las ven las partes (RF-05): para admin y para etapas sin datos son nil.
+	Delivery *HandoverView
+	Return   *HandoverView
+}
+
+// HandoverView es una etapa de entrega o devolución lista para responder.
+type HandoverView struct {
+	Stage domain.Handover
+	// URLs corresponde a Stage.Photos, en el mismo orden (firmadas, 10 min).
+	URLs []images.URLs
+	// QR es el estado del QR en este momento; QRExpiresAt solo si hay uno
+	// activo o vencido.
+	QR          domain.QRState
+	QRExpiresAt *time.Time
 }
 
 // Page es una página de GET /me/bookings; Next es nil al final.

@@ -110,6 +110,36 @@ func (s *Service) viewWith(b domain.Booking, role domain.Role, profiles map[stri
 		}
 		v.ThumbURL = &u.ThumbURL
 	}
+	if role == domain.RoleOwner || role == domain.RoleRequester {
+		var err error
+		if v.Delivery, err = s.handoverView(b.Delivery); err != nil {
+			return BookingView{}, err
+		}
+		if v.Return, err = s.handoverView(b.Return); err != nil {
+			return BookingView{}, err
+		}
+	}
+	return v, nil
+}
+
+// handoverView arma una etapa con las URL firmadas de sus fotos; nil si la
+// etapa no tiene datos (spec 009, RF-05).
+func (s *Service) handoverView(h *domain.Handover) (*HandoverView, error) {
+	if h == nil {
+		return nil, nil
+	}
+	v := &HandoverView{Stage: *h, QR: h.QRStateAt(s.now())}
+	for _, p := range h.Photos {
+		u, err := s.d.Images.URLs(p)
+		if err != nil {
+			return nil, fmt.Errorf("bookings: URL de evidencia: %w", err)
+		}
+		v.URLs = append(v.URLs, u)
+	}
+	if h.QR != nil && v.QR != domain.QRNone {
+		exp := h.QR.ExpiresAt
+		v.QRExpiresAt = &exp
+	}
 	return v, nil
 }
 

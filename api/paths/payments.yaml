@@ -1,0 +1,103 @@
+# Pagos acordados, registrados y confirmados por las partes (spec 009, T001;
+# Art. IV, V y XII.2). Se referencia desde api/openapi.yaml. VAIVÉN NO cobra ni
+# verifica pagos: solo lleva el control de lo acordado fuera de la app. Estados:
+# pending → reported → confirmed. Los préstamos gratuitos no tienen pagos. El QR
+# de entrega o devolución no modifica el pago y el pago no condiciona el QR.
+paymentReport:
+  parameters:
+    - $ref: '#/components/parameters/BookingId'
+    - $ref: '#/components/parameters/PaymentStage'
+    - $ref: '../openapi.yaml#/components/parameters/RequestId'
+  post:
+    tags: [pagos]
+    operationId: reportPayment
+    summary: Reportar el pago (solicitante)
+    description: |
+      El solicitante informa que ya pagó la etapa. Pasa de `pending` a `reported`
+      y avisa al propietario. `note` es opcional (hasta 200 caracteres).
+
+      - La etapa debe existir en la reserva (importes fijados al solicitar, spec
+        007); si no, 404. La reserva debe estar `accepted`, `in_progress` o
+        `completed`.
+      - Reportar un pago que ya no está `pending` responde 409.
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ReportPaymentRequest'
+          example:
+            note: Transferencia SPEI del 20 de noviembre.
+    responses:
+      '200':
+        $ref: '#/components/responses/BookingOk'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '403':
+        $ref: '../openapi.yaml#/components/responses/Forbidden'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '409':
+        $ref: '../openapi.yaml#/components/responses/Conflict'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+paymentConfirm:
+  parameters:
+    - $ref: '#/components/parameters/BookingId'
+    - $ref: '#/components/parameters/PaymentStage'
+    - $ref: '../openapi.yaml#/components/parameters/RequestId'
+  post:
+    tags: [pagos]
+    operationId: confirmPayment
+    summary: Confirmar el pago recibido (propietario)
+    description: |
+      El propietario confirma que recibió el pago reportado. Solo desde
+      `reported` (si está `pending` o ya `confirmed`, 409) y avisa al solicitante.
+    responses:
+      '200':
+        $ref: '#/components/responses/BookingOk'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '403':
+        $ref: '../openapi.yaml#/components/responses/Forbidden'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '409':
+        $ref: '../openapi.yaml#/components/responses/Conflict'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+components:
+  parameters:
+    BookingId:
+      name: id
+      in: path
+      required: true
+      description: Identificador de la reserva.
+      schema:
+        type: string
+        pattern: '^[0-9a-f]{24}$'
+    PaymentStage:
+      name: stage
+      in: path
+      required: true
+      description: Etapa del pago.
+      schema:
+        $ref: '../openapi.yaml#/components/schemas/PaymentStage'
+  responses:
+    BookingOk:
+      description: La reserva actualizada.
+      headers:
+        X-Request-Id:
+          $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/Booking'

@@ -7,10 +7,12 @@ import (
 	authhttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/adapter/http"
 	bookingshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/bookings/adapter/http"
 	chathttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/chat/adapter/http"
+	handoverhttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/handover/adapter/http"
 	imageshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/images/adapter/http"
 	itemshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/items/adapter/http"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/moderation"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/notify"
+	paymentshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/payments/adapter/http"
 	searchhttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/search/adapter/http"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/users"
 )
@@ -34,6 +36,10 @@ type moduleDeps struct {
 	Bookings *bookingshttp.Module
 	// Chat es el módulo de la spec 008 (chat privado).
 	Chat *chathttp.Module
+	// Handover es el módulo de la spec 009 (entrega y devolución).
+	Handover *handoverhttp.Module
+	// Payments es el módulo de pagos y retrasos de la spec 009.
+	Payments *paymentshttp.Module
 	// Users da perfiles públicos por lote y acciones de administración.
 	Users interface {
 		users.Directory
@@ -53,5 +59,7 @@ func modules(deps moduleDeps) []apihttp.Module {
 		deps.Search,   // 006 búsqueda
 		deps.Bookings, // 007 solicitudes y reservas
 		deps.Chat,     // 008 chat privado
+		deps.Handover, // 009 entrega y devolución
+		deps.Payments, // 009 pagos y retrasos
 	}
 }
