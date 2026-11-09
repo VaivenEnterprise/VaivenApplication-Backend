@@ -1,6 +1,10 @@
 package domain
 
-import "time"
+import (
+	"time"
+
+	images "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/images/domain"
+)
 
 // LastMessage es el resumen del último mensaje de una conversación.
 type LastMessage struct {
@@ -55,4 +59,16 @@ func CanWrite(bookingStatus string, counterpartActive bool) bool {
 type Cursor struct {
 	At time.Time
 	ID string
+}
+
+// BookingInfo son los datos de la reserva que necesita el chat (solo
+// lectura de bookings, plan P-03).
+type BookingInfo struct {
+	ID          string
+	Status      string
+	OwnerID     string
+	RequesterID string
+	ItemID      string
+	ItemTitle   string
+	ItemPhoto   *images.Image
 }

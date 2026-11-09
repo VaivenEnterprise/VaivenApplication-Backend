@@ -15,7 +15,7 @@
   - Aceptación: `NewMessage` valida cuerpo (1–1000 runas, no solo espacios); `Conversation.CanWrite(bookingStatus, counterpartActive)`; solo stdlib; ≥ 80 %
   - Refs: RF-04, RF-06, RF-07
 
-- [ ] **T003** Repositorios de conversaciones y mensajes
+- [x] **T003** Repositorios de conversaciones y mensajes
   - Archivos: `internal/chat/adapter/mongo/{docs.go, conversation_repo.go, message_repo.go, booking_reader.go, repo_integration_test.go}`
   - Agente: `modelador-mongo` · Depende de: T002, 002-T014
   - Aceptación: colecciones e índices del plan §3 (incluye el único parcial); `upsert` por `bookingId`; `before`/`after` sin repetidos; `$inc`/`$set` de no leídos; `booking_reader.go` lee **solo** `status`, `ownerId`, `requesterId` y datos de objeto de `bookings` (solo lectura); prueba de integración
