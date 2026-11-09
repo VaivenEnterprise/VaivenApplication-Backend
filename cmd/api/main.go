@@ -13,6 +13,8 @@ import (
 	"syscall"
 	"time"
 
+	"go.mongodb.org/mongo-driver/v2/mongo"
+
 	apihttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/docs"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/handler"
@@ -34,6 +36,9 @@ import (
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/platform/mongodb"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/platform/redis"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/platform/security"
+	searchhttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/search/adapter/http"
+	searchmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/search/adapter/mongo"
+	searchusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/search/usecase"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/usecase/ratelimit"
 )
 
@@ -111,7 +116,8 @@ func run() error {
 	userRepo := authmongo.NewUserRepo(db)
 	refreshRepo := authmongo.NewRefreshRepo(db)
 	itemRepo := itemsmongo.NewItemRepo(db)
-	if err := adaptermongo.EnsureAll(ctx, userRepo, refreshRepo, itemRepo); err != nil {
+	// Los índices de búsqueda (006) van después de los de items (005).
+	if err := adaptermongo.EnsureAll(ctx, userRepo, refreshRepo, itemRepo, searchmongo.NewIndexes(db)); err != nil {
 		return fmt.Errorf("no se pudieron crear los índices: %w", err)
 	}
 
@@ -152,6 +158,11 @@ func run() error {
 		return err
 	}
 
+	searchModule, err := newSearchModule(log, authModule, db, imagesSvc)
+	if err != nil {
+		return err
+	}
+
 	mods := modules(moduleDeps{
 		Log:        log,
 		Notifier:   notify.Noop{},
@@ -159,6 +170,7 @@ func run() error {
 		Auth:       authModule,
 		Images:     imagesModule,
 		Items:      itemsModule,
+		Search:     searchModule,
 		Users:      userRepo,
 	})
 	for _, m := range mods {
@@ -302,6 +314,23 @@ func newItemsModule(log *slog.Logger, authModule *authhttp.Module, userRepo *aut
 		Authenticate:  authModule.Authenticate(),
 		RequireActive: authhttp.RequireActive(userRepo.ByID, nil),
 		Log:           log,
+	})
+}
+
+// newSearchModule arma el módulo de la spec 006: búsqueda de solo lectura
+// sobre items, users y bookings, con la miniatura de images.Service.
+func newSearchModule(log *slog.Logger, authModule *authhttp.Module, db *mongo.Database, imgs imgport.Service) (*searchhttp.Module, error) {
+	svc, err := searchusecase.NewService(searchusecase.Deps{
+		Repo:   searchmongo.NewRepo(db, nil),
+		Images: imgs,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return searchhttp.NewModule(searchhttp.ModuleDeps{
+		Service:      svc,
+		Authenticate: authModule.Authenticate(),
+		Log:          log,
 	})
 }
 

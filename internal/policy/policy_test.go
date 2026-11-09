@@ -16,6 +16,8 @@ func TestPolicyValues(t *testing.T) {
 		{"POL04MaxDeclaredValueCents", POL04MaxDeclaredValueCents, 10_000_000},
 		{"POL01LoanPriceCents", POL01LoanPriceCents, 0},
 		{"POL01MinRentPriceCents", POL01MinRentPriceCents, 1000},
+		{"POL02MinDays", POL02MinDays, 1},
+		{"POL02MaxDays", POL02MaxDays, 7},
 		{"POL13MinItemPhotos", POL13MinItemPhotos, 1},
 		{"POL13MaxItemPhotos", POL13MaxItemPhotos, 5},
 	}

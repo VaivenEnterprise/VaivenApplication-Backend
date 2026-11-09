@@ -41,7 +41,7 @@ Booking = { id, item:{id,title,thumbUrl|null,modality}, owner:PublicUser, reques
 Fechas `startDate`/`endDate`: **fecha de calendario** `YYYY-MM-DD` interpretada en `America/Mexico_City` (excepción documentada en Art. V). Resto de instantes en ISO UTC.
 
 ## 3. Datos
-**`bookings`**: `_id`, `itemId`, `ownerId`, `requesterId`, `startDate`, `endDate` (cadenas `YYYY-MM-DD`), `days`, `itemSnapshot{title,usageRules,modality,firstPhoto Image}`, `priceSnapshot{modality,pricePerDayCents,totalCents,currency}`, `paymentMode`, `payments[]` (≤ 2), `status`, `statusHistory[]` (≤ 10: `{status,at,by}`), `expiresAt`, `meetingPoint{description}`, `cancelReason`, `cancelledBy`, `conversationId`, `createdAt`, `updatedAt`, `version`.
+**`bookings`**: `_id`, `itemId` (texto hexadecimal del `_id` del objeto, igual que `items.ownerId`; la búsqueda de la 006 lo compara así — [NEEDS CLARIFICATION] confirmar BE-A), `ownerId`, `requesterId`, `startDate`, `endDate` (cadenas `YYYY-MM-DD`), `days`, `itemSnapshot{title,usageRules,modality,firstPhoto Image}`, `priceSnapshot{modality,pricePerDayCents,totalCents,currency}`, `paymentMode`, `payments[]` (≤ 2), `status`, `statusHistory[]` (≤ 10: `{status,at,by}`), `expiresAt`, `meetingPoint{description}`, `cancelReason`, `cancelledBy`, `conversationId`, `createdAt`, `updatedAt`, `version`.
 Índices: `{itemId:1,status:1,startDate:1,endDate:1}`; `{requesterId:1,status:1,createdAt:-1}`; `{ownerId:1,status:1,createdAt:-1}`; `{status:1,expiresAt:1}`.
 `items` recibe un contador `reservationSeq` (int) que 007 incrementa solo dentro de la transacción de aceptar (ver P-03).
 

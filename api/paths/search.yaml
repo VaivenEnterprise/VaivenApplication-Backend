@@ -1,0 +1,157 @@
+# Búsqueda de objetos (spec 006, T001; Art. IV y XII.2). Se referencia desde
+# api/openapi.yaml. GET /api/v1/items (búsqueda) comparte la ruta con
+# POST /api/v1/items (publicar, spec 005): este path item declara el GET y
+# reutiliza el POST de items.yaml sin copiarlo.
+items:
+  get:
+    tags: [busqueda]
+    operationId: searchItems
+    summary: Buscar objetos
+    description: |
+      Devuelve tarjetas de objetos `active` de otras personas con cuenta activa
+      (RF-02); nunca los propios. Tres modos de orden:
+
+      - **Reciente** (sin `q` ni `lat`/`lng`): por fecha de publicación descendente.
+      - **Texto** (`q` sin ubicación): por relevancia en título y descripción, en
+        español, sin importar acentos ni mayúsculas (RF-04).
+      - **Cercanía** (`lat` y `lng`): por `distanceKm` ascendente dentro de
+        `radiusKm` (25 km por defecto). Si además hay `q`, cada palabra (hasta 8)
+        debe aparecer en el título o la descripción, sin importar acentos ni
+        mayúsculas, y el orden sigue siendo por distancia. En el modo texto basta
+        con que aparezca alguna palabra (orden por relevancia).
+
+      `municipality` es igualdad exacta sin importar acentos ni mayúsculas.
+
+      Con `from` y `to` excluye objetos con una reserva aceptada o en curso que se
+      cruce con el periodo; una solicitud pendiente no bloquea (RF-03). Las fechas
+      son de calendario en America/Mexico_City: `from` no puede ser anterior a
+      hoy, `to ≥ from` y el periodo dura como máximo 7 días (POL-02).
+
+      Para la página siguiente se envía `cursor` con el `nextCursor` recibido y los
+      **mismos** filtros (null = no hay más).
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+      - name: q
+        in: query
+        required: false
+        description: Texto a buscar (2 a 80 caracteres).
+        schema:
+          type: string
+          minLength: 2
+          maxLength: 80
+        example: taladro
+      - name: category
+        in: query
+        required: false
+        schema:
+          $ref: '../openapi.yaml#/components/schemas/CategoryKey'
+      - name: modality
+        in: query
+        required: false
+        schema:
+          $ref: '../openapi.yaml#/components/schemas/ItemModality'
+      - name: municipality
+        in: query
+        required: false
+        description: Municipio o alcaldía exactos (sin importar mayúsculas).
+        schema:
+          type: string
+          minLength: 2
+          maxLength: 60
+      - name: from
+        in: query
+        required: false
+        description: Primer día del periodo (`YYYY-MM-DD`); va junto con `to`.
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        required: false
+        description: Último día del periodo (`YYYY-MM-DD`, inclusivo); va junto con `from`.
+        schema:
+          type: string
+          format: date
+      - name: lat
+        in: query
+        required: false
+        description: Latitud de quien busca; va junto con `lng`.
+        schema:
+          type: number
+          minimum: -90
+          maximum: 90
+      - name: lng
+        in: query
+        required: false
+        schema:
+          type: number
+          minimum: -180
+          maximum: 180
+      - name: radiusKm
+        in: query
+        required: false
+        description: Radio en km (1 a 50; 25 por defecto). Solo con `lat` y `lng`.
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 50
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 20
+      - name: cursor
+        in: query
+        required: false
+        description: Valor opaco de `nextCursor`.
+        schema:
+          type: string
+          maxLength: 256
+    responses:
+      '200':
+        description: Página de tarjetas.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/ItemCardPage'
+            example:
+              items:
+                - id: 6731a2b3c4d5e6f7a8b9c0d1
+                  title: Taladro percutor 600 W
+                  category: herramientas_electricas
+                  modality: rent
+                  pricePerDayCents: 3000
+                  zone:
+                    municipality: Coyoacán
+                    neighborhood: Del Carmen
+                  approxLocation:
+                    lat: 19.35
+                    lng: -99.16
+                  distanceKm: 1.4
+                  thumbUrl: https://res.cloudinary.com/vaiven/image/upload/c_fill,w_320,h_320/vaiven/staging/item_photo/6730f1c2a9b3e4d5f6a7b8c9/9b2f6c1e4a7d4c0e8f3b5a2d1c6e7f80.jpg
+                  photoCount: 3
+                  owner:
+                    id: 6730f1c2a9b3e4d5f6a7b8c9
+                    displayName: Ana
+                    ratingAverage: 4.8
+                    ratingCount: 12
+                  createdAt: '2026-11-08T16:00:00Z'
+              nextCursor: eyJtIjoibmVhciIsImsiOjE0MDAuNSwiaWQiOiI2NzMxYTJiM2M0ZDVlNmY3YThiOWMwZDEifQ
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'
+  post:
+    $ref: './items.yaml#/items/post'
