@@ -22,6 +22,7 @@ import (
 	adaptermongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/mongo"
 	authhttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/adapter/http"
 	authmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/adapter/mongo"
+	authdomain "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/domain"
 	authusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/usecase"
 	bookingshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/bookings/adapter/http"
 	bookingsmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/bookings/adapter/mongo"
@@ -37,6 +38,9 @@ import (
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/images"
 	imageshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/images/adapter/http"
 	imgport "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/images/port"
+	incidentshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/incidents/adapter/http"
+	incidentsmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/incidents/adapter/mongo"
+	incidentsusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/incidents/usecase"
 	itemshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/items/adapter/http"
 	itemsmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/items/adapter/mongo"
 	itemsusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/items/usecase"
@@ -51,6 +55,12 @@ import (
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/platform/mongodb"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/platform/redis"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/platform/security"
+	ratingshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ratings/adapter/http"
+	ratingsmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ratings/adapter/mongo"
+	ratingsusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ratings/usecase"
+	sanctionshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/sanctions/adapter/http"
+	sanctionsmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/sanctions/adapter/mongo"
+	sanctionsusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/sanctions/usecase"
 	searchhttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/search/adapter/http"
 	searchmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/search/adapter/mongo"
 	searchusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/search/usecase"
@@ -135,7 +145,13 @@ func run() error {
 	bookingRepo := bookingsmongo.NewRepo(db)
 	convRepo, msgRepo := chatmongo.NewConversationRepo(db), chatmongo.NewMessageRepo(db)
 	paymentsRepo := paymentsmongo.NewRepo(db)
-	if err := adaptermongo.EnsureAll(ctx, userRepo, refreshRepo, itemRepo, searchmongo.NewIndexes(db), bookingRepo, convRepo, msgRepo, paymentsRepo); err != nil {
+	// Confianza (spec 010): la calificación actualiza el promedio del perfil en
+	// la misma transacción, por eso el repositorio recibe users.Admin.
+	ratingsRepo := ratingsmongo.NewRepo(db, userRepo)
+	incidentsRepo := incidentsmongo.NewRepo(db)
+	sanctionsRepo := sanctionsmongo.NewRepo(db)
+	if err := adaptermongo.EnsureAll(ctx, userRepo, refreshRepo, itemRepo, searchmongo.NewIndexes(db), bookingRepo, convRepo, msgRepo, paymentsRepo,
+		ratingsRepo, incidentsRepo, sanctionsRepo); err != nil {
 		return fmt.Errorf("no se pudieron crear los índices: %w", err)
 	}
 
@@ -253,6 +269,45 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	// Calificaciones, incidencias y sanciones (spec 010). Las rutas de
+	// administración exigen el rol admin además de la sesión (CA-05).
+	requireAdmin := authhttp.RequireRole(authdomain.RoleAdmin)
+	ratingsSvc, err := ratingsusecase.NewService(ratingsusecase.Deps{
+		Repo: ratingsRepo, Bookings: bookingRepo, Users: userRepo, Notifier: notifier, Log: log,
+	})
+	if err != nil {
+		return err
+	}
+	ratingsModule, err := ratingshttp.NewModule(ratingshttp.ModuleDeps{
+		Service: ratingsSvc, Authenticate: authModule.Authenticate(), Log: log,
+	})
+	if err != nil {
+		return err
+	}
+	incidentsSvc, err := incidentsusecase.NewService(incidentsusecase.Deps{
+		Repo: incidentsRepo, Bookings: bookingRepo, Images: imagesSvc, Users: userRepo, Notifier: notifier, Log: log,
+	})
+	if err != nil {
+		return err
+	}
+	incidentsModule, err := incidentshttp.NewModule(incidentshttp.ModuleDeps{
+		Service: incidentsSvc, Authenticate: authModule.Authenticate(), RequireAdmin: requireAdmin, Log: log,
+	})
+	if err != nil {
+		return err
+	}
+	sanctionsSvc, err := sanctionsusecase.NewService(sanctionsusecase.Deps{
+		Repo: sanctionsRepo, Incidents: incidentsRepo, Directory: userRepo, Admin: userRepo, Notifier: notifier, Log: log,
+	})
+	if err != nil {
+		return err
+	}
+	sanctionsModule, err := sanctionshttp.NewModule(sanctionshttp.ModuleDeps{
+		Service: sanctionsSvc, Authenticate: authModule.Authenticate(), RequireAdmin: requireAdmin, Log: log,
+	})
+	if err != nil {
+		return err
+	}
 	// Vencimiento de solicitudes cada 60 s (plan 007 P-04); termina con ctx.
 	expirerDone := make(chan struct{})
 	go func() {
@@ -278,6 +333,9 @@ func run() error {
 		Chat:       chatModule,
 		Handover:   handoverModule,
 		Payments:   paymentsModule,
+		Ratings:    ratingsModule,
+		Incidents:  incidentsModule,
+		Sanctions:  sanctionsModule,
 		Users:      userRepo,
 	})
 	for _, m := range mods {

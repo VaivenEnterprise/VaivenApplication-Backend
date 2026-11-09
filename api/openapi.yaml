@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: VAIVÉN API
-  version: 0.8.0
+  version: 0.10.0
   summary: API REST del backend de VAIVÉN (préstamo y renta de objetos en México).
   description: |
     Contrato de la spec 002 (arquitectura base): endpoints de infraestructura y
@@ -11,7 +11,9 @@ info:
     (`api/paths/items.yaml`); la spec 006 la búsqueda (`api/paths/search.yaml`) y la
     spec 007 las solicitudes y reservas (`api/paths/bookings.yaml`) y la spec
     008 el chat privado (`api/paths/chat.yaml`) y la spec 009 la entrega, la
-    devolución y los pagos (`api/paths/handover.yaml` y `payments.yaml`).
+    devolución y los pagos (`api/paths/handover.yaml` y `payments.yaml`) y la spec
+    010 las calificaciones, las incidencias y la administración
+    (`api/paths/ratings.yaml`, `incidents.yaml` y `admin.yaml`).
 
     - Rutas de negocio bajo `/api/v1`; `/healthz` y `/readyz` fuera del prefijo.
     - JSON en `camelCase`; fechas en ISO-8601 UTC.
@@ -52,6 +54,12 @@ tags:
     description: Evidencia, QR de un solo uso y confirmación de la entrega y la devolución (spec 009).
   - name: pagos
     description: Reporte y confirmación del pago acordado, sin cobro (spec 009).
+  - name: calificaciones
+    description: Calificar a la otra parte de una reserva completada y ver las recibidas (spec 010).
+  - name: incidencias
+    description: Reportar un incumplimiento con evidencia y consultarlo (spec 010).
+  - name: administracion
+    description: Revisión de incidencias y sanciones; exige rol `admin` (spec 010).
 paths:
   /healthz:
     get:
@@ -216,6 +224,26 @@ paths:
     $ref: './paths/payments.yaml#/paymentReport'
   /api/v1/bookings/{id}/payments/{stage}/confirm:
     $ref: './paths/payments.yaml#/paymentConfirm'
+  /api/v1/bookings/{id}/ratings:
+    $ref: './paths/ratings.yaml#/bookingRatings'
+  /api/v1/bookings/{id}/rating-status:
+    $ref: './paths/ratings.yaml#/ratingStatus'
+  /api/v1/users/{id}/ratings:
+    $ref: './paths/ratings.yaml#/userRatings'
+  /api/v1/bookings/{id}/incidents:
+    $ref: './paths/incidents.yaml#/bookingIncidents'
+  /api/v1/incidents/{id}:
+    $ref: './paths/incidents.yaml#/incidentById'
+  /api/v1/me/incidents:
+    $ref: './paths/incidents.yaml#/myIncidents'
+  /api/v1/admin/incidents:
+    $ref: './paths/admin.yaml#/adminIncidents'
+  /api/v1/admin/incidents/{id}/notes:
+    $ref: './paths/admin.yaml#/adminIncidentNotes'
+  /api/v1/admin/incidents/{id}/close:
+    $ref: './paths/admin.yaml#/adminIncidentClose'
+  /api/v1/admin/users/{id}/sanctions:
+    $ref: './paths/admin.yaml#/adminUserSanctions'
 components:
   securitySchemes:
     bearerAuth:
@@ -223,7 +251,54 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: "Token de acceso que entregan login, register y refresh."
+    adminAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: "El mismo token de acceso, de una cuenta con rol `admin` (spec 010, RF-11). Las demás cuentas reciben 403."
   parameters:
+    BookingIdPath:
+      name: id
+      in: path
+      required: true
+      description: Identificador de la reserva (24 caracteres hexadecimales).
+      schema:
+        type: string
+        pattern: '^[0-9a-f]{24}$'
+    UserIdPath:
+      name: id
+      in: path
+      required: true
+      description: Identificador de la persona (24 caracteres hexadecimales).
+      schema:
+        type: string
+        pattern: '^[0-9a-f]{24}$'
+    IncidentIdPath:
+      name: id
+      in: path
+      required: true
+      description: Identificador de la incidencia (24 caracteres hexadecimales).
+      schema:
+        type: string
+        pattern: '^[0-9a-f]{24}$'
+    CursorQuery:
+      name: cursor
+      in: query
+      required: false
+      description: El `nextCursor` de la página anterior.
+      schema:
+        type: string
+        maxLength: 128
+    LimitQuery:
+      name: limit
+      in: query
+      required: false
+      description: Tamaño de página.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 50
+        default: 20
     RequestId:
       name: X-Request-Id
       in: header
@@ -1236,6 +1311,224 @@ components:
             $ref: '#/components/schemas/Conversation'
         nextCursor:
           type: [string, 'null']
+    RateRequest:
+      type: object
+      required: [score]
+      properties:
+        score:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type: [string, 'null']
+          maxLength: 300
+          description: Opcional; vacío equivale a sin comentario.
+    Rating:
+      type: object
+      required: [id, bookingId, score, comment, ratedRole, rater, createdAt]
+      properties:
+        id:
+          type: string
+        bookingId:
+          type: string
+        score:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type: [string, 'null']
+        ratedRole:
+          type: string
+          enum: [owner, requester]
+          description: Papel que tenía en la reserva la persona calificada.
+        rater:
+          type: object
+          description: Quien califica, solo con su nombre visible (Art. VI.4).
+          required: [id, displayName]
+          properties:
+            id:
+              type: string
+            displayName:
+              type: string
+        createdAt:
+          type: string
+          format: date-time
+    RatingPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Rating'
+        nextCursor:
+          type: [string, 'null']
+    RatingStatus:
+      type: object
+      required: [canRate, myRating, expiresAt]
+      properties:
+        canRate:
+          type: boolean
+        myRating:
+          oneOf:
+            - $ref: '#/components/schemas/Rating'
+            - type: 'null'
+        expiresAt:
+          type: [string, 'null']
+          format: date-time
+          description: Fin de la ventana de 14 días; null si la reserva aún no se completó.
+    IncidentReason:
+      type: string
+      enum: [no_show, late_return, damaged, not_returned, payment_dispute, other]
+    IncidentStatus:
+      type: string
+      enum: [open, closed]
+    IncidentOutcome:
+      type: string
+      enum: [none, monetary_adjustment, restriction]
+    IncidentInput:
+      type: object
+      required: [reason, description]
+      properties:
+        reason:
+          $ref: '#/components/schemas/IncidentReason'
+        description:
+          type: string
+          minLength: 10
+          maxLength: 1000
+        evidence:
+          type: array
+          maxItems: 5
+          description: Imágenes con propósito `evidence` subidas por quien reporta (puede omitirse).
+          items:
+            $ref: '#/components/schemas/ImageInput'
+    Incident:
+      type: object
+      required: [id, bookingId, reporter, reported, reason, description, evidence, status, notes, finalResponse, createdAt, closedAt]
+      properties:
+        id:
+          type: string
+        bookingId:
+          type: string
+        reporter:
+          $ref: '#/components/schemas/PublicUser'
+        reported:
+          $ref: '#/components/schemas/PublicUser'
+        reason:
+          $ref: '#/components/schemas/IncidentReason'
+        description:
+          type: string
+        evidence:
+          type: array
+          description: Evidencia con URL firmadas de 10 minutos.
+          items:
+            $ref: '#/components/schemas/Image'
+        status:
+          $ref: '#/components/schemas/IncidentStatus'
+        notes:
+          type: array
+          description: Las partes ven solo las notas visibles; el administrador ve todas, con `visibleToParties`.
+          items:
+            type: object
+            required: [text, at]
+            properties:
+              text:
+                type: string
+              at:
+                type: string
+                format: date-time
+              visibleToParties:
+                type: boolean
+                description: Solo en la vista de administración.
+        finalResponse:
+          oneOf:
+            - type: object
+              required: [text, outcome, at]
+              properties:
+                text:
+                  type: string
+                outcome:
+                  $ref: '#/components/schemas/IncidentOutcome'
+                at:
+                  type: string
+                  format: date-time
+            - type: 'null'
+        createdAt:
+          type: string
+          format: date-time
+        closedAt:
+          type: [string, 'null']
+          format: date-time
+    IncidentPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Incident'
+        nextCursor:
+          type: [string, 'null']
+    AddIncidentNoteRequest:
+      type: object
+      required: [text, visibleToParties]
+      properties:
+        text:
+          type: string
+          minLength: 3
+          maxLength: 1000
+        visibleToParties:
+          type: boolean
+    CloseIncidentRequest:
+      type: object
+      required: [finalResponse, outcome]
+      properties:
+        finalResponse:
+          type: string
+          minLength: 5
+          maxLength: 1000
+        outcome:
+          $ref: '#/components/schemas/IncidentOutcome'
+    SanctionType:
+      type: string
+      enum: [warning, suspension]
+    SanctionInput:
+      type: object
+      required: [type, reason]
+      properties:
+        type:
+          $ref: '#/components/schemas/SanctionType'
+        reason:
+          type: string
+          minLength: 5
+          maxLength: 500
+        endsAt:
+          type: [string, 'null']
+          format: date-time
+          description: Obligatorio y futuro en `suspension`; debe omitirse en `warning`.
+        incidentId:
+          type: [string, 'null']
+          description: Incidencia que motiva la sanción (opcional; debe existir).
+    Sanction:
+      type: object
+      required: [id, userId, type, reason, endsAt, incidentId, createdAt]
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        type:
+          $ref: '#/components/schemas/SanctionType'
+        reason:
+          type: string
+        endsAt:
+          type: [string, 'null']
+          format: date-time
+        incidentId:
+          type: [string, 'null']
+        createdAt:
+          type: string
+          format: date-time
     ErrorCode:
       type: string
       description: Códigos permitidos por el Art. IV.3 de la constitución.

@@ -1,0 +1,62 @@
+# Ejemplos de las rutas de administración de la spec 010 (incidencias y
+# sanciones), para el cliente REST de VS Code / JetBrains. Todas exigen una
+# sesión con rol `admin` (CA-05): un usuario común recibe 403 forbidden.
+#
+# No hay credenciales en este archivo. Define @host y @adminToken en un
+# archivo de entorno local que no se versione (p. ej. .vscode/settings.json →
+# rest-client.environmentVariables) o pégalos aquí solo en tu copia.
+#
+#   @host = https://<tu-host>/api/v1
+#   @adminToken = <access token de una cuenta admin; sale de POST /auth/login>
+#   @incidentId = <id de una incidencia abierta>
+#   @userId = <id de la persona a sancionar>
+
+### Cola de incidencias (por omisión, las abiertas; más antiguas primero).
+### Parámetros opcionales: status=open|closed, limit=1..50, cursor=<nextCursor>.
+GET {{host}}/admin/incidents?status=open&limit=20
+Authorization: Bearer {{adminToken}}
+
+### Agregar una nota. visibleToParties=false la deja solo para el equipo;
+### true la muestran las dos partes y las avisa. Máx. 10 notas por incidencia.
+POST {{host}}/admin/incidents/{{incidentId}}/notes
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "text": "Pedimos una foto adicional del daño.",
+  "visibleToParties": true
+}
+
+### Cerrar la incidencia con la respuesta final (la ven ambas partes).
+### outcome: none | monetary_adjustment | restriction.
+POST {{host}}/admin/incidents/{{incidentId}}/close
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "finalResponse": "Revisamos la evidencia y acordamos un ajuste entre las partes.",
+  "outcome": "monetary_adjustment"
+}
+
+### Advertencia (solo avisa; no lleva endsAt).
+POST {{host}}/admin/users/{{userId}}/sanctions
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "type": "warning",
+  "reason": "Primera advertencia por devolver el objeto con retraso.",
+  "incidentId": "{{incidentId}}"
+}
+
+### Suspensión: endsAt obligatorio y futuro. Bloquea crear objetos y solicitudes
+### hasta esa fecha; no cambia las calificaciones. incidentId es opcional.
+POST {{host}}/admin/users/{{userId}}/sanctions
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "type": "suspension",
+  "reason": "Daño reiterado en objetos prestados.",
+  "endsAt": "2026-12-15T00:00:00Z"
+}
