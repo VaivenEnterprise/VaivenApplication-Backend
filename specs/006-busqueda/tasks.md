@@ -39,13 +39,13 @@
   - Aceptación: cumple el contrato; `thumbUrl` con `images.Service`; errores de validación con `details` (CA-06); módulo registrado con una línea; pruebas con repositorio falso
   - Refs: RF-01, RF-06, RF-08
 
-- [ ] **T007** Disponibilidad con reservas (prueba cruzada)
+- [x] **T007** Disponibilidad con reservas (prueba cruzada)
   - Archivos: `internal/search/adapter/mongo/availability_integration_test.go`
   - Agente: `qa-go` · Depende de: T005
   - Aceptación: con reservas sembradas manualmente en `bookings` (estados `accepted`, `in_progress`, `pending`, `cancelled`) solo las dos primeras bloquean; cubre CA-03 y periodos que tocan bordes
   - Refs: RF-03 · CA-03
 
-- [ ] **T008** [P] Prueba de rendimiento
+- [x] **T008** [P] Prueba de rendimiento
   - Archivos: `internal/search/adapter/mongo/search_perf_test.go` (`//go:build perf`)
   - Agente: `qa-go` · Depende de: T005
   - Aceptación: con 5,000 objetos sembrados, p95 < 500 ms en los 3 modos; resultado anotado en `memoria.md`
