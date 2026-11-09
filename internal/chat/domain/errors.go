@@ -13,4 +13,7 @@ var (
 	// ErrDuplicateClientID: el clientId ya se usó (el repositorio lo
 	// traduce en el mensaje existente).
 	ErrDuplicateClientID = shared.NewConflict("Ya enviaste este mensaje.")
+	// ErrUnknownMessage: el id de before/after no es un mensaje de esta
+	// conversación (el usecase lo devuelve como validation_failed).
+	ErrUnknownMessage = shared.NewValidation(MessageInvalidData, shared.Detail{Field: "cursor", Issue: "no es un mensaje de esta conversación"})
 )

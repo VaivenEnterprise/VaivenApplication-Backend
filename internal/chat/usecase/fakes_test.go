@@ -157,6 +157,9 @@ func (m *memMsgs) Before(_ context.Context, conv, before string, limit int) ([]d
 }
 
 func (m *memMsgs) After(_ context.Context, conv, after string, limit int) ([]domain.Message, error) {
+	if err := m.fail["After"]; err != nil {
+		return nil, err
+	}
 	var out []domain.Message
 	for _, x := range m.list {
 		if x.ConversationID == conv && x.ID > after && len(out) < limit {
@@ -164,6 +167,25 @@ func (m *memMsgs) After(_ context.Context, conv, after string, limit int) ([]dom
 		}
 	}
 	return out, nil
+}
+
+// fakeSender hace en memoria lo que adapter/mongo.Sender hace en una
+// transacción: guarda el mensaje y luego actualiza la conversación.
+type fakeSender struct {
+	convs *memConvs
+	msgs  *memMsgs
+}
+
+func (f fakeSender) Send(ctx context.Context, m domain.Message, receiver string, lm domain.LastMessage) (domain.Message, int, error) {
+	saved, err := f.msgs.Insert(ctx, m)
+	if err != nil {
+		return domain.Message{}, 0, err
+	}
+	prev, err := f.convs.RecordMessage(ctx, m.ConversationID, receiver, lm)
+	if err != nil {
+		return domain.Message{}, 0, err
+	}
+	return saved, prev, nil
 }
 
 type fakeBookings struct {
@@ -262,7 +284,7 @@ func newEnv(t *testing.T, mutate ...func(*Deps)) env {
 		not:      &fakeNotifier{},
 		logs:     &bytes.Buffer{},
 	}
-	d := Deps{Conversations: e.convs, Messages: e.msgs, Bookings: e.bookings, Accounts: e.accounts, Users: fakeUsers{},
+	d := Deps{Conversations: e.convs, Messages: e.msgs, Sender: fakeSender{e.convs, e.msgs}, Bookings: e.bookings, Accounts: e.accounts, Users: fakeUsers{},
 		Images: fakeImages{}, Moderation: fakeMod{}, Notifier: e.not, Log: slog.New(slog.NewTextHandler(e.logs, nil)),
 		Now: func() time.Time { return t0 }}
 	for _, m := range mutate {

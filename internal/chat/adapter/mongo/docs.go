@@ -34,6 +34,9 @@ type conversationDoc struct {
 	LastMessage    *lastMessageDoc `bson:"lastMessage"`
 	LastMessageAt  time.Time       `bson:"lastMessageAt"`
 	CreatedAt      time.Time       `bson:"createdAt"`
+	// Seq es el número del último mensaje; lo incrementa Sender en la
+	// transacción de envío (ausente = 0 en conversaciones sin mensajes).
+	Seq int64 `bson:"seq"`
 }
 
 func (d conversationDoc) toDomain() domain.Conversation {
@@ -53,12 +56,14 @@ func (d conversationDoc) toDomain() domain.Conversation {
 	return c
 }
 
-// messageDoc es el documento de messages. El _id (ObjectID) crece con el
-// tiempo y sirve de cursor (plan P-01).
+// messageDoc es el documento de messages. El _id es el cursor que ve el
+// cliente (plan P-01); el orden real lo da seq, asignado en la transacción de
+// envío en el mismo orden en que se confirma (ajuste A-01).
 type messageDoc struct {
 	ID             bson.ObjectID `bson:"_id"`
 	ConversationID string        `bson:"conversationId"`
 	SenderID       string        `bson:"senderId"`
+	Seq            int64         `bson:"seq"`
 	Body           string        `bson:"body"`
 	ClientID       *string       `bson:"clientId,omitempty"`
 	CreatedAt      time.Time     `bson:"createdAt"`
@@ -66,7 +71,7 @@ type messageDoc struct {
 
 func (d messageDoc) toDomain() domain.Message {
 	return domain.Message{
-		ID: d.ID.Hex(), ConversationID: d.ConversationID, SenderID: d.SenderID,
+		ID: d.ID.Hex(), ConversationID: d.ConversationID, SenderID: d.SenderID, Seq: d.Seq,
 		Body: d.Body, ClientID: d.ClientID, CreatedAt: d.CreatedAt.UTC(),
 	}
 }

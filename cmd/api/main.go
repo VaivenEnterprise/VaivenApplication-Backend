@@ -187,7 +187,7 @@ func run() error {
 	// Chat de cada reserva (spec 008); su servicio es el chat.Opener real que
 	// abre la conversación al crear una solicitud (reemplaza el vacío de 007).
 	chatSvc, err := chatusecase.NewService(chatusecase.Deps{
-		Conversations: convRepo, Messages: msgRepo,
+		Conversations: convRepo, Messages: msgRepo, Sender: chatmongo.NewSender(db),
 		Bookings: chatmongo.NewBookingReader(db), Accounts: chatmongo.NewAccountReader(db),
 		Users: userRepo, Images: imagesSvc, Moderation: mod, Notifier: notifier, Log: log,
 	})

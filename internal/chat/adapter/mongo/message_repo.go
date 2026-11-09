@@ -21,10 +21,10 @@ func NewMessageRepo(db *drv.Database) *MessageRepo {
 }
 
 // EnsureIndexes crea los índices de messages (plan §3): por conversación y
-// _id, y el único parcial de idempotencia por clientId.
+// seq (orden de las páginas), y el único parcial de idempotencia por clientId.
 func (r *MessageRepo) EnsureIndexes(ctx context.Context) error {
 	_, err := r.col.Indexes().CreateMany(ctx, []drv.IndexModel{
-		{Keys: bson.D{{Key: "conversationId", Value: 1}, {Key: "_id", Value: -1}}, Options: options.Index().SetName("conversation_id")},
+		{Keys: bson.D{{Key: "conversationId", Value: 1}, {Key: "seq", Value: -1}, {Key: "_id", Value: -1}}, Options: options.Index().SetName("conversation_seq")},
 		{
 			Keys: bson.D{{Key: "conversationId", Value: 1}, {Key: "senderId", Value: 1}, {Key: "clientId", Value: 1}},
 			Options: options.Index().SetName("conversation_sender_clientId_unique").SetUnique(true).
@@ -35,22 +35,6 @@ func (r *MessageRepo) EnsureIndexes(ctx context.Context) error {
 		return fmt.Errorf("chat: crear índices de mensajes: %w", err)
 	}
 	return nil
-}
-
-// Insert guarda el mensaje con un id nuevo. Un clientId repetido del mismo
-// remitente devuelve domain.ErrDuplicateClientID.
-func (r *MessageRepo) Insert(ctx context.Context, m domain.Message) (domain.Message, error) {
-	d := messageDoc{
-		ID: bson.NewObjectID(), ConversationID: m.ConversationID, SenderID: m.SenderID,
-		Body: m.Body, ClientID: m.ClientID, CreatedAt: m.CreatedAt.UTC(),
-	}
-	if _, err := r.col.InsertOne(ctx, d); err != nil {
-		if drv.IsDuplicateKeyError(err) {
-			return domain.Message{}, domain.ErrDuplicateClientID
-		}
-		return domain.Message{}, fmt.Errorf("chat: guardar mensaje: %w", err)
-	}
-	return d.toDomain(), nil
 }
 
 // ByClientID busca el mensaje que senderID ya envió con clientID.
@@ -68,32 +52,52 @@ func (r *MessageRepo) ByClientID(ctx context.Context, conversationID, senderID, 
 	return d.toDomain(), true, nil
 }
 
-// Before devuelve hasta limit mensajes anteriores a before (o los más nuevos
-// si before es ""), del más nuevo al más viejo (RF-03).
+// seqOf devuelve el seq del mensaje id de la conversación; si no existe,
+// domain.ErrUnknownMessage.
+func (r *MessageRepo) seqOf(ctx context.Context, conversationID, id string) (int64, error) {
+	oid, err := bson.ObjectIDFromHex(id)
+	if err != nil {
+		return 0, domain.ErrUnknownMessage
+	}
+	var d messageDoc
+	err = r.col.FindOne(ctx, bson.D{{Key: "_id", Value: oid}, {Key: "conversationId", Value: conversationID}},
+		options.FindOne().SetProjection(bson.D{{Key: "seq", Value: 1}})).Decode(&d)
+	if errors.Is(err, drv.ErrNoDocuments) {
+		return 0, domain.ErrUnknownMessage
+	}
+	if err != nil {
+		return 0, fmt.Errorf("chat: leer cursor: %w", err)
+	}
+	return d.Seq, nil
+}
+
+// Before devuelve hasta limit mensajes anteriores al mensaje before (o los
+// más nuevos si before es ""), del más nuevo al más viejo (RF-03).
 func (r *MessageRepo) Before(ctx context.Context, conversationID, before string, limit int) ([]domain.Message, error) {
 	f := bson.D{{Key: "conversationId", Value: conversationID}}
 	if before != "" {
-		oid, err := bson.ObjectIDFromHex(before)
+		seq, err := r.seqOf(ctx, conversationID, before)
 		if err != nil {
-			return nil, fmt.Errorf("chat: cursor inválido: %w", err)
+			return nil, err
 		}
-		f = append(f, bson.E{Key: "_id", Value: bson.D{{Key: "$lt", Value: oid}}})
+		f = append(f, bson.E{Key: "seq", Value: bson.D{{Key: "$lt", Value: seq}}})
 	}
 	return r.find(ctx, f, -1, limit)
 }
 
-// After devuelve hasta limit mensajes posteriores a after, en orden
-// ascendente (consulta periódica, RF-03).
+// After devuelve hasta limit mensajes posteriores al mensaje after, en orden
+// ascendente (consulta periódica, RF-03). Ordena por seq, que se confirma en
+// orden: no hay huecos aunque dos personas escriban a la vez.
 func (r *MessageRepo) After(ctx context.Context, conversationID, after string, limit int) ([]domain.Message, error) {
-	oid, err := bson.ObjectIDFromHex(after)
+	seq, err := r.seqOf(ctx, conversationID, after)
 	if err != nil {
-		return nil, fmt.Errorf("chat: cursor inválido: %w", err)
+		return nil, err
 	}
-	return r.find(ctx, bson.D{{Key: "conversationId", Value: conversationID}, {Key: "_id", Value: bson.D{{Key: "$gt", Value: oid}}}}, 1, limit)
+	return r.find(ctx, bson.D{{Key: "conversationId", Value: conversationID}, {Key: "seq", Value: bson.D{{Key: "$gt", Value: seq}}}}, 1, limit)
 }
 
 func (r *MessageRepo) find(ctx context.Context, f bson.D, dir, limit int) ([]domain.Message, error) {
-	cur, err := r.col.Find(ctx, f, options.Find().SetSort(bson.D{{Key: "_id", Value: dir}}).SetLimit(int64(limit)))
+	cur, err := r.col.Find(ctx, f, options.Find().SetSort(bson.D{{Key: "seq", Value: dir}, {Key: "_id", Value: dir}}).SetLimit(int64(limit)))
 	if err != nil {
 		return nil, fmt.Errorf("chat: leer mensajes: %w", err)
 	}

@@ -19,6 +19,7 @@ import (
 type Deps struct {
 	Conversations Conversations
 	Messages      Messages
+	Sender        Sender
 	Bookings      Bookings
 	Accounts      Accounts
 	Users         users.Directory
@@ -37,7 +38,7 @@ var _ chat.Opener = (*Service)(nil)
 
 // NewService crea el servicio. Falla si falta una dependencia obligatoria.
 func NewService(d Deps) (*Service, error) {
-	if d.Conversations == nil || d.Messages == nil || d.Bookings == nil || d.Accounts == nil ||
+	if d.Conversations == nil || d.Messages == nil || d.Sender == nil || d.Bookings == nil || d.Accounts == nil ||
 		d.Users == nil || d.Images == nil || d.Moderation == nil || d.Notifier == nil || d.Log == nil {
 		return nil, errors.New("chat: faltan dependencias del servicio")
 	}

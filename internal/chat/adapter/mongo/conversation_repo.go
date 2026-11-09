@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -35,13 +34,26 @@ func (r *ConversationRepo) EnsureIndexes(ctx context.Context) error {
 	return nil
 }
 
-// unreadField devuelve la ruta unread.<userId>. Los ids son hexadecimales;
-// cualquier otro carácter se rechaza para no alterar la ruta del documento.
+// unreadField devuelve la ruta unread.<userId>. Solo acepta ids de 24
+// caracteres hexadecimales en minúsculas (ObjectID), para que ningún valor
+// pueda alterar la ruta del documento (revisión T009, observación 6).
 func unreadField(userID string) (string, error) {
-	if userID == "" || strings.ContainsAny(userID, ".$") {
+	if !isObjectIDHex(userID) {
 		return "", errors.New("chat: id de usuario inválido")
 	}
 	return "unread." + userID, nil
+}
+
+func isObjectIDHex(s string) bool {
+	if len(s) != 24 {
+		return false
+	}
+	for _, c := range s {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 // Open crea la conversación de una reserva o devuelve la existente
@@ -115,35 +127,6 @@ func (r *ConversationRepo) ListByParticipant(ctx context.Context, userID string,
 		out = append(out, d.toDomain())
 	}
 	return out, nil
-}
-
-// RecordMessage suma uno a los no leídos de receiverID y actualiza el último
-// mensaje (plan P-04). Devuelve los no leídos que tenía receiverID antes, para
-// avisar solo en el primero (P-05).
-func (r *ConversationRepo) RecordMessage(ctx context.Context, conversationID, receiverID string, lm domain.LastMessage) (int, error) {
-	oid, err := bson.ObjectIDFromHex(conversationID)
-	if err != nil {
-		return 0, domain.ErrNotFound
-	}
-	field, err := unreadField(receiverID)
-	if err != nil {
-		return 0, err
-	}
-	var before conversationDoc
-	err = r.col.FindOneAndUpdate(ctx, bson.D{{Key: "_id", Value: oid}}, bson.D{
-		{Key: "$inc", Value: bson.D{{Key: field, Value: 1}}},
-		{Key: "$set", Value: bson.D{
-			{Key: "lastMessage", Value: lastMessageDoc{Preview: lm.Preview, At: lm.At.UTC(), SenderID: lm.SenderID}},
-			{Key: "lastMessageAt", Value: lm.At.UTC()},
-		}},
-	}, options.FindOneAndUpdate().SetReturnDocument(options.Before)).Decode(&before)
-	if err != nil {
-		if errors.Is(err, drv.ErrNoDocuments) {
-			return 0, domain.ErrNotFound
-		}
-		return 0, fmt.Errorf("chat: registrar mensaje: %w", err)
-	}
-	return before.Unread[receiverID], nil
 }
 
 // MarkRead pone en cero los no leídos de userID (RF-08).

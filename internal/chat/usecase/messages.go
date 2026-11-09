@@ -24,7 +24,10 @@ func (s *Service) Messages(ctx context.Context, userID, conversationID string, q
 	}
 	if q.After != "" {
 		items, err := s.d.Messages.After(ctx, c.ID, q.After, MaxAfter)
-		return MessagePage{Items: items}, err
+		if err != nil {
+			return MessagePage{}, cursorError(err, "after")
+		}
+		return MessagePage{Items: items}, nil
 	}
 	limit := q.Limit
 	if limit <= 0 {
@@ -33,7 +36,7 @@ func (s *Service) Messages(ctx context.Context, userID, conversationID string, q
 	limit = min(limit, MaxMessages)
 	items, err := s.d.Messages.Before(ctx, c.ID, q.Before, limit+1)
 	if err != nil {
-		return MessagePage{}, err
+		return MessagePage{}, cursorError(err, "before")
 	}
 	page := MessagePage{Items: items}
 	if len(items) > limit {
@@ -83,21 +86,24 @@ func (s *Service) Send(ctx context.Context, userID, conversationID, body string,
 		}
 		return domain.Message{}, false, shared.NewValidation("El mensaje no cumple las reglas de contenido.", shared.Detail{Field: "body", Issue: reason})
 	}
-	m, err := s.d.Messages.Insert(ctx, domain.Message{
-		ConversationID: c.ID, SenderID: userID, Body: text, ClientID: cid, CreatedAt: s.now(),
-	})
+	now := s.now()
+	other := c.Counterpart(userID)
+	// Mensaje, no leídos, último mensaje y seq se guardan juntos (A-01): si
+	// algo falla no queda un mensaje sin contar ni avisar.
+	m, prev, err := s.d.Sender.Send(ctx,
+		domain.Message{ConversationID: c.ID, SenderID: userID, Body: text, ClientID: cid, CreatedAt: now},
+		other, domain.LastMessage{Preview: domain.Preview(text), At: now, SenderID: userID})
 	if errors.Is(err, domain.ErrDuplicateClientID) && cid != nil {
 		// Dos envíos simultáneos con el mismo clientId: gana el primero.
-		existing, _, err := s.d.Messages.ByClientID(ctx, c.ID, userID, *cid)
-		return existing, false, err
+		existing, ok, err := s.d.Messages.ByClientID(ctx, c.ID, userID, *cid)
+		if err != nil {
+			return domain.Message{}, false, err
+		}
+		if !ok {
+			return domain.Message{}, false, errors.New("chat: clientId repetido sin mensaje guardado")
+		}
+		return existing, false, nil
 	}
-	if err != nil {
-		return domain.Message{}, false, err
-	}
-	other := c.Counterpart(userID)
-	prev, err := s.d.Conversations.RecordMessage(ctx, c.ID, other, domain.LastMessage{
-		Preview: domain.Preview(m.Body), At: m.CreatedAt, SenderID: userID,
-	})
 	if err != nil {
 		return domain.Message{}, false, err
 	}
@@ -126,4 +132,13 @@ func (s *Service) Read(ctx context.Context, userID, conversationID string) error
 		return err
 	}
 	return s.d.Conversations.MarkRead(ctx, c.ID, userID)
+}
+
+// cursorError traduce un cursor que no es de la conversación en
+// validation_failed sobre el parámetro usado.
+func cursorError(err error, field string) error {
+	if errors.Is(err, domain.ErrUnknownMessage) {
+		return shared.NewValidation(domain.MessageInvalidData, shared.Detail{Field: field, Issue: "no es un mensaje de esta conversación"})
+	}
+	return err
 }
