@@ -9,13 +9,13 @@
   - Aceptación: las 8 rutas del plan §2; esquemas `Quote`, `Booking`, `Stage` (placeholder), estados y errores `quote_changed`; ejemplos con importes en centavos
   - Refs: Art. IV, XII
 
-- [ ] **T002** [P] Dominio: fechas y cotización
+- [x] **T002** [P] Dominio: fechas y cotización
   - Archivos: `internal/bookings/domain/{dates.go, quote.go}`, `internal/bookings/domain/quote_test.go`
   - Agente: `dev-go` · Depende de: 005-T002
   - Aceptación: `ParseCalendarDate`, `Days`, `Quote` con mitades `ceil/floor`; CA-01 y CA-02 pasan; zona `America/Mexico_City` con `time/tzdata`; solo stdlib; ≥ 80 %
   - Refs: RF-01, RF-05 · P-01, P-02
 
-- [ ] **T003** [P] Dominio: máquina de estados y reglas de creación
+- [x] **T003** [P] Dominio: máquina de estados y reglas de creación
   - Archivos: `internal/bookings/domain/{booking.go, statemachine.go, errors.go}`, `internal/bookings/domain/statemachine_test.go`
   - Agente: `dev-go` · Depende de: 005-T002
   - Aceptación: todas las transiciones del plan §4 (válidas e inválidas) probadas; reglas RF-03; `statusHistory` limitada a 10; solo stdlib

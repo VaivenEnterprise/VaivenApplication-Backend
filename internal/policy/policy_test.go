@@ -18,6 +18,7 @@ func TestPolicyValues(t *testing.T) {
 		{"POL01MinRentPriceCents", POL01MinRentPriceCents, 1000},
 		{"POL02MinDays", POL02MinDays, 1},
 		{"POL02MaxDays", POL02MaxDays, 7},
+		{"POL03RequestExpiryHours", POL03RequestExpiryHours, 48},
 		{"POL13MinItemPhotos", POL13MinItemPhotos, 1},
 		{"POL13MaxItemPhotos", POL13MaxItemPhotos, 5},
 	}
@@ -54,5 +55,14 @@ func TestPOL14Categories(t *testing.T) {
 		if POL14Valid(k) {
 			t.Errorf("POL14Valid(%q) = true", k)
 		}
+	}
+}
+
+func TestPolicyTexts(t *testing.T) {
+	if POL05FullOnDelivery != "full_on_delivery" || POL05Split5050 != "split_50_50" {
+		t.Error("POL-05")
+	}
+	if POL09LateCancellationNotice == "" || POL09NoShowNotice == "" {
+		t.Error("POL-09 sin texto")
 	}
 }
