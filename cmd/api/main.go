@@ -27,7 +27,9 @@ import (
 	bookingsmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/bookings/adapter/mongo"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/bookings/jobs"
 	bookingsusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/bookings/usecase"
-	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/chat"
+	chathttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/chat/adapter/http"
+	chatmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/chat/adapter/mongo"
+	chatusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/chat/usecase"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/config"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/images"
 	imageshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/images/adapter/http"
@@ -123,7 +125,8 @@ func run() error {
 	itemRepo := itemsmongo.NewItemRepo(db)
 	// Los índices de búsqueda (006) van después de los de items (005).
 	bookingRepo := bookingsmongo.NewRepo(db)
-	if err := adaptermongo.EnsureAll(ctx, userRepo, refreshRepo, itemRepo, searchmongo.NewIndexes(db), bookingRepo); err != nil {
+	convRepo, msgRepo := chatmongo.NewConversationRepo(db), chatmongo.NewMessageRepo(db)
+	if err := adaptermongo.EnsureAll(ctx, userRepo, refreshRepo, itemRepo, searchmongo.NewIndexes(db), bookingRepo, convRepo, msgRepo); err != nil {
 		return fmt.Errorf("no se pudieron crear los índices: %w", err)
 	}
 
@@ -172,9 +175,26 @@ func run() error {
 	}
 
 	notifier := notify.Noop{}
+	// Chat de cada reserva (spec 008); su servicio es el chat.Opener real que
+	// abre la conversación al crear una solicitud (reemplaza el vacío de 007).
+	chatSvc, err := chatusecase.NewService(chatusecase.Deps{
+		Conversations: convRepo, Messages: msgRepo,
+		Bookings: chatmongo.NewBookingReader(db), Accounts: chatmongo.NewAccountReader(db),
+		Users: userRepo, Images: imagesSvc, Moderation: mod, Notifier: notifier, Log: log,
+	})
+	if err != nil {
+		return err
+	}
+	chatModule, err := chathttp.NewModule(chathttp.ModuleDeps{
+		Service: chatSvc, Authenticate: authModule.Authenticate(), Log: log,
+		Limiter: limiter, LimiterFallback: redis.NewMemoryLimiter(),
+	})
+	if err != nil {
+		return err
+	}
 	bookingsSvc, err := bookingsusecase.NewService(bookingsusecase.Deps{
 		Repo: bookingRepo, Images: imagesSvc, Users: userRepo,
-		Chat: chat.Noop{}, Notifier: notifier, Log: log,
+		Chat: chatSvc, Notifier: notifier, Log: log,
 	})
 	if err != nil {
 		return err
@@ -204,6 +224,7 @@ func run() error {
 		Items:      itemsModule,
 		Search:     searchModule,
 		Bookings:   bookingsModule,
+		Chat:       chatModule,
 		Users:      userRepo,
 	})
 	for _, m := range mods {

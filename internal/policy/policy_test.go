@@ -19,6 +19,8 @@ func TestPolicyValues(t *testing.T) {
 		{"POL02MinDays", POL02MinDays, 1},
 		{"POL02MaxDays", POL02MaxDays, 7},
 		{"POL03RequestExpiryHours", POL03RequestExpiryHours, 48},
+		{"POL11MaxMessageChars", POL11MaxMessageChars, 1000},
+		{"POL11MessagesPerMinute", POL11MessagesPerMinute, 30},
 		{"POL13MinItemPhotos", POL13MinItemPhotos, 1},
 		{"POL13MaxItemPhotos", POL13MaxItemPhotos, 5},
 	}
