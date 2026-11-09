@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: VAIVÉN API
-  version: 0.7.0
+  version: 0.8.0
   summary: API REST del backend de VAIVÉN (préstamo y renta de objetos en México).
   description: |
     Contrato de la spec 002 (arquitectura base): endpoints de infraestructura y
@@ -9,7 +9,8 @@ info:
     agrega la cuenta y la autenticación (`api/paths/auth.yaml` y `users.yaml`) y
     la spec 004 las imágenes (`api/paths/uploads.yaml`) y la spec 005 los objetos
     (`api/paths/items.yaml`); la spec 006 la búsqueda (`api/paths/search.yaml`) y la
-    spec 007 las solicitudes y reservas (`api/paths/bookings.yaml`).
+    spec 007 las solicitudes y reservas (`api/paths/bookings.yaml`) y la spec
+    008 el chat privado (`api/paths/chat.yaml`).
 
     - Rutas de negocio bajo `/api/v1`; `/healthz` y `/readyz` fuera del prefijo.
     - JSON en `camelCase`; fechas en ISO-8601 UTC.
@@ -44,6 +45,8 @@ tags:
     description: Buscar objetos por texto, categoría, zona, cercanía y fechas (spec 006).
   - name: reservas
     description: Cotizar, solicitar, aceptar, rechazar y cancelar reservas (spec 007).
+  - name: chat
+    description: Conversación privada de texto de cada reserva (spec 008).
 paths:
   /healthz:
     get:
@@ -1465,6 +1468,250 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+  /api/v1/conversations:
+    get:
+      tags:
+        - chat
+      operationId: listConversations
+      summary: Mis conversaciones
+      description: |
+        Una conversación por reserva, con su contraparte, el objeto, el último mensaje
+        (≤ 80 caracteres), mis no leídos y si se puede escribir (RF-02). La más
+        reciente primero. `nextCursor` null = no hay más.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 128
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        '200':
+          description: Página de conversaciones.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationPage'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/conversations/unread-count:
+    get:
+      tags:
+        - chat
+      operationId: getUnreadCount
+      summary: Mis mensajes sin leer
+      description: Suma de mis no leídos en todas mis conversaciones (RF-09).
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Total sin leer.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - count
+                properties:
+                  count:
+                    type: integer
+                    minimum: 0
+              example:
+                count: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/conversations/{id}/messages:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+      - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+        - chat
+      operationId: listMessages
+      summary: Mensajes de una conversación
+      description: |
+        Solo para los dos participantes; cualquier otra persona recibe 404 (RF-05).
+
+        - **Historial** (sin `after`): del más nuevo al más viejo, `limit` (30 por
+          defecto, máximo 50); para seguir hacia atrás se envía `before` con el
+          `nextCursor` recibido.
+        - **Consulta periódica** (`after=<id del último mensaje que tengo>`): los
+          mensajes más nuevos que ese, en orden **ascendente**, máximo 100;
+          `nextCursor` siempre null.
+
+        `before` y `after` no se combinan (400).
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 30
+        - name: before
+          in: query
+          required: false
+          description: Id de mensaje; devuelve los anteriores.
+          schema:
+            type: string
+            pattern: ^[0-9a-f]{24}$
+        - name: after
+          in: query
+          required: false
+          description: Id de mensaje; devuelve los posteriores en orden ascendente.
+          schema:
+            type: string
+            pattern: ^[0-9a-f]{24}$
+      responses:
+        '200':
+          description: Mensajes.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessagePage'
+              examples:
+                historial:
+                  summary: Historial (descendente)
+                  value:
+                    items:
+                      - id: 6731b0000000000000000003
+                        conversationId: 6731a0000000000000000001
+                        senderId: 6730f1c2a9b3e4d5f6a7b8c9
+                        body: ¿Te queda bien a las 5 en el metro?
+                        createdAt: '2026-11-09T17:02:00Z'
+                        clientId: null
+                    nextCursor: 6731b0000000000000000003
+                consultaPeriodica:
+                  summary: Consulta periódica con after (ascendente)
+                  value:
+                    items:
+                      - id: 6731b0000000000000000004
+                        conversationId: 6731a0000000000000000001
+                        senderId: 6730f1c2a9b3e4d5f6a7b8d0
+                        body: Perfecto, ahí nos vemos.
+                        createdAt: '2026-11-09T17:03:00Z'
+                        clientId: 2f1c-8e
+                    nextCursor: null
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      tags:
+        - chat
+      operationId: sendMessage
+      summary: Enviar un mensaje
+      description: |
+        Texto plano de 1 a 1000 caracteres, sin ser solo espacios (POL-11). Pasa por
+        moderación (400 con el motivo). Con `clientId` es idempotente: repetir el
+        mismo `clientId` devuelve el mensaje existente con 200 (CA-03).
+
+        - Solo se escribe mientras la reserva esté `pending`, `accepted` o
+          `in_progress` y la contraparte siga activa; si no, 409 «La conversación
+          está cerrada.» (el historial se sigue leyendo).
+        - Límite: 30 mensajes por minuto por persona (429).
+        - Al primer mensaje sin leer se avisa a la otra parte (`message_received`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+            example:
+              body: ¿Te queda bien a las 5 en el metro?
+              clientId: 2f1c-8e
+      responses:
+        '200':
+          description: Ya existía un mensaje con ese clientId; se devuelve sin duplicarlo.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '201':
+          description: Mensaje enviado.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/conversations/{id}/read:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+      - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+        - chat
+      operationId: markConversationRead
+      summary: Marcar como leída
+      description: |
+        Pone en cero **mis** no leídos de la conversación (RF-08). No existe ni se
+        expone información de lectura de la otra parte.
+      responses:
+        '204':
+          description: Listo.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
 components:
   securitySchemes:
     bearerAuth:
@@ -1487,6 +1734,14 @@ components:
       in: path
       required: true
       description: Identificador de la solicitud o reserva.
+      schema:
+        type: string
+        pattern: ^[0-9a-f]{24}$
+    ConversationId:
+      name: id
+      in: path
+      required: true
+      description: Identificador de la conversación.
       schema:
         type: string
         pattern: ^[0-9a-f]{24}$
@@ -2559,6 +2814,135 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Booking'
+        nextCursor:
+          type:
+            - string
+            - 'null'
+    Message:
+      type: object
+      required:
+        - id
+        - conversationId
+        - senderId
+        - body
+        - createdAt
+        - clientId
+      properties:
+        id:
+          type: string
+          description: ObjectID; crece con el tiempo (sirve de cursor before/after).
+        conversationId:
+          type: string
+        senderId:
+          type: string
+        body:
+          type: string
+          description: Texto plano; el cliente nunca lo interpreta como HTML.
+        createdAt:
+          type: string
+          format: date-time
+        clientId:
+          type:
+            - string
+            - 'null'
+    MessagePage:
+      type: object
+      required:
+        - items
+        - nextCursor
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+        nextCursor:
+          type:
+            - string
+            - 'null'
+    SendMessageRequest:
+      type: object
+      required:
+        - body
+      properties:
+        body:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        clientId:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: Generado por el cliente para reintentar sin duplicar.
+    Conversation:
+      type: object
+      required:
+        - id
+        - bookingId
+        - bookingStatus
+        - counterpart
+        - item
+        - canWrite
+        - lastMessage
+        - unreadCount
+      properties:
+        id:
+          type: string
+        bookingId:
+          type: string
+        bookingStatus:
+          $ref: '#/components/schemas/BookingStatus'
+        counterpart:
+          $ref: '#/components/schemas/PublicUser'
+        item:
+          type: object
+          required:
+            - id
+            - title
+            - thumbUrl
+          properties:
+            id:
+              type: string
+            title:
+              type: string
+            thumbUrl:
+              type:
+                - string
+                - 'null'
+              format: uri
+        canWrite:
+          type: boolean
+          description: false si la reserva ya no está pending, accepted ni in_progress, o si la contraparte se dio de baja.
+        lastMessage:
+          oneOf:
+            - type: object
+              required:
+                - preview
+                - at
+                - senderId
+              properties:
+                preview:
+                  type: string
+                  maxLength: 81
+                at:
+                  type: string
+                  format: date-time
+                senderId:
+                  type: string
+            - type: 'null'
+        unreadCount:
+          type: integer
+          minimum: 0
+          description: Solo mis no leídos; nunca los de la otra parte.
+    ConversationPage:
+      type: object
+      required:
+        - items
+        - nextCursor
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Conversation'
         nextCursor:
           type:
             - string

@@ -3,7 +3,7 @@
 - **Dueño:** BE-B · **Estado:** sin ejecutar · `[P]` = paralelizable
 - Puede empezar con el contrato y el dominio antes de que 007 esté integrada.
 
-- [ ] **T001** Contrato OpenAPI del chat
+- [x] **T001** Contrato OpenAPI del chat
   - Archivos: `api/paths/chat.yaml`, `api/openapi.yaml` (agregar `$ref`)
   - Agente: `spec-writer` · Depende de: 007-T001
   - Aceptación: las 5 rutas del plan §2, esquemas `Conversation` y `Message`, ejemplos de `before` y `after`

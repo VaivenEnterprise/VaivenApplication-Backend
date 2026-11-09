@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: VAIVÉN API
-  version: 0.7.0
+  version: 0.8.0
   summary: API REST del backend de VAIVÉN (préstamo y renta de objetos en México).
   description: |
     Contrato de la spec 002 (arquitectura base): endpoints de infraestructura y
@@ -9,7 +9,8 @@ info:
     agrega la cuenta y la autenticación (`api/paths/auth.yaml` y `users.yaml`) y
     la spec 004 las imágenes (`api/paths/uploads.yaml`) y la spec 005 los objetos
     (`api/paths/items.yaml`); la spec 006 la búsqueda (`api/paths/search.yaml`) y la
-    spec 007 las solicitudes y reservas (`api/paths/bookings.yaml`).
+    spec 007 las solicitudes y reservas (`api/paths/bookings.yaml`) y la spec
+    008 el chat privado (`api/paths/chat.yaml`).
 
     - Rutas de negocio bajo `/api/v1`; `/healthz` y `/readyz` fuera del prefijo.
     - JSON en `camelCase`; fechas en ISO-8601 UTC.
@@ -44,6 +45,8 @@ tags:
     description: Buscar objetos por texto, categoría, zona, cercanía y fechas (spec 006).
   - name: reservas
     description: Cotizar, solicitar, aceptar, rechazar y cancelar reservas (spec 007).
+  - name: chat
+    description: Conversación privada de texto de cada reserva (spec 008).
 paths:
   /healthz:
     get:
@@ -180,6 +183,14 @@ paths:
     $ref: './paths/bookings.yaml#/cancel'
   /api/v1/bookings/{id}/meeting-point:
     $ref: './paths/bookings.yaml#/meetingPoint'
+  /api/v1/conversations:
+    $ref: './paths/chat.yaml#/conversations'
+  /api/v1/conversations/unread-count:
+    $ref: './paths/chat.yaml#/unreadCount'
+  /api/v1/conversations/{id}/messages:
+    $ref: './paths/chat.yaml#/messages'
+  /api/v1/conversations/{id}/read:
+    $ref: './paths/chat.yaml#/read'
 components:
   securitySchemes:
     bearerAuth:
@@ -988,6 +999,102 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Booking'
+        nextCursor:
+          type: [string, 'null']
+    Message:
+      type: object
+      required: [id, conversationId, senderId, body, createdAt, clientId]
+      properties:
+        id:
+          type: string
+          description: ObjectID; crece con el tiempo (sirve de cursor before/after).
+        conversationId:
+          type: string
+        senderId:
+          type: string
+        body:
+          type: string
+          description: Texto plano; el cliente nunca lo interpreta como HTML.
+        createdAt:
+          type: string
+          format: date-time
+        clientId:
+          type: [string, 'null']
+    MessagePage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+        nextCursor:
+          type: [string, 'null']
+    SendMessageRequest:
+      type: object
+      required: [body]
+      properties:
+        body:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        clientId:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: Generado por el cliente para reintentar sin duplicar.
+    Conversation:
+      type: object
+      required: [id, bookingId, bookingStatus, counterpart, item, canWrite, lastMessage, unreadCount]
+      properties:
+        id:
+          type: string
+        bookingId:
+          type: string
+        bookingStatus:
+          $ref: '#/components/schemas/BookingStatus'
+        counterpart:
+          $ref: '#/components/schemas/PublicUser'
+        item:
+          type: object
+          required: [id, title, thumbUrl]
+          properties:
+            id:
+              type: string
+            title:
+              type: string
+            thumbUrl:
+              type: [string, 'null']
+              format: uri
+        canWrite:
+          type: boolean
+          description: false si la reserva ya no está pending, accepted ni in_progress, o si la contraparte se dio de baja.
+        lastMessage:
+          oneOf:
+            - type: object
+              required: [preview, at, senderId]
+              properties:
+                preview:
+                  type: string
+                  maxLength: 81
+                at:
+                  type: string
+                  format: date-time
+                senderId:
+                  type: string
+            - type: 'null'
+        unreadCount:
+          type: integer
+          minimum: 0
+          description: Solo mis no leídos; nunca los de la otra parte.
+    ConversationPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Conversation'
         nextCursor:
           type: [string, 'null']
     ErrorCode:
