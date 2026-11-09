@@ -1,6 +1,6 @@
 # Tareas 007 — Solicitudes, precio y reservas (backend)
 
-- **Dueño:** BE-A · **Estado:** T001–T012 hechas (BE-B a pedido del responsable; archivos consolidados según plan §8 A-07) · `[P]` = paralelizable
+- **Dueño:** BE-A · **Estado:** T001–T013 hechas; verificada en staging (BE-B a pedido del responsable; archivos consolidados según plan §8 A-07) · `[P]` = paralelizable
 - **T001 se integra el primer día** para MO-A y para BE-B (008 y 006 leen `bookings`).
 
 - [x] **T001** Contrato OpenAPI de reservas
@@ -75,7 +75,7 @@
   - Aceptación: veredicto **CONFORME**; hito H3 (backend) marcado
   - Refs: DoD
 
-- [ ] **T013** Despliegue de la spec en Azure (staging)
+- [x] **T013** Despliegue de la spec en Azure (staging)
   - Archivos: `memoria.md` (solo anexar)
   - Agente: `devops-mcp` · Depende de: T012 (y todas las anteriores `[x]`)
   - Aceptación: `make fmt lint test` en verde; `scripts/deploy.sh staging` (construye, envía a la VM y reinicia la API); `/healthz` y `/readyz` devuelven 200 por HTTPS sin `-k`; cada endpoint nuevo de esta spec (`api/paths/<modulo>.yaml`) responde con una petición correcta y una inválida en el formato de error del Art. IV; registros sin secretos ni datos personales; resultado anotado en `memoria.md`. **La spec siguiente no empieza hasta que esta tarea pase.**
