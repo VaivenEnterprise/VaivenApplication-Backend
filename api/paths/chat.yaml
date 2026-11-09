@@ -1,0 +1,256 @@
+# Chat privado de cada reserva (spec 008, T001; Art. IV y XII.2). Se referencia
+# desde api/openapi.yaml. Solo texto: sin adjuntos, audios, llamadas,
+# indicadores de escritura ni confirmaciones de lectura. El cliente consulta
+# periódicamente (cada 5 s con el chat abierto) con `after`; no hay WebSockets.
+conversations:
+  get:
+    tags: [chat]
+    operationId: listConversations
+    summary: Mis conversaciones
+    description: |
+      Una conversación por reserva, con su contraparte, el objeto, el último mensaje
+      (≤ 80 caracteres), mis no leídos y si se puede escribir (RF-02). La más
+      reciente primero. `nextCursor` null = no hay más.
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 128
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 20
+    responses:
+      '200':
+        description: Página de conversaciones.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/ConversationPage'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+unreadCount:
+  get:
+    tags: [chat]
+    operationId: getUnreadCount
+    summary: Mis mensajes sin leer
+    description: Suma de mis no leídos en todas mis conversaciones (RF-09).
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+    responses:
+      '200':
+        description: Total sin leer.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [count]
+              properties:
+                count:
+                  type: integer
+                  minimum: 0
+            example:
+              count: 3
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+messages:
+  parameters:
+    - $ref: '#/components/parameters/ConversationId'
+    - $ref: '../openapi.yaml#/components/parameters/RequestId'
+  get:
+    tags: [chat]
+    operationId: listMessages
+    summary: Mensajes de una conversación
+    description: |
+      Solo para los dos participantes; cualquier otra persona recibe 404 (RF-05).
+
+      - **Historial** (sin `after`): del más nuevo al más viejo, `limit` (30 por
+        defecto, máximo 50); para seguir hacia atrás se envía `before` con el
+        `nextCursor` recibido.
+      - **Consulta periódica** (`after=<id del último mensaje que tengo>`): los
+        mensajes más nuevos que ese, en orden **ascendente**, máximo 100;
+        `nextCursor` siempre null.
+
+      `before` y `after` no se combinan (400).
+    parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 30
+      - name: before
+        in: query
+        required: false
+        description: Id de mensaje; devuelve los anteriores.
+        schema:
+          type: string
+          pattern: '^[0-9a-f]{24}$'
+      - name: after
+        in: query
+        required: false
+        description: Id de mensaje; devuelve los posteriores en orden ascendente.
+        schema:
+          type: string
+          pattern: '^[0-9a-f]{24}$'
+    responses:
+      '200':
+        description: Mensajes.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/MessagePage'
+            examples:
+              historial:
+                summary: Historial (descendente)
+                value:
+                  items:
+                    - id: 6731b0000000000000000003
+                      conversationId: 6731a0000000000000000001
+                      senderId: 6730f1c2a9b3e4d5f6a7b8c9
+                      body: ¿Te queda bien a las 5 en el metro?
+                      createdAt: '2026-11-09T17:02:00Z'
+                      clientId: null
+                  nextCursor: 6731b0000000000000000003
+              consultaPeriodica:
+                summary: Consulta periódica con after (ascendente)
+                value:
+                  items:
+                    - id: 6731b0000000000000000004
+                      conversationId: 6731a0000000000000000001
+                      senderId: 6730f1c2a9b3e4d5f6a7b8d0
+                      body: Perfecto, ahí nos vemos.
+                      createdAt: '2026-11-09T17:03:00Z'
+                      clientId: 2f1c-8e
+                  nextCursor: null
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+  post:
+    tags: [chat]
+    operationId: sendMessage
+    summary: Enviar un mensaje
+    description: |
+      Texto plano de 1 a 1000 caracteres, sin ser solo espacios (POL-11). Pasa por
+      moderación (400 con el motivo). Con `clientId` es idempotente: repetir el
+      mismo `clientId` devuelve el mensaje existente con 200 (CA-03).
+
+      - Solo se escribe mientras la reserva esté `pending`, `accepted` o
+        `in_progress` y la contraparte siga activa; si no, 409 «La conversación
+        está cerrada.» (el historial se sigue leyendo).
+      - Límite: 30 mensajes por minuto por persona (429).
+      - Al primer mensaje sin leer se avisa a la otra parte (`message_received`).
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/SendMessageRequest'
+          example:
+            body: ¿Te queda bien a las 5 en el metro?
+            clientId: 2f1c-8e
+    responses:
+      '201':
+        description: Mensaje enviado.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/Message'
+      '200':
+        description: Ya existía un mensaje con ese clientId; se devuelve sin duplicarlo.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/Message'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '409':
+        $ref: '../openapi.yaml#/components/responses/Conflict'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+read:
+  parameters:
+    - $ref: '#/components/parameters/ConversationId'
+    - $ref: '../openapi.yaml#/components/parameters/RequestId'
+  post:
+    tags: [chat]
+    operationId: markConversationRead
+    summary: Marcar como leída
+    description: |
+      Pone en cero **mis** no leídos de la conversación (RF-08). No existe ni se
+      expone información de lectura de la otra parte.
+    responses:
+      '204':
+        description: Listo.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+components:
+  parameters:
+    ConversationId:
+      name: id
+      in: path
+      required: true
+      description: Identificador de la conversación.
+      schema:
+        type: string
+        pattern: '^[0-9a-f]{24}$'

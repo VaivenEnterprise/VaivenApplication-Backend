@@ -57,6 +57,13 @@ const (
 	POL09NoShowNotice           = "Si no te presentas a la entrega o la devolución puede registrarse una incidencia y una advertencia o suspensión."
 )
 
+// POL-11 — Chat: texto de hasta 1000 caracteres y 30 mensajes por minuto por
+// persona; sin borrado en esta versión (spec 008).
+const (
+	POL11MaxMessageChars   = 1000
+	POL11MessagesPerMinute = 30
+)
+
 // POL-13 — Fotos: de 1 a 5 por objeto.
 const (
 	POL13MinItemPhotos = 1
