@@ -67,8 +67,11 @@ func (d Date) StartOf(loc *time.Location) time.Time {
 // Days cuenta los días de un periodo con fechas inclusivas (POL-01):
 // (end − start) + 1. Si end es anterior a start devuelve ≤ 0.
 func Days(start, end Date) int {
-	return int(end.t.Sub(start.t).Hours()/24) + 1
+	return int(end.t.Sub(start.t)/(24*time.Hour)) + 1
 }
+
+// AddDays devuelve la fecha n días después (o antes si n < 0).
+func (d Date) AddDays(n int) Date { return Date{t: d.t.AddDate(0, 0, n)} }
 
 // Overlaps indica si dos periodos inclusivos se cruzan.
 func Overlaps(aStart, aEnd, bStart, bEnd Date) bool {

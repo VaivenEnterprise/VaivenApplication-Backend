@@ -23,7 +23,7 @@ type Repository interface {
 	Accept(ctx context.Context, b domain.Booking, now time.Time) (domain.Booking, []domain.Booking, error)
 	HasBlockingOverlap(ctx context.Context, itemID string, start, end domain.Date) (bool, error)
 	HasPendingOverlap(ctx context.Context, itemID, requesterID string, start, end domain.Date, now time.Time) (bool, error)
-	ListByParty(ctx context.Context, userID string, role domain.Role, status *domain.Status, after *domain.Cursor, limit int) ([]domain.Booking, error)
+	ListByParty(ctx context.Context, userID string, role domain.Role, status *domain.Status, after *domain.Cursor, limit int, now time.Time) ([]domain.Booking, error)
 	DuePending(ctx context.Context, now time.Time, limit int) ([]domain.Booking, error)
 	ItemForBooking(ctx context.Context, itemID string) (domain.ItemForBooking, error)
 }

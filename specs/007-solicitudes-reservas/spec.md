@@ -1,7 +1,7 @@
 # Spec 007 — Solicitudes, precio y reservas (backend)
 
 - **Dueño:** BE-A · **Prioridad:** P0 · **Ventana:** 10–13 nov · **Depende de:** 005
-- **Constitución:** v2.0.0 · **Políticas:** POL-01, 02, 03, 05, 09, 17 · **Estado:** Borrador
+- **Constitución:** v2.0.0 · **Políticas:** POL-01, 02, 03, 05, 09, 17 · **Estado:** Implementada (a pedido del responsable el 2026-11-08, pendiente de visto bueno de BE-A; desviación del Art. I.1 registrada en memoria)
 
 ## 1. Objetivo y por qué
 Convertir el interés en un acuerdo claro: la persona ve el importe y las condiciones **antes** de solicitar; el propietario acepta o rechaza; al aceptar se **reserva** el periodo sin cruces. La solicitud conserva lo que se mostró aunque el objeto cambie después.
@@ -24,8 +24,8 @@ Convertir el interés en un acuerdo claro: la persona ve el importe y las condic
 | RF-03 | Reglas: no se solicita un objeto propio; el objeto debe estar `active`; `startDate ≥ hoy`; `endDate ≥ startDate`; 1–7 días (POL-02, una semana); sin cruce con reservas `accepted`/`in_progress`; no se repite una solicitud pendiente propia que se cruce. |
 | RF-04 | La solicitud guarda una **instantánea**: tarifa, total, modalidad, título, reglas de uso y primera foto. Un cambio posterior del objeto no la altera. |
 | RF-05 | Préstamo: total $0, `paymentMode = none`, sin pagos. Renta: `paymentMode` ∈ {`full_on_delivery`, `split_50_50`} y los importes de POL-05 quedan registrados en la solicitud. |
-| RF-06 | La solicitud vence a las 48 h o al llegar la fecha de inicio, lo primero (POL-03), sin sanción; pasa a `expired`. |
-| RF-07 | `POST /api/v1/bookings/{id}/accept` (propietario) reserva el periodo de forma **atómica**: verifica ausencia de cruces dentro de una transacción; al aceptar, las demás solicitudes pendientes que se cruzan pasan a `rejected` con motivo `no_disponible`. Acepta `meetingPoint.description` (≤ 200) opcional. |
+| RF-06 | La solicitud vence a las 48 h o al llegar la fecha de inicio, lo primero (POL-03), sin sanción; pasa a `expired`. Si la fecha de inicio es hoy, vence al terminar ese día. [NEEDS CLARIFICATION: confirmar con BE-A; ajuste A-02 del plan] |
+| RF-07 | `POST /api/v1/bookings/{id}/accept` (propietario) reserva el periodo de forma **atómica**: verifica ausencia de cruces dentro de una transacción; al aceptar, las demás solicitudes pendientes que se cruzan pasan a `rejected` con motivo `no_disponible`. Acepta `meetingPoint.description` (3–200) opcional. |
 | RF-08 | `POST /bookings/{id}/reject` (propietario, `reason` opcional ≤ 200) y `POST /bookings/{id}/cancel` (cualquiera de las partes, solo `pending` por el solicitante o `accepted` por cualquiera; `reason` 3–200 obligatorio en `accepted`). Cancelar libera la reserva y conserva motivo e historial. |
 | RF-09 | `POST /bookings/{id}/meeting-point` (propietario, reserva `accepted`/`in_progress`) fija o cambia el punto de encuentro; solo lo ven las dos partes. |
 | RF-10 | `GET /api/v1/bookings/{id}` (partes o admin) y `GET /api/v1/me/bookings?role=owner|requester&status=&cursor=&limit=`. |

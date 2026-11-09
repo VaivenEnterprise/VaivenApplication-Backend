@@ -7,6 +7,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
@@ -97,6 +98,7 @@ func TestIntegrationAcceptItemUnavailable(t *testing.T) {
 	e := newEnv(t)
 	itemID := e.item("own", "active")
 	b := e.request(itemID, "r1", "2026-11-10", "2026-11-12")
+	b2 := e.request(itemID, "r2", "2026-11-20", "2026-11-20")
 	_, _ = e.db.Collection(ItemsCollection).UpdateOne(ctx, bson.D{}, bson.D{{Key: "$set", Value: bson.D{{Key: "status", Value: "blocked"}}}})
 	if _, _, err := e.repo.Accept(ctx, accepted(t, b), now0); !errors.Is(err, domain.ErrItemUnavailable) {
 		t.Errorf("bloqueado = %v", err)
@@ -105,6 +107,10 @@ func TestIntegrationAcceptItemUnavailable(t *testing.T) {
 	_, _ = e.db.Collection(ItemsCollection).UpdateOne(ctx, bson.D{}, bson.D{{Key: "$set", Value: bson.D{{Key: "status", Value: "paused"}}}})
 	if _, _, err := e.repo.Accept(ctx, accepted(t, b), now0); err != nil {
 		t.Errorf("pausado = %v", err)
+	}
+	// Una pendiente que venció entre leerla y aceptar no se acepta.
+	if _, _, err := e.repo.Accept(ctx, accepted(t, b2), now0.Add(49*time.Hour)); !errors.Is(err, domain.ErrVersionConflict) {
+		t.Errorf("vencida en la transacción = %v", err)
 	}
 	if _, _, err := e.repo.Accept(ctx, domain.Booking{ItemID: "zz"}, now0); !errors.Is(err, domain.ErrItemNotFound) {
 		t.Errorf("objeto inválido = %v", err)

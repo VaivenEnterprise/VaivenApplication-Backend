@@ -38,7 +38,7 @@ func (s *Service) List(ctx context.Context, viewer Viewer, q ListQuery) (Page, e
 		limit = DefaultPageSize
 	}
 	limit = min(limit, MaxPageSize)
-	items, err := s.d.Repo.ListByParty(ctx, viewer.ID, q.Role, q.Status, q.After, limit+1)
+	items, err := s.d.Repo.ListByParty(ctx, viewer.ID, q.Role, q.Status, q.After, limit+1, s.now())
 	if err != nil {
 		return Page{}, err
 	}

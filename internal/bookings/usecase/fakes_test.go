@@ -106,7 +106,7 @@ func (r *memRepo) HasPendingOverlap(_ context.Context, itemID, requester string,
 	return false, nil
 }
 
-func (r *memRepo) ListByParty(_ context.Context, userID string, role domain.Role, status *domain.Status, after *domain.Cursor, limit int) ([]domain.Booking, error) {
+func (r *memRepo) ListByParty(_ context.Context, userID string, role domain.Role, status *domain.Status, after *domain.Cursor, limit int, now time.Time) ([]domain.Booking, error) {
 	if err := r.fail["ListByParty"]; err != nil {
 		return nil, err
 	}
@@ -116,7 +116,7 @@ func (r *memRepo) ListByParty(_ context.Context, userID string, role domain.Role
 		if role == domain.RoleOwner {
 			party = b.OwnerID
 		}
-		if party != userID || (status != nil && b.Status != *status) {
+		if party != userID || (status != nil && b.EffectiveStatus(now) != *status) {
 			continue
 		}
 		if after != nil && !b.CreatedAt.Before(after.CreatedAt) && (!b.CreatedAt.Equal(after.CreatedAt) || b.ID >= after.ID) {

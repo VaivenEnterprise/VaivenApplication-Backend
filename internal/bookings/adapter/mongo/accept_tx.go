@@ -65,6 +65,7 @@ func (r *Repo) Accept(ctx context.Context, b domain.Booking, now time.Time) (dom
 		d.Version = expected + 1
 		rep, err := r.bookings.ReplaceOne(tx, bson.D{
 			{Key: "_id", Value: d.ID}, {Key: "version", Value: expected}, {Key: "status", Value: string(domain.StatusPending)},
+			{Key: "expiresAt", Value: bson.D{{Key: "$gt", Value: now.UTC()}}},
 		}, d)
 		if err != nil {
 			return nil, err

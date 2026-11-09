@@ -113,11 +113,18 @@ type ItemForBooking struct {
 }
 
 // ExpiresAt calcula el vencimiento de una solicitud (POL-03, plan P-04): 48 h
-// después de crearla o al empezar el día de inicio en México, lo primero.
+// después de crearla o al empezar el día de inicio en México, lo primero. Si
+// el inicio es hoy (RF-03 lo permite) ese instante ya pasó: entonces vence al
+// terminar el día de inicio, para que el propietario pueda responder
+// (ajuste A-02 del plan; [NEEDS CLARIFICATION] confirmar con BE-A).
 func ExpiresAt(created time.Time, start Date, loc *time.Location) time.Time {
 	byHours := created.Add(time.Duration(policy.POL03RequestExpiryHours) * time.Hour)
-	if s := start.StartOf(loc); s.Before(byHours) {
-		return s.UTC()
+	deadline := start.StartOf(loc)
+	if !deadline.After(created) {
+		deadline = start.AddDays(1).StartOf(loc)
+	}
+	if deadline.Before(byHours) {
+		return deadline.UTC()
 	}
 	return byHours.UTC()
 }

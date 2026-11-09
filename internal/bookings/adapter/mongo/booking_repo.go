@@ -138,14 +138,26 @@ func (r *Repo) HasPendingOverlap(ctx context.Context, itemID, requesterID string
 }
 
 // ListByParty devuelve las reservas de userID como owner o requester, con
-// un estado opcional, más recientes primero, desde after (exclusivo).
-func (r *Repo) ListByParty(ctx context.Context, userID string, role domain.Role, status *domain.Status, after *domain.Cursor, limit int) ([]domain.Booking, error) {
+// un estado opcional, más recientes primero, desde after (exclusivo). El
+// filtro usa el estado efectivo (P-04): una pending ya vencida cuenta como
+// expired aunque la tarea aún no la haya cambiado.
+func (r *Repo) ListByParty(ctx context.Context, userID string, role domain.Role, status *domain.Status, after *domain.Cursor, limit int, now time.Time) ([]domain.Booking, error) {
 	field := "requesterId"
 	if role == domain.RoleOwner {
 		field = "ownerId"
 	}
 	f := bson.D{{Key: field, Value: userID}}
-	if status != nil {
+	switch {
+	case status == nil:
+	case *status == domain.StatusPending:
+		f = append(f, bson.E{Key: "status", Value: string(domain.StatusPending)},
+			bson.E{Key: "expiresAt", Value: bson.D{{Key: "$gt", Value: now.UTC()}}})
+	case *status == domain.StatusExpired:
+		f = append(f, bson.E{Key: "$and", Value: bson.A{bson.D{{Key: "$or", Value: bson.A{
+			bson.D{{Key: "status", Value: string(domain.StatusExpired)}},
+			bson.D{{Key: "status", Value: string(domain.StatusPending)}, {Key: "expiresAt", Value: bson.D{{Key: "$lte", Value: now.UTC()}}}},
+		}}}}})
+	default:
 		f = append(f, bson.E{Key: "status", Value: string(*status)})
 	}
 	if after != nil {

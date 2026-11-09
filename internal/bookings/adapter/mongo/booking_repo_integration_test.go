@@ -195,7 +195,7 @@ func TestIntegrationOverlapsAndList(t *testing.T) {
 	var seen int
 	var after *domain.Cursor
 	for range 5 {
-		page, err := e.repo.ListByParty(ctx, "req", domain.RoleRequester, nil, after, 2)
+		page, err := e.repo.ListByParty(ctx, "req", domain.RoleRequester, nil, after, 2, now0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -210,10 +210,23 @@ func TestIntegrationOverlapsAndList(t *testing.T) {
 		t.Errorf("solicitante vio %d", seen)
 	}
 	pend := domain.StatusPending
-	if own, _ := e.repo.ListByParty(ctx, "own", domain.RoleOwner, &pend, nil, 50); len(own) != 3 {
+	if own, _ := e.repo.ListByParty(ctx, "own", domain.RoleOwner, &pend, nil, 50, now0); len(own) != 3 {
 		t.Errorf("pendientes del propietario = %d", len(own))
 	}
-	if _, err := e.repo.ListByParty(ctx, "req", domain.RoleRequester, nil, &domain.Cursor{ID: "x"}, 5); err == nil {
+	// Estado efectivo: a las 49 h las pendientes cuentan como expired (P-04).
+	late := now0.Add(49 * time.Hour)
+	if own, _ := e.repo.ListByParty(ctx, "own", domain.RoleOwner, &pend, nil, 50, late); len(own) != 0 {
+		t.Errorf("pendientes vencidas = %d", len(own))
+	}
+	exp := domain.StatusExpired
+	if own, _ := e.repo.ListByParty(ctx, "own", domain.RoleOwner, &exp, nil, 50, late); len(own) != 3 {
+		t.Errorf("vencidas sin barrer = %d", len(own))
+	}
+	accSt := domain.StatusAccepted
+	if own, _ := e.repo.ListByParty(ctx, "own", domain.RoleOwner, &accSt, nil, 50, late); len(own) != 1 {
+		t.Errorf("aceptadas = %d", len(own))
+	}
+	if _, err := e.repo.ListByParty(ctx, "req", domain.RoleRequester, nil, &domain.Cursor{ID: "x"}, 5, now0); err == nil {
 		t.Error("cursor inválido")
 	}
 

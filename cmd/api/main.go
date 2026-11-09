@@ -188,7 +188,11 @@ func run() error {
 		return err
 	}
 	// Vencimiento de solicitudes cada 60 s (plan 007 P-04); termina con ctx.
-	go jobs.RunExpirer(ctx, bookingsSvc, nil, log)
+	expirerDone := make(chan struct{})
+	go func() {
+		jobs.RunExpirer(ctx, bookingsSvc, nil, log)
+		close(expirerDone)
+	}()
 
 	mods := modules(moduleDeps{
 		Log:        log,
@@ -258,6 +262,7 @@ func run() error {
 	if err := <-serveErr; err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("el servidor se detuvo: %w", err)
 	}
+	<-expirerDone // la tarea termina con ctx; se espera antes de cerrar MongoDB
 	log.Info("servidor detenido")
 	return nil
 }

@@ -46,6 +46,14 @@ func TestNewRequest(t *testing.T) {
 	if !b.ExpiresAt.Equal(time.Date(2026, 11, 9, 6, 0, 0, 0, time.UTC)) {
 		t.Errorf("ExpiresAt inicio = %v", b.ExpiresAt)
 	}
+	// Inicio hoy: no nace vencida; vence al terminar el día de inicio.
+	b = pending(t, "2026-11-08", "2026-11-08")
+	if !b.ExpiresAt.Equal(time.Date(2026, 11, 9, 6, 0, 0, 0, time.UTC)) || b.EffectiveStatus(t0) != StatusPending {
+		t.Errorf("inicio hoy = %v %s", b.ExpiresAt, b.EffectiveStatus(t0))
+	}
+	if MustDate("2026-11-30").AddDays(1).String() != "2026-12-01" {
+		t.Error("AddDays")
+	}
 	q, _ := NewQuote(rentInput("2026-11-10", "2026-11-11", PaymentSplit5050))
 	own := item()
 	own.OwnerID = "req"

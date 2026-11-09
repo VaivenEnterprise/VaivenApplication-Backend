@@ -65,7 +65,7 @@ Todo lo demás → 409 `conflict`.
 | P-04 | Vencimiento: `expiresAt = min(createdAt+48h, inicio del día startDate en México)`; tarea periódica (cada 60 s) `pending && expiresAt<=now → expired`; además, al leer, una pendiente vencida se presenta como `expired` | IX |
 | P-05 | `activity_checker.go` implementa `ActiveBookingChecker` (usuario y objeto) y reemplaza los vacíos de 003/005 en `modules.go` | XII |
 | P-06 | `chat.Opener` (puerto) se invoca al crear; si falla, la solicitud **no** se crea | XII |
-| P-07 | Notificaciones por `notify.Notifier` (eventos `booking_requested|accepted|rejected|cancelled|expired`); si falla el aviso no revierte la operación (se registra) | IX |
+| P-07 | Notificaciones por `notify.Notifier` (eventos `booking.requested|accepted|rejected|cancelled|expired|meeting_point`; la 010 consume estos tipos); si falla el aviso no revierte la operación (se registra) | IX |
 | P-08 | Los textos de política salen de `internal/policy` (POL-03, POL-09) | XII |
 
 ## 6. Pruebas
@@ -79,3 +79,15 @@ Unitarias: cotización (tabla de días y mitades, bordes de 1 y 7 días, y 8 dí
 | IV, V | Contrato; importes en centavos; fechas de calendario documentadas |
 | VI | Punto de encuentro solo para partes |
 | XII | Puertos `chat.Opener`, `Notifier`; sin tocar rutas ajenas |
+
+## 8. Ajustes durante la implementación (2026-11-08, BE-B a pedido del responsable; pendientes de visto bueno de BE-A)
+| # | Ajuste | Motivo |
+|---|---|---|
+| A-01 | Aceptar hace `$inc` de `items.reservationSeq` **y** `items.version`: dos aceptaciones del mismo objeto chocan (el driver reintenta) y un `DELETE /items` concurrente de la 005 falla por versión; un PATCH con versión vieja recibe 409. Se acepta si el objeto está `active` o `paused` (no `blocked`/`removed`); crear exige `active`. El filtro de la transacción incluye `expiresAt > now` | RNF-01, RF-14; cierra la [NEEDS CLARIFICATION] de 005 plan §7 |
+| A-02 | Si `startDate` es hoy, la solicitud vence al terminar ese día (si no, nacería vencida). [NEEDS CLARIFICATION] confirmar con BE-A | RF-03, RF-06 |
+| A-03 | P-03 se implementa con `ReplaceOne` filtrado por `version` (y `status`) en lugar de `findOneAndUpdate`/`updateMany`; cada pendiente rechazada guarda su entrada de historial. **La 009 debe ampliar `bookingDoc`** (adapter/mongo) con sus campos; si escribe campos con `$set` sin ampliarlo, un `Update` de 007 los borraría | Revisión T012 |
+| A-04 | `rejectReason` es un campo aparte (`no_disponible` al perder el periodo); `GET /bookings/{id}` responde 404 a quien no es parte; admin ve la reserva sin punto de encuentro; el propietario no cancela una pendiente (la rechaza) | RF-08, RF-10, Art. VI |
+| A-05 | `GET /me/bookings?status=` usa el estado efectivo: `pending` excluye las ya vencidas y `expired` incluye las pendientes vencidas sin barrer | P-04 |
+| A-06 | `chat.Opener.Open(ctx, bookingID, ownerID, requesterID)`; el id de la solicitud se genera antes de guardar (`Repo.NewID`). `meetingPoint.description` de 3 a 200 caracteres | P-06, RF-07, RF-09 |
+| A-07 | Archivos consolidados: casos de uso en `create.go`, `flow.go` (aceptar, rechazar, cancelar, punto de encuentro) y `read.go` (consultar, listar, vencer); las pruebas de `activity_checker` viven en `accept_tx_integration_test.go`. `cmd/api/main.go` arma el módulo, sustituye los verificadores vacíos de 003 y 005 y arranca y espera la tarea de vencimiento | Tamaño del módulo |
+| A-08 | Riesgo aceptado: la transacción de aceptar no revisa el estado de las cuentas; una baja (003) que pasa su verificación justo antes de un commit de aceptar podría dejar una reserva con una parte dada de baja. Ventana de milisegundos; se revisará si la 010 agrega sanciones | RF-14 |

@@ -1,6 +1,6 @@
 # Tareas 007 — Solicitudes, precio y reservas (backend)
 
-- **Dueño:** BE-A · **Estado:** sin ejecutar · `[P]` = paralelizable
+- **Dueño:** BE-A · **Estado:** T001–T012 hechas (BE-B a pedido del responsable; archivos consolidados según plan §8 A-07) · `[P]` = paralelizable
 - **T001 se integra el primer día** para MO-A y para BE-B (008 y 006 leen `bookings`).
 
 - [x] **T001** Contrato OpenAPI de reservas
@@ -69,7 +69,7 @@
   - Aceptación: cotizar→solicitar→aceptar→(cruce rechazado)→cancelar→disponible en `GET /items`; cambio de precio no altera la reserva; CA-01…CA-08 cubiertos
   - Refs: CA-01…CA-08
 
-- [ ] **T012** Memoria y revisión
+- [x] **T012** Memoria y revisión
   - Archivos: `memoria.md` (solo anexar)
   - Agente: `revisor-constitucion` · Depende de: T011
   - Aceptación: veredicto **CONFORME**; hito H3 (backend) marcado

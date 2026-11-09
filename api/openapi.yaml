@@ -820,7 +820,7 @@ components:
         policy:
           requestExpiresInHours: 48
           lateCancellationNotice: Cancelar tarde no tiene cargo automático, pero puede registrarse una incidencia.
-          noShowNotice: Si no te presentas a la entrega puede registrarse una incidencia y una advertencia o suspensión.
+          noShowNotice: Si no te presentas a la entrega o la devolución puede registrarse una incidencia y una advertencia o suspensión.
     BookingRequest:
       type: object
       required: [itemId, startDate, endDate, paymentMode, acceptedTotalCents]
@@ -888,7 +888,7 @@ components:
       description: Marcador de entrega o devolución; la spec 009 define su contenido. Hoy siempre null.
     Booking:
       type: object
-      required: [id, item, owner, requester, startDate, endDate, days, priceSnapshot, paymentMode, payments, status, expiresAt, meetingPoint, cancelReason, cancelledBy, rejectReason, conversationId, delivery, return, isLate, adjustments, viewerRole, createdAt, updatedAt, version]
+      required: [id, item, owner, requester, startDate, endDate, days, usageRules, priceSnapshot, paymentMode, payments, status, expiresAt, meetingPoint, cancelReason, cancelledBy, rejectReason, conversationId, delivery, return, isLate, adjustments, viewerRole, createdAt, updatedAt, version]
       properties:
         id:
           type: string
