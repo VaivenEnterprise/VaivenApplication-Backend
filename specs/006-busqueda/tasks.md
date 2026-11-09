@@ -9,7 +9,7 @@
   - Aceptación: describe `GET /api/v1/items` con todos los parámetros, esquema `ItemCard` y `ItemPage`, errores de validación
   - Refs: Art. IV, XII
 
-- [ ] **T002** [P] Dominio de consulta y cursor
+- [x] **T002** [P] Dominio de consulta y cursor
   - Archivos: `internal/search/domain/{query.go, card.go, cursor.go}`, `internal/search/domain/domain_test.go`
   - Agente: `dev-go` · Depende de: 002-T006
   - Aceptación: validación de parámetros (RF-08, P-02); cursor codifica/decodifica y rechaza basura; solo stdlib; ≥ 80 %
