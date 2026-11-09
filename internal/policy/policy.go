@@ -31,6 +31,13 @@ const (
 	POL01MinRentPriceCents int64 = 1_000
 )
 
+// POL-02 — Duración de un préstamo o renta: de 1 a 7 días de calendario
+// (fechas inclusivas). La búsqueda la usa para acotar el periodo (spec 006).
+const (
+	POL02MinDays = 1
+	POL02MaxDays = 7
+)
+
 // POL-13 — Fotos: de 1 a 5 por objeto.
 const (
 	POL13MinItemPhotos = 1

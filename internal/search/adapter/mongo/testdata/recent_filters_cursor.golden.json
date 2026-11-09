@@ -1,0 +1,213 @@
+[
+  {
+    "$match": {
+      "status": "active",
+      "ownerId": {
+        "$ne": "u1"
+      },
+      "category": "hogar",
+      "modality": "rent",
+      "zone.municipality": {
+        "$regularExpression": {
+          "pattern": "^c[oóòöôOÓÒÖÔ]y[oóòöôOÓÒÖÔ][aáàäâAÁÀÄÂ]c[aáàäâAÁÀÄÂ][nñNÑ] \\(c[eéèëêEÉÈËÊ][nñNÑ]tr[oóòöôOÓÒÖÔ]\\)$",
+          "options": "i"
+        }
+      },
+      "$or": [
+        {
+          "createdAt": {
+            "$lt": {
+              "$date": {
+                "$numberLong": "1794240000000"
+              }
+            }
+          }
+        },
+        {
+          "createdAt": {
+            "$date": {
+              "$numberLong": "1794240000000"
+            }
+          },
+          "_id": {
+            "$lt": {
+              "$oid": "6731a2b3c4d5e6f7a8b9c0d1"
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "$sort": {
+      "createdAt": {
+        "$numberInt": "-1"
+      },
+      "_id": {
+        "$numberInt": "-1"
+      }
+    }
+  },
+  {
+    "$addFields": {
+      "_itemId": {
+        "$toString": "$_id"
+      }
+    }
+  },
+  {
+    "$lookup": {
+      "from": "bookings",
+      "localField": "_itemId",
+      "foreignField": "itemId",
+      "pipeline": [
+        {
+          "$match": {
+            "status": {
+              "$in": [
+                "accepted",
+                "in_progress"
+              ]
+            },
+            "startDate": {
+              "$lte": "2026-11-12"
+            },
+            "endDate": {
+              "$gte": "2026-11-10"
+            }
+          }
+        },
+        {
+          "$limit": {
+            "$numberInt": "1"
+          }
+        },
+        {
+          "$project": {
+            "_id": {
+              "$numberInt": "1"
+            }
+          }
+        }
+      ],
+      "as": "_busy"
+    }
+  },
+  {
+    "$match": {
+      "_busy": {
+        "$size": {
+          "$numberInt": "0"
+        }
+      }
+    }
+  },
+  {
+    "$addFields": {
+      "_ownerOid": {
+        "$convert": {
+          "input": "$ownerId",
+          "to": "objectId",
+          "onError": null,
+          "onNull": null
+        }
+      }
+    }
+  },
+  {
+    "$lookup": {
+      "from": "users",
+      "localField": "_ownerOid",
+      "foreignField": "_id",
+      "pipeline": [
+        {
+          "$project": {
+            "displayName": {
+              "$numberInt": "1"
+            },
+            "status": {
+              "$numberInt": "1"
+            },
+            "suspendedUntil": {
+              "$numberInt": "1"
+            },
+            "ratingSum": {
+              "$numberInt": "1"
+            },
+            "ratingCount": {
+              "$numberInt": "1"
+            }
+          }
+        }
+      ],
+      "as": "_owner"
+    }
+  },
+  {
+    "$unwind": "$_owner"
+  },
+  {
+    "$match": {
+      "_owner.status": "active",
+      "_owner.suspendedUntil": {
+        "$not": {
+          "$gt": {
+            "$date": {
+              "$numberLong": "1794160800000"
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "$limit": {
+      "$numberLong": "11"
+    }
+  },
+  {
+    "$project": {
+      "title": {
+        "$numberInt": "1"
+      },
+      "category": {
+        "$numberInt": "1"
+      },
+      "modality": {
+        "$numberInt": "1"
+      },
+      "pricePerDayCents": {
+        "$numberInt": "1"
+      },
+      "zone": {
+        "$numberInt": "1"
+      },
+      "location": {
+        "$numberInt": "1"
+      },
+      "createdAt": {
+        "$numberInt": "1"
+      },
+      "firstPhoto": {
+        "$first": "$photos"
+      },
+      "photoCount": {
+        "$size": {
+          "$ifNull": [
+            "$photos",
+            []
+          ]
+        }
+      },
+      "owner": {
+        "id": "$ownerId",
+        "displayName": "$_owner.displayName",
+        "ratingSum": "$_owner.ratingSum",
+        "ratingCount": "$_owner.ratingCount"
+      },
+      "sortKey": {
+        "$toLong": "$createdAt"
+      }
+    }
+  }
+]
