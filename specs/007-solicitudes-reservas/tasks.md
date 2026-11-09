@@ -33,19 +33,19 @@
   - Aceptación: transacción del plan P-03 (incluye `$inc reservationSeq`); prueba de **concurrencia**: 2 aceptaciones con cruce → exactamente una gana, la otra recibe conflicto (CA-05); las pendientes cruzadas pasan a `rejected`
   - Refs: RF-07 · RNF-01
 
-- [ ] **T006** Casos de uso: cotizar y crear
+- [x] **T006** Casos de uso: cotizar y crear
   - Archivos: `internal/bookings/usecase/{ports.go, quote.go, create.go, usecase_create_test.go}`
   - Agente: `dev-go` · Depende de: T002, T003, T004, 005-T005
   - Aceptación: RF-01…RF-05; instantánea del objeto; `quote_changed`; invoca `chat.Opener` y `Notifier` (dobles); creación falla si `Opener` falla; ≥ 80 %
   - Refs: RF-02…RF-05, RF-12 · CA-01…CA-04, CA-07
 
-- [ ] **T007** Casos de uso: aceptar, rechazar, cancelar, punto de encuentro
+- [x] **T007** Casos de uso: aceptar, rechazar, cancelar, punto de encuentro
   - Archivos: `internal/bookings/usecase/{accept.go, reject.go, cancel.go, meeting_point.go, usecase_flow_test.go}`
   - Agente: `dev-go` · Depende de: T005, T006
   - Aceptación: permisos por rol; motivo obligatorio al cancelar `accepted`; notificaciones; cancelar libera la reserva (CA-08); pruebas con repositorio falso
   - Refs: RF-07…RF-09, RF-12
 
-- [ ] **T008** Casos de uso: consultar, listar y vencer
+- [x] **T008** Casos de uso: consultar, listar y vencer
   - Archivos: `internal/bookings/usecase/{get.go, list.go, expire.go, usecase_read_test.go}`, `internal/bookings/jobs/expirer.go`
   - Agente: `dev-go` · Depende de: T004
   - Aceptación: solo partes o admin ven la reserva; punto de encuentro oculto a terceros; una pendiente vencida se muestra `expired`; tarea cada 60 s con reloj inyectado (CA-06)

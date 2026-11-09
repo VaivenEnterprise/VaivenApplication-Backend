@@ -39,3 +39,7 @@ var ErrQuoteChanged = &shared.Error{
 // ErrReasonRequired: cancelar una reserva aceptada exige motivo (RF-08).
 var ErrReasonRequired = shared.NewValidation(MessageInvalidData,
 	shared.Detail{Field: "reason", Issue: "es obligatorio (3 a 200 caracteres) al cancelar una reserva aceptada"})
+
+// ErrMeetingPointRequired: el punto de encuentro no puede quedar vacío.
+var ErrMeetingPointRequired = shared.NewValidation(MessageInvalidData,
+	shared.Detail{Field: "description", Issue: "es obligatorio (3 a 200 caracteres)"})
