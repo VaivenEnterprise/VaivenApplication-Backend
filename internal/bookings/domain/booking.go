@@ -92,6 +92,7 @@ type Booking struct {
 	MeetingPoint   *string
 	CancelReason   *string
 	CancelledBy    *Role
+	RejectReason   *string
 	ConversationID *string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
@@ -197,4 +198,11 @@ func lengthIssue(minLen, maxLen int) string {
 		return "debe tener como máximo 200 caracteres"
 	}
 	return "debe tener entre 3 y 200 caracteres"
+}
+
+// Cursor marca la posición de una página de GET /me/bookings (createdAt
+// descendente y, a igual fecha, id descendente).
+type Cursor struct {
+	CreatedAt time.Time
+	ID        string
 }

@@ -21,13 +21,13 @@
   - Aceptación: todas las transiciones del plan §4 (válidas e inválidas) probadas; reglas RF-03; `statusHistory` limitada a 10; solo stdlib
   - Refs: RF-03, RF-11
 
-- [ ] **T004** Repositorio de reservas
+- [x] **T004** Repositorio de reservas
   - Archivos: `internal/bookings/adapter/mongo/{booking_doc.go, booking_repo.go, booking_repo_integration_test.go}`
   - Agente: `modelador-mongo` · Depende de: T003, 002-T014
   - Aceptación: colección `bookings` con los 4 índices del plan §3; crear, buscar, listar por rol y estado con cursor, buscar cruces `accepted/in_progress`, expirar pendientes; prueba de integración
   - Refs: plan §3 · Art. II
 
-- [ ] **T005** Aceptación atómica
+- [x] **T005** Aceptación atómica
   - Archivos: `internal/bookings/adapter/mongo/accept_tx.go`, `internal/bookings/adapter/mongo/accept_tx_integration_test.go`
   - Agente: `modelador-mongo` · Depende de: T004
   - Aceptación: transacción del plan P-03 (incluye `$inc reservationSeq`); prueba de **concurrencia**: 2 aceptaciones con cruce → exactamente una gana, la otra recibe conflicto (CA-05); las pendientes cruzadas pasan a `rejected`

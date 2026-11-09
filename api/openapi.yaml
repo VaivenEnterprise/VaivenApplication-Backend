@@ -888,7 +888,7 @@ components:
       description: Marcador de entrega o devolución; la spec 009 define su contenido. Hoy siempre null.
     Booking:
       type: object
-      required: [id, item, owner, requester, startDate, endDate, days, priceSnapshot, paymentMode, payments, status, expiresAt, meetingPoint, cancelReason, cancelledBy, conversationId, delivery, return, isLate, adjustments, viewerRole, createdAt, updatedAt, version]
+      required: [id, item, owner, requester, startDate, endDate, days, priceSnapshot, paymentMode, payments, status, expiresAt, meetingPoint, cancelReason, cancelledBy, rejectReason, conversationId, delivery, return, isLate, adjustments, viewerRole, createdAt, updatedAt, version]
       properties:
         id:
           type: string
@@ -953,6 +953,9 @@ components:
         cancelledBy:
           type: [string, 'null']
           enum: [owner, requester, null]
+        rejectReason:
+          type: [string, 'null']
+          description: Motivo del rechazo; no_disponible si se aceptó otra solicitud que se cruzaba (RF-07).
         conversationId:
           type: [string, 'null']
         delivery:
