@@ -21,13 +21,13 @@
   - Aceptación: colecciones e índices del plan §3 (incluye el único parcial); `upsert` por `bookingId`; `before`/`after` sin repetidos; `$inc`/`$set` de no leídos; `booking_reader.go` lee **solo** `status`, `ownerId`, `requesterId` y datos de objeto de `bookings` (solo lectura); prueba de integración
   - Refs: plan §3 · Art. II
 
-- [ ] **T004** Casos de uso: abrir y listar
+- [x] **T004** Casos de uso: abrir y listar
   - Archivos: `internal/chat/usecase/{ports.go, open.go, list.go, unread.go, usecase_read_test.go}`
   - Agente: `dev-go` · Depende de: T002, T003
   - Aceptación: `Open` idempotente (CA-01); lista con contraparte, objeto y `canWrite` (usa `BookingReader` y repositorio de usuarios con dobles); conteo de no leídos
   - Refs: RF-01, RF-02, RF-09
 
-- [ ] **T005** Casos de uso: mensajes, envío y lectura
+- [x] **T005** Casos de uso: mensajes, envío y lectura
   - Archivos: `internal/chat/usecase/{messages.go, send.go, read.go, usecase_write_test.go}`
   - Agente: `dev-go` · Depende de: T004, 003-T002
   - Aceptación: ajenos → no encontrado (CA-02); `clientId` idempotente (CA-03); estado cerrado → conflicto (CA-04); `Checker` de moderación; notificación solo en el primer no leído (RF-12); contadores (CA-06); ≥ 80 %
