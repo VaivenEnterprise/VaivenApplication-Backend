@@ -44,6 +44,8 @@ type Config struct {
 	Auth Auth
 	// Imágenes (spec 004, plan §5).
 	Images Images
+	// Push configura el envío de notificaciones por Expo (spec 011).
+	Push Push
 
 	// DocsEnabled sirve Swagger UI en /docs (solo development y staging).
 	DocsEnabled bool
@@ -122,6 +124,7 @@ func load(lookup lookupFunc) (Config, error) {
 	cfg.TLS = loadTLS(&r, cfg.AppEnv)
 	cfg.Auth = loadAuth(&r, cfg.AppEnv)
 	cfg.Images = loadImages(&r)
+	cfg.Push = loadPush(&r, cfg.AppEnv)
 	cfg.DocsEnabled = loadDocs(&r, cfg.AppEnv)
 
 	if len(r.problems) > 0 {

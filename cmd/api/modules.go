@@ -12,9 +12,11 @@ import (
 	incidentshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/incidents/adapter/http"
 	itemshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/items/adapter/http"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/moderation"
+	notificationshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/notifications/adapter/http"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/notify"
 	paymentshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/payments/adapter/http"
 	ratingshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ratings/adapter/http"
+	reportshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/reports/adapter/http"
 	sanctionshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/sanctions/adapter/http"
 	searchhttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/search/adapter/http"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/users"
@@ -49,6 +51,10 @@ type moduleDeps struct {
 	Incidents *incidentshttp.Module
 	// Sanctions es el módulo de sanciones de la spec 010.
 	Sanctions *sanctionshttp.Module
+	// Notifications es el módulo de avisos y tokens de push de la spec 011.
+	Notifications *notificationshttp.Module
+	// Reports es el módulo de reportes y su revisión de la spec 011.
+	Reports *reportshttp.Module
 	// Users da perfiles públicos por lote y acciones de administración.
 	Users interface {
 		users.Directory
@@ -62,16 +68,18 @@ type moduleDeps struct {
 func modules(deps moduleDeps) []apihttp.Module {
 	return []apihttp.Module{
 		// Una línea por módulo, en orden de spec:
-		deps.Auth,      // 003 cuenta y autenticación
-		deps.Images,    // 004 imágenes
-		deps.Items,     // 005 objetos
-		deps.Search,    // 006 búsqueda
-		deps.Bookings,  // 007 solicitudes y reservas
-		deps.Chat,      // 008 chat privado
-		deps.Handover,  // 009 entrega y devolución
-		deps.Payments,  // 009 pagos y retrasos
-		deps.Ratings,   // 010 calificaciones
-		deps.Incidents, // 010 incidencias
-		deps.Sanctions, // 010 sanciones
+		deps.Auth,          // 003 cuenta y autenticación
+		deps.Images,        // 004 imágenes
+		deps.Items,         // 005 objetos
+		deps.Search,        // 006 búsqueda
+		deps.Bookings,      // 007 solicitudes y reservas
+		deps.Chat,          // 008 chat privado
+		deps.Handover,      // 009 entrega y devolución
+		deps.Payments,      // 009 pagos y retrasos
+		deps.Ratings,       // 010 calificaciones
+		deps.Incidents,     // 010 incidencias
+		deps.Sanctions,     // 010 sanciones
+		deps.Notifications, // 011 avisos y push
+		deps.Reports,       // 011 reportes y moderación
 	}
 }

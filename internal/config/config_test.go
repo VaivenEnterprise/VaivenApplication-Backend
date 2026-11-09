@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"reflect"
 	"strings"
@@ -61,6 +62,7 @@ func TestLoadDefaults(t *testing.T) {
 			LoginAttemptsPerAccount: 20,
 		},
 		Images:      Images{MaxBytes: 5 * 1024 * 1024, SignaturesPerHour: 30},
+		Push:        Push{Enabled: false, URL: DefaultExpoPushURL},
 		DocsEnabled: true,
 	}
 	if !reflect.DeepEqual(cfg, want) {
@@ -181,5 +183,50 @@ func TestLoadReadsEnvironment(t *testing.T) {
 	}
 	if cfg.IsProduction() {
 		t.Error("IsProduction() = true con APP_ENV=test")
+	}
+}
+
+func TestLoadPush(t *testing.T) { // spec 011, P-09
+	// development y test: apagado por omisión.
+	for _, env := range []string{"development", "test"} {
+		e := valid()
+		e["APP_ENV"] = env
+		cfg, err := load(e.lookup)
+		if err != nil || cfg.Push.Enabled || cfg.Push.URL != DefaultExpoPushURL || cfg.Push.AccessToken != "" {
+			t.Errorf("%s: Push = %+v, %v", env, cfg.Push, err)
+		}
+	}
+	// staging: activo por omisión.
+	e := deployed()
+	cfg, err := load(e.lookup)
+	if err != nil || !cfg.Push.Enabled {
+		t.Errorf("deployed: Push = %+v, %v", cfg.Push, err)
+	}
+	// Variables explícitas.
+	e = valid()
+	e["PUSH_ENABLED"] = "true"
+	e["EXPO_PUSH_URL"] = "http://127.0.0.1:9999/send"
+	e["EXPO_ACCESS_TOKEN"] = "tok-secreto"
+	cfg, err = load(e.lookup)
+	if err != nil || !cfg.Push.Enabled || cfg.Push.URL != "http://127.0.0.1:9999/send" || cfg.Push.AccessToken != "tok-secreto" {
+		t.Errorf("explícitas: Push = %+v, %v", cfg.Push, err)
+	}
+	if strings.Contains(fmt.Sprintf("%+v %v", cfg.Push, cfg.Push), "tok-secreto") {
+		t.Error("EXPO_ACCESS_TOKEN no debe imprimirse")
+	}
+}
+
+func TestLoadPushInvalid(t *testing.T) {
+	e := valid()
+	e["PUSH_ENABLED"] = "quizá"
+	e["EXPO_PUSH_URL"] = "ftp://x"
+	if _, err := load(e.lookup); err == nil || !strings.Contains(err.Error(), "PUSH_ENABLED") || !strings.Contains(err.Error(), "EXPO_PUSH_URL") {
+		t.Errorf("debe reportar ambas variables: %v", err)
+	}
+	d := deployed()
+	d["PUSH_ENABLED"] = "true"
+	d["EXPO_PUSH_URL"] = "http://exp.host/send"
+	if _, err := load(d.lookup); err == nil || !strings.Contains(err.Error(), "https://") {
+		t.Errorf("en staging solo https: %v", err)
 	}
 }

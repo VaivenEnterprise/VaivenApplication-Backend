@@ -1,5 +1,5 @@
-# Ejemplos de las rutas de administración de la spec 010 (incidencias y
-# sanciones), para el cliente REST de VS Code / JetBrains. Todas exigen una
+# Ejemplos de las rutas de administración de las specs 010 (incidencias y
+# sanciones) y 011 (reportes), para el cliente REST de VS Code / JetBrains. Todas exigen una
 # sesión con rol `admin` (CA-05): un usuario común recibe 403 forbidden.
 #
 # No hay credenciales en este archivo. Define @host y @adminToken en un
@@ -10,6 +10,7 @@
 #   @adminToken = <access token de una cuenta admin; sale de POST /auth/login>
 #   @incidentId = <id de una incidencia abierta>
 #   @userId = <id de la persona a sancionar>
+#   @reportId = <id de un reporte abierto; sale de GET /admin/reports>
 
 ### Cola de incidencias (por omisión, las abiertas; más antiguas primero).
 ### Parámetros opcionales: status=open|closed, limit=1..50, cursor=<nextCursor>.
@@ -59,4 +60,45 @@ Content-Type: application/json
   "type": "suspension",
   "reason": "Daño reiterado en objetos prestados.",
   "endsAt": "2026-12-15T00:00:00Z"
+}
+
+### ---------------------------------------------------------------------------
+### Reportes de contenido (spec 011). Solo con rol admin; otro rol recibe 403.
+### ---------------------------------------------------------------------------
+
+### Cola de reportes abiertos, los más antiguos primero. status: open (por
+### omisión), actioned o dismissed. Usa cursor=<nextCursor> para la página siguiente.
+GET {{host}}/admin/reports?status=open&limit=20
+Authorization: Bearer {{adminToken}}
+
+### Descartar un reporte (no hay falta). note: de 3 a 500 caracteres.
+POST {{host}}/admin/reports/{{reportId}}/resolve
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "action": "dismiss",
+  "note": "Revisado: el objeto cumple las reglas."
+}
+
+### Ocultar el objeto reportado (solo reportes de objetos): sale de la búsqueda
+### y su dueño recibe el aviso content_removed.
+POST {{host}}/admin/reports/{{reportId}}/resolve
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "action": "hide_item",
+  "note": "El título ofrece algo que la política de contenido no permite."
+}
+
+### Suspender 7 días a la persona reportada (o al dueño del objeto, o a quien
+### escribió el mensaje). No aplica a reportes de moderation_decision (409).
+POST {{host}}/admin/reports/{{reportId}}/resolve
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "action": "suspend_user",
+  "note": "Mensajes ofensivos reiterados."
 }
