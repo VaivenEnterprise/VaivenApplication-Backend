@@ -45,7 +45,7 @@
   - Aceptación: al crear una solicitud existe su conversación; si falla, la solicitud no se crea (probado con el flujo de 007)
   - Refs: RF-01 · P-07
 
-- [ ] **T008** Prueba de integración y consulta periódica
+- [x] **T008** Prueba de integración y consulta periódica
   - Archivos: `internal/chat/adapter/http/chat_integration_test.go`
   - Agente: `qa-go` · Depende de: T006, T007
   - Aceptación: flujo de dos personas (enviar, `after`, `read`), CA-01…CA-06, y `after` responde < 100 ms con 5,000 mensajes sembrados
