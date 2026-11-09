@@ -21,13 +21,13 @@
   - Aceptación: función pura que genera los 3 modos del plan §3 con cursor y disponibilidad; pruebas *golden* por modo; regex escapado
   - Refs: plan §3 · P-05
 
-- [ ] **T004** Índices de búsqueda
+- [x] **T004** Índices de búsqueda
   - Archivos: `internal/search/adapter/mongo/search_indexes.go`, `internal/search/adapter/mongo/search_indexes_test.go`
   - Agente: `modelador-mongo` · Depende de: 002-T014
   - Aceptación: crea el índice de texto en español y el compuesto del plan §4 de forma idempotente; probado con Mongo real
   - Refs: plan §4
 
-- [ ] **T005** Repositorio de búsqueda
+- [x] **T005** Repositorio de búsqueda
   - Archivos: `internal/search/adapter/mongo/search_repo.go`, `internal/search/adapter/mongo/search_repo_integration_test.go`
   - Agente: `modelador-mongo` · Depende de: T003, T004, 005-T004
   - Aceptación: ejecuta los 3 modos y devuelve tarjetas con propietario; paginación sin repetidos (CA-01); texto con acentos (CA-02); cercanía ordenada (CA-04); excluye pausados, propios y cuentas inactivas (CA-05)
