@@ -125,7 +125,7 @@ func newWorld(t *testing.T) world {
 
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	chatSvc, err := usecase.NewService(usecase.Deps{
-		Conversations: convs, Messages: msgs, Bookings: chatmongo.NewBookingReader(db), Accounts: chatmongo.NewAccountReader(db),
+		Conversations: convs, Messages: msgs, Sender: chatmongo.NewSender(db), Bookings: chatmongo.NewBookingReader(db), Accounts: chatmongo.NewAccountReader(db),
 		Users: itUsers{}, Images: itImages{}, Moderation: moderation.AllowAll{}, Notifier: w.not, Log: log,
 	})
 	if err != nil {
@@ -265,11 +265,14 @@ func TestIntegrationPollingPerformance(t *testing.T) {
 	base := time.Now().Add(-time.Hour)
 	for i := range 5000 {
 		docs = append(docs, bson.M{"_id": bson.NewObjectIDFromTimestamp(base.Add(time.Duration(i) * time.Millisecond)),
-			"conversationId": conv, "senderId": w.ids["req"], "body": fmt.Sprint(i), "createdAt": base})
+			"conversationId": conv, "senderId": w.ids["req"], "seq": int64(i + 1), "body": fmt.Sprint(i), "createdAt": base})
 	}
 	if _, err := w.db.Collection(chatmongo.MessagesCollection).InsertMany(context.Background(), docs); err != nil {
 		t.Fatal(err)
 	}
+	convOID, _ := bson.ObjectIDFromHex(conv)
+	_, _ = w.db.Collection(chatmongo.ConversationsCollection).UpdateOne(context.Background(),
+		bson.D{{Key: "_id", Value: convOID}}, bson.D{{Key: "$set", Value: bson.D{{Key: "seq", Value: int64(5000)}}}})
 	_, last := w.call(t, "req", "POST", "/conversations/"+conv+"/messages", `{"body":"último"}`)
 	var times []time.Duration
 	for range 30 {

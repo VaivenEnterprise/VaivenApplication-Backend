@@ -11,6 +11,10 @@ conversations:
       Una conversación por reserva, con su contraparte, el objeto, el último mensaje
       (≤ 80 caracteres), mis no leídos y si se puede escribir (RF-02). La más
       reciente primero. `nextCursor` null = no hay más.
+
+      El orden cambia cuando llega un mensaje: una conversación que aún no se
+      pidió puede subir por encima del cursor. Para no perderla, en la consulta
+      periódica se vuelve a pedir la **primera página** (sin `cursor`).
     parameters:
       - $ref: '../openapi.yaml#/components/parameters/RequestId'
       - name: cursor
@@ -94,9 +98,11 @@ messages:
         `nextCursor` recibido.
       - **Consulta periódica** (`after=<id del último mensaje que tengo>`): los
         mensajes más nuevos que ese, en orden **ascendente**, máximo 100;
-        `nextCursor` siempre null.
+        `nextCursor` siempre null. El orden es el de confirmación del envío, así
+        que no hay huecos aunque las dos personas escriban a la vez.
 
-      `before` y `after` no se combinan (400).
+      `before` y `after` no se combinan, y deben ser ids de mensajes de esta
+      conversación (400 si no).
     parameters:
       - name: limit
         in: query

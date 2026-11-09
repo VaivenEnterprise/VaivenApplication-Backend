@@ -174,6 +174,16 @@ func TestSendFailures(t *testing.T) {
 	if m, created, err := e.svc.Send(ctx, "req", cid, "hola", &k); err != nil || created || m.ID == "" {
 		t.Errorf("carrera = %+v %v %v", m, created, err)
 	}
+	// Carrera de clientId sin mensaje encontrado: error interno, nunca un
+	// mensaje vacío (revisión T009, observación 4).
+	e = newEnv(t)
+	cid = e.booking(t, "b1", "accepted")
+	e.msgs.fail["Insert"] = domain.ErrDuplicateClientID
+	if m, _, err := e.svc.Send(ctx, "req", cid, "hola", &k); err == nil || m.ID != "" {
+		t.Errorf("carrera sin mensaje = %+v %v", m, err)
+	}
+	e.msgs.fail["Insert"] = nil
+	e.msgs.fail["ByClientID"] = nil
 	// Conversación huérfana (la solicitud no se guardó): 404.
 	e = newEnv(t)
 	orphan, _ := e.svc.Open(ctx, "nunca", "own", "req")
@@ -213,6 +223,20 @@ func TestMessagesPaging(t *testing.T) {
 	}
 	if _, err := e.svc.Messages(ctx, "otro", cid, MessageQuery{}); !errors.Is(err, domain.ErrNotFound) {
 		t.Error("ajeno")
+	}
+	// Un cursor que no es de la conversación: 400 sobre el parámetro usado.
+	e.msgs.fail["After"] = domain.ErrUnknownMessage
+	var de *shared.Error
+	if _, err := e.svc.Messages(ctx, "own", cid, MessageQuery{After: "x"}); !errors.As(err, &de) || de.Details[0].Field != "after" {
+		t.Errorf("after desconocido = %v", err)
+	}
+	e.msgs.fail["Before"] = domain.ErrUnknownMessage
+	if _, err := e.svc.Messages(ctx, "own", cid, MessageQuery{Before: "x"}); !errors.As(err, &de) || de.Details[0].Field != "before" {
+		t.Errorf("before desconocido = %v", err)
+	}
+	e.msgs.fail["After"] = errors.New("x")
+	if _, err := e.svc.Messages(ctx, "own", cid, MessageQuery{After: "x"}); err == nil {
+		t.Error("error en after")
 	}
 	e.msgs.fail["Before"] = errors.New("x")
 	if _, err := e.svc.Messages(ctx, "own", cid, MessageQuery{}); err == nil {

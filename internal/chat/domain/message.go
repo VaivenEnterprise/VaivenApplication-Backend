@@ -17,9 +17,12 @@ type Message struct {
 	ID             string
 	ConversationID string
 	SenderID       string
-	Body           string
-	ClientID       *string
-	CreatedAt      time.Time
+	// Seq es el orden del mensaje en su conversación (1, 2, 3…), asignado al
+	// confirmar el envío; el cliente usa ID como cursor.
+	Seq       int64
+	Body      string
+	ClientID  *string
+	CreatedAt time.Time
 }
 
 // MaxClientIDLen acota el clientId de idempotencia.

@@ -58,3 +58,14 @@ Unitarias: validación de cuerpo (runas), `canWrite` por estado, idempotencia po
 | IV | Contrato, cursor, errores estándar |
 | VI | Privacidad: solo participantes; sin lectura de la otra parte |
 | XII | Reemplaza `chat.Opener` sin tocar 007 |
+
+## 8. Ajustes tras la revisión T009 (2026-11-09, BE-B)
+| # | Ajuste | Motivo |
+|---|---|---|
+| A-01 | Enviar es **una transacción** (`adapter/mongo.Sender`): `$inc` de `conversations.seq` y de `unread.<receptor>`, `$set` del último mensaje y luego el `insert` del mensaje con ese `seq`. La escritura de la conversación la bloquea hasta el commit, así que los `seq` se confirman en orden; `before`/`after` siguen recibiendo el id del mensaje (P-01) pero ordenan por `seq` (índice `conversation_seq`) | Observaciones 1 y 2: con ObjectID generado en la app, dos envíos simultáneos podían guardarse en desorden y `after` saltarse uno; y si fallaba el contador, el mensaje quedaba sin contar ni avisar |
+| A-02 | Un `clientId` repetido aborta la transacción (no suma no leídos ni consume `seq`); si en la carrera no se encuentra el mensaje existente se responde error interno, nunca un mensaje vacío | Observación 3 |
+| A-03 | `unread.<userId>` solo acepta ids de 24 caracteres hexadecimales | Observación 4 (Art. VI) |
+| A-04 | Contrato: la consulta periódica de `/conversations` vuelve a pedir la primera página; `before`/`after` de otra conversación → 400 | Observación 5 |
+| A-05 | Archivos consolidados respecto a §1: casos de uso en `list.go`, `messages.go` y `service.go`; HTTP en `handler.go`; el `chat.Opener` real es `usecase.Service`, conectado en `cmd/api/main.go` (el `Noop` de 007 se conserva) | Registro de desviaciones |
+
+Los mensajes guardados antes de A-01 no tienen `seq` (cuentan como 0 y quedan antes de los nuevos); solo existían datos de prueba en staging. El índice anterior `conversation_id` puede quedar en staging sin efecto.

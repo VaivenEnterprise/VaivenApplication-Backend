@@ -16,15 +16,21 @@ type Conversations interface {
 	Open(ctx context.Context, bookingID, ownerID, requesterID string, now time.Time) (domain.Conversation, error)
 	ByID(ctx context.Context, id string) (domain.Conversation, error)
 	ListByParticipant(ctx context.Context, userID string, after *domain.Cursor, limit int) ([]domain.Conversation, error)
-	// RecordMessage devuelve los no leídos que tenía receiverID antes.
-	RecordMessage(ctx context.Context, conversationID, receiverID string, lm domain.LastMessage) (int, error)
 	MarkRead(ctx context.Context, conversationID, userID string) error
 	UnreadTotal(ctx context.Context, userID string) (int, error)
 }
 
-// Messages guarda los mensajes (adapter/mongo.MessageRepo).
+// Sender guarda un mensaje y actualiza la conversación (no leídos del
+// receptor, último mensaje y seq) de forma atómica (adapter/mongo.Sender).
+// Devuelve los no leídos que tenía receiverID antes. Un clientId repetido es
+// domain.ErrDuplicateClientID y no cambia nada.
+type Sender interface {
+	Send(ctx context.Context, m domain.Message, receiverID string, lm domain.LastMessage) (domain.Message, int, error)
+}
+
+// Messages lee los mensajes (adapter/mongo.MessageRepo). Before y After
+// devuelven domain.ErrUnknownMessage si el cursor no es de la conversación.
 type Messages interface {
-	Insert(ctx context.Context, m domain.Message) (domain.Message, error)
 	ByClientID(ctx context.Context, conversationID, senderID, clientID string) (domain.Message, bool, error)
 	Before(ctx context.Context, conversationID, before string, limit int) ([]domain.Message, error)
 	After(ctx context.Context, conversationID, after string, limit int) ([]domain.Message, error)
