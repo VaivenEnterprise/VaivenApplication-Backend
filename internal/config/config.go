@@ -44,6 +44,9 @@ type Config struct {
 	Auth Auth
 	// Imágenes (spec 004, plan §5).
 	Images Images
+
+	// DocsEnabled sirve Swagger UI en /docs (solo development y staging).
+	DocsEnabled bool
 }
 
 // IsProduction indica si el servicio corre en producción (logs en JSON, plan P-04).
@@ -119,6 +122,7 @@ func load(lookup lookupFunc) (Config, error) {
 	cfg.TLS = loadTLS(&r, cfg.AppEnv)
 	cfg.Auth = loadAuth(&r, cfg.AppEnv)
 	cfg.Images = loadImages(&r)
+	cfg.DocsEnabled = loadDocs(&r, cfg.AppEnv)
 
 	if len(r.problems) > 0 {
 		return Config{}, &Error{Problems: r.problems}

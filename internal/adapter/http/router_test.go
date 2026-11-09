@@ -241,3 +241,23 @@ func TestModulesMountUnderAPIv1(t *testing.T) {
 		t.Errorf("POST /api/v1/fake = %d %q", rec.Code, rec.Body.String())
 	}
 }
+
+func TestDocsMountedOnlyWhenGiven(t *testing.T) {
+	docs := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusTeapot)
+	})
+	base := Deps{Log: slog.New(slog.DiscardHandler), Pinger: fakePinger{}}
+
+	off := NewRouter(base)
+	if rec := do(off, http.MethodGet, "/docs", nil); rec.Code != http.StatusNotFound {
+		t.Errorf("sin Docs: status = %d, want 404", rec.Code)
+	}
+
+	base.Docs = docs
+	on := NewRouter(base)
+	for _, path := range []string{"/docs", "/docs/openapi.yaml"} {
+		if rec := do(on, http.MethodGet, path, nil); rec.Code != http.StatusTeapot {
+			t.Errorf("con Docs %s: status = %d, want 418", path, rec.Code)
+		}
+	}
+}

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	apihttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http"
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/docs"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/handler"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/middleware"
 	adaptermongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/mongo"
@@ -175,6 +176,7 @@ func run() error {
 			LimiterFallback: redis.NewMemoryLimiter(),
 			RateLimit:       middleware.RateLimitConfig{Limit: rateLimitPerWindow, Window: rateLimitWindow},
 			Modules:         mods,
+			Docs:            docsHandler(cfg.DocsEnabled),
 			Meta: handler.MetaInfo{
 				Name:        serviceName,
 				Version:     resolveVersion(version, cfg.AppVersion),
@@ -310,4 +312,13 @@ func resolveVersion(injected, fromEnv string) string {
 		return injected
 	}
 	return fromEnv
+}
+
+// docsHandler devuelve Swagger UI si DOCS_ENABLED lo permite (development y
+// staging); nil en otro caso, y el router no monta /docs.
+func docsHandler(enabled bool) http.Handler {
+	if !enabled {
+		return nil
+	}
+	return docs.Handler()
 }

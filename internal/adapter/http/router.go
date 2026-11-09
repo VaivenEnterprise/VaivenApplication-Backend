@@ -47,6 +47,10 @@ type Deps struct {
 
 	// Modules son los módulos de negocio, en el orden de cmd/api/modules.go.
 	Modules []Module
+
+	// Docs sirve Swagger UI en /docs, fuera de /api/v1 y sin autenticación.
+	// nil (production) no lo monta.
+	Docs http.Handler
 }
 
 // NewRouter devuelve el handler raíz de la API.
@@ -80,6 +84,9 @@ func NewRouter(d Deps) http.Handler {
 
 	r.Get("/healthz", handler.Healthz)
 	r.Get("/readyz", handler.Readyz(d.Pinger, d.Redis))
+	if d.Docs != nil {
+		r.Mount("/docs", d.Docs)
+	}
 	r.Route("/api/v1", func(api chi.Router) {
 		api.Get("/meta", handler.Meta(d.Meta))
 		for _, m := range d.Modules {
