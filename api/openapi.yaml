@@ -1,14 +1,15 @@
 openapi: 3.1.0
 info:
   title: VAIVÉN API
-  version: 0.6.0
+  version: 0.7.0
   summary: API REST del backend de VAIVÉN (préstamo y renta de objetos en México).
   description: |
     Contrato de la spec 002 (arquitectura base): endpoints de infraestructura y
     el envoltorio único de errores (Art. IV de la constitución). La spec 003
     agrega la cuenta y la autenticación (`api/paths/auth.yaml` y `users.yaml`) y
     la spec 004 las imágenes (`api/paths/uploads.yaml`) y la spec 005 los objetos
-    (`api/paths/items.yaml`); la spec 006 la búsqueda (`api/paths/search.yaml`).
+    (`api/paths/items.yaml`); la spec 006 la búsqueda (`api/paths/search.yaml`) y la
+    spec 007 las solicitudes y reservas (`api/paths/bookings.yaml`).
 
     - Rutas de negocio bajo `/api/v1`; `/healthz` y `/readyz` fuera del prefijo.
     - JSON en `camelCase`; fechas en ISO-8601 UTC.
@@ -41,6 +42,8 @@ tags:
     description: Publicar, editar y pausar objetos; precio sugerido y categorías (spec 005).
   - name: busqueda
     description: Buscar objetos por texto, categoría, zona, cercanía y fechas (spec 006).
+  - name: reservas
+    description: Cotizar, solicitar, aceptar, rechazar y cancelar reservas (spec 007).
 paths:
   /healthz:
     get:
@@ -161,6 +164,22 @@ paths:
     $ref: './paths/items.yaml#/myItems'
   /api/v1/categories:
     $ref: './paths/items.yaml#/categories'
+  /api/v1/items/{id}/quote:
+    $ref: './paths/bookings.yaml#/quote'
+  /api/v1/bookings:
+    $ref: './paths/bookings.yaml#/bookings'
+  /api/v1/bookings/{id}:
+    $ref: './paths/bookings.yaml#/bookingById'
+  /api/v1/me/bookings:
+    $ref: './paths/bookings.yaml#/myBookings'
+  /api/v1/bookings/{id}/accept:
+    $ref: './paths/bookings.yaml#/accept'
+  /api/v1/bookings/{id}/reject:
+    $ref: './paths/bookings.yaml#/reject'
+  /api/v1/bookings/{id}/cancel:
+    $ref: './paths/bookings.yaml#/cancel'
+  /api/v1/bookings/{id}/meeting-point:
+    $ref: './paths/bookings.yaml#/meetingPoint'
 components:
   securitySchemes:
     bearerAuth:
@@ -718,6 +737,254 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ItemCard'
+        nextCursor:
+          type: [string, 'null']
+    CalendarDate:
+      type: string
+      format: date
+      description: Fecha de calendario YYYY-MM-DD en America/Mexico_City (excepción documentada al Art. V).
+    PaymentMode:
+      type: string
+      enum: [none, full_on_delivery, split_50_50]
+      description: none solo en préstamo; en renta full_on_delivery o split_50_50 (POL-05).
+    BookingStatus:
+      type: string
+      enum: [pending, accepted, rejected, expired, cancelled, in_progress, completed]
+    PaymentStage:
+      type: string
+      enum: [delivery, return]
+    QuotePayment:
+      type: object
+      required: [stage, amountCents]
+      properties:
+        stage:
+          $ref: '#/components/schemas/PaymentStage'
+        amountCents:
+          type: integer
+          minimum: 0
+    Quote:
+      type: object
+      required: [itemId, startDate, endDate, days, modality, pricePerDayCents, totalCents, currency, paymentMode, payments, policy]
+      properties:
+        itemId:
+          type: string
+        startDate:
+          $ref: '#/components/schemas/CalendarDate'
+        endDate:
+          $ref: '#/components/schemas/CalendarDate'
+        days:
+          type: integer
+          minimum: 1
+          maximum: 7
+        modality:
+          $ref: '#/components/schemas/ItemModality'
+        pricePerDayCents:
+          type: integer
+        totalCents:
+          type: integer
+        currency:
+          type: string
+          const: MXN
+        paymentMode:
+          $ref: '#/components/schemas/PaymentMode'
+        payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuotePayment'
+        policy:
+          type: object
+          required: [requestExpiresInHours, lateCancellationNotice, noShowNotice]
+          properties:
+            requestExpiresInHours:
+              type: integer
+              const: 48
+            lateCancellationNotice:
+              type: string
+            noShowNotice:
+              type: string
+      example:
+        itemId: 6731a2b3c4d5e6f7a8b9c0d1
+        startDate: '2026-11-10'
+        endDate: '2026-11-12'
+        days: 3
+        modality: rent
+        pricePerDayCents: 3000
+        totalCents: 9000
+        currency: MXN
+        paymentMode: split_50_50
+        payments:
+          - stage: delivery
+            amountCents: 4500
+          - stage: return
+            amountCents: 4500
+        policy:
+          requestExpiresInHours: 48
+          lateCancellationNotice: Cancelar tarde no tiene cargo automático, pero puede registrarse una incidencia.
+          noShowNotice: Si no te presentas a la entrega puede registrarse una incidencia y una advertencia o suspensión.
+    BookingRequest:
+      type: object
+      required: [itemId, startDate, endDate, paymentMode, acceptedTotalCents]
+      properties:
+        itemId:
+          type: string
+          pattern: '^[0-9a-f]{24}$'
+        startDate:
+          $ref: '#/components/schemas/CalendarDate'
+        endDate:
+          $ref: '#/components/schemas/CalendarDate'
+        paymentMode:
+          $ref: '#/components/schemas/PaymentMode'
+        acceptedTotalCents:
+          type: integer
+          minimum: 0
+          description: Total que mostró la cotización; si cambió, 409 con detalle quote_changed.
+    MeetingPoint:
+      type: object
+      required: [description]
+      properties:
+        description:
+          type: string
+          minLength: 3
+          maxLength: 200
+    AcceptBookingRequest:
+      type: object
+      properties:
+        meetingPoint:
+          $ref: '#/components/schemas/MeetingPoint'
+    RejectBookingRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 200
+    CancelBookingRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 200
+          description: Obligatorio al cancelar una reserva accepted.
+    BookingPayment:
+      type: object
+      required: [stage, amountCents, status, reportedAt, confirmedAt]
+      properties:
+        stage:
+          $ref: '#/components/schemas/PaymentStage'
+        amountCents:
+          type: integer
+        status:
+          type: string
+          enum: [pending, reported, confirmed]
+          description: La spec 009 registra y confirma los pagos.
+        reportedAt:
+          type: [string, 'null']
+          format: date-time
+        confirmedAt:
+          type: [string, 'null']
+          format: date-time
+    Stage:
+      type: [object, 'null']
+      description: Marcador de entrega o devolución; la spec 009 define su contenido. Hoy siempre null.
+    Booking:
+      type: object
+      required: [id, item, owner, requester, startDate, endDate, days, priceSnapshot, paymentMode, payments, status, expiresAt, meetingPoint, cancelReason, cancelledBy, conversationId, delivery, return, isLate, adjustments, viewerRole, createdAt, updatedAt, version]
+      properties:
+        id:
+          type: string
+        item:
+          type: object
+          required: [id, title, thumbUrl, modality]
+          properties:
+            id:
+              type: string
+            title:
+              type: string
+              description: Título de la instantánea (RF-04).
+            thumbUrl:
+              type: [string, 'null']
+              format: uri
+            modality:
+              $ref: '#/components/schemas/ItemModality'
+        owner:
+          $ref: '#/components/schemas/PublicUser'
+        requester:
+          $ref: '#/components/schemas/PublicUser'
+        startDate:
+          $ref: '#/components/schemas/CalendarDate'
+        endDate:
+          $ref: '#/components/schemas/CalendarDate'
+        days:
+          type: integer
+        usageRules:
+          type: [string, 'null']
+          description: Reglas de uso de la instantánea.
+        priceSnapshot:
+          type: object
+          required: [modality, pricePerDayCents, totalCents, currency]
+          properties:
+            modality:
+              $ref: '#/components/schemas/ItemModality'
+            pricePerDayCents:
+              type: integer
+            totalCents:
+              type: integer
+            currency:
+              type: string
+              const: MXN
+        paymentMode:
+          $ref: '#/components/schemas/PaymentMode'
+        payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookingPayment'
+        status:
+          $ref: '#/components/schemas/BookingStatus'
+        expiresAt:
+          type: [string, 'null']
+          format: date-time
+          description: Solo en pending.
+        meetingPoint:
+          oneOf:
+            - $ref: '#/components/schemas/MeetingPoint'
+            - type: 'null'
+        cancelReason:
+          type: [string, 'null']
+        cancelledBy:
+          type: [string, 'null']
+          enum: [owner, requester, null]
+        conversationId:
+          type: [string, 'null']
+        delivery:
+          $ref: '#/components/schemas/Stage'
+        return:
+          $ref: '#/components/schemas/Stage'
+        isLate:
+          type: boolean
+        adjustments:
+          type: array
+          description: Ajustes por retraso (spec 009). Hoy vacío.
+          items:
+            type: object
+        viewerRole:
+          type: string
+          enum: [owner, requester, admin]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+    BookingPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Booking'
         nextCursor:
           type: [string, 'null']
     ErrorCode:

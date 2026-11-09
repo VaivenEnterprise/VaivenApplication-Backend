@@ -1,0 +1,373 @@
+# Solicitudes, precio y reservas (spec 007, T001; Art. IV, V y XII.2). Se
+# referencia desde api/openapi.yaml. Importes en centavos de MXN (enteros).
+# startDate y endDate son FECHAS DE CALENDARIO YYYY-MM-DD en America/Mexico_City
+# (excepción documentada al Art. V); los demás instantes son ISO-8601 UTC.
+quote:
+  parameters:
+    - name: id
+      in: path
+      required: true
+      description: Identificador del objeto.
+      schema:
+        type: string
+        pattern: '^[0-9a-f]{24}$'
+    - $ref: '../openapi.yaml#/components/parameters/RequestId'
+  get:
+    tags: [reservas]
+    operationId: quoteBooking
+    summary: Cotizar un periodo
+    description: |
+      Devuelve días, tarifa, total, desglose de pagos (POL-05) y los textos de
+      política (POL-03, POL-09) **antes** de solicitar. No crea nada (RF-01).
+
+      - `days = (endDate − startDate) + 1`, de 1 a 7 (POL-02); `startDate` no puede
+        ser anterior a hoy en Ciudad de México.
+      - Préstamo: total 0 y `paymentMode=none`. Renta: `full_on_delivery` o
+        `split_50_50` (entrega `ceil(total/2)`, devolución `floor(total/2)`).
+      - El objeto debe estar `active` y no ser de quien cotiza.
+    parameters:
+      - name: startDate
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+        example: '2026-11-10'
+      - name: endDate
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+        example: '2026-11-12'
+      - name: paymentMode
+        in: query
+        required: true
+        schema:
+          $ref: '../openapi.yaml#/components/schemas/PaymentMode'
+    responses:
+      '200':
+        description: Cotización.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/Quote'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '403':
+        $ref: '../openapi.yaml#/components/responses/Forbidden'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '409':
+        $ref: '../openapi.yaml#/components/responses/Conflict'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+bookings:
+  post:
+    tags: [reservas]
+    operationId: createBooking
+    summary: Solicitar un objeto
+    description: |
+      Crea una solicitud `pending` (RF-02). Se envía el `acceptedTotalCents` que
+      mostró la cotización: si el total actual es otro responde 409 con el detalle
+      `acceptedTotalCents: quote_changed` (CA-03) y hay que volver a cotizar.
+
+      - No se solicita un objeto propio (403); el objeto debe estar `active`; sin
+        cruce con reservas aceptadas o en curso; no se repite una solicitud
+        pendiente propia que se cruce (409).
+      - Guarda una instantánea (título, reglas, primera foto, tarifa y total): un
+        cambio posterior del objeto no la altera (RF-04).
+      - Vence a las 48 h o al empezar el día de `startDate`, lo primero (POL-03).
+      - Abre la conversación de la reserva y notifica al propietario (RF-12).
+      - Una cuenta suspendida recibe 403.
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/BookingRequest'
+          example:
+            itemId: 6731a2b3c4d5e6f7a8b9c0d1
+            startDate: '2026-11-10'
+            endDate: '2026-11-12'
+            paymentMode: split_50_50
+            acceptedTotalCents: 9000
+    responses:
+      '201':
+        description: Solicitud creada.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/Booking'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '403':
+        $ref: '../openapi.yaml#/components/responses/Forbidden'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '409':
+        $ref: '../openapi.yaml#/components/responses/Conflict'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'
+
+bookingById:
+  parameters:
+    - $ref: '#/components/parameters/BookingId'
+    - $ref: '../openapi.yaml#/components/parameters/RequestId'
+  get:
+    tags: [reservas]
+    operationId: getBooking
+    summary: Detalle de una solicitud o reserva
+    description: |
+      Solo las dos partes y admin (404 para los demás). El punto de encuentro solo
+      lo ven las dos partes. Una pendiente ya vencida se muestra `expired` (RF-06).
+    responses:
+      '200':
+        $ref: '#/components/responses/BookingOk'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+myBookings:
+  get:
+    tags: [reservas]
+    operationId: listMyBookings
+    summary: Mis solicitudes y reservas
+    description: |
+      Por rol (`owner`: las que recibo como propietario; `requester`: las que
+      envié) y estado opcional, más recientes primero (RF-10). `nextCursor` null =
+      no hay más.
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+      - name: role
+        in: query
+        required: true
+        schema:
+          type: string
+          enum: [owner, requester]
+      - name: status
+        in: query
+        required: false
+        schema:
+          $ref: '../openapi.yaml#/components/schemas/BookingStatus'
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 128
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 20
+    responses:
+      '200':
+        description: Página de solicitudes y reservas.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/BookingPage'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+accept:
+  parameters:
+    - $ref: '#/components/parameters/BookingId'
+    - $ref: '../openapi.yaml#/components/parameters/RequestId'
+  post:
+    tags: [reservas]
+    operationId: acceptBooking
+    summary: Aceptar (propietario)
+    description: |
+      Reserva el periodo de forma atómica (RF-07): si otra reserva aceptada o en
+      curso se cruza responde 409 y no cambia nada (CA-05). Las demás solicitudes
+      pendientes que se cruzan pasan a `rejected` con motivo `no_disponible`.
+      Solo una solicitud `pending` y no vencida.
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/AcceptBookingRequest'
+          example:
+            meetingPoint:
+              description: Entrada principal del metro Coyoacán.
+    responses:
+      '200':
+        $ref: '#/components/responses/BookingOk'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '403':
+        $ref: '../openapi.yaml#/components/responses/Forbidden'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '409':
+        $ref: '../openapi.yaml#/components/responses/Conflict'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+reject:
+  parameters:
+    - $ref: '#/components/parameters/BookingId'
+    - $ref: '../openapi.yaml#/components/parameters/RequestId'
+  post:
+    tags: [reservas]
+    operationId: rejectBooking
+    summary: Rechazar (propietario)
+    description: Rechaza una solicitud `pending`; `reason` es opcional (≤ 200 caracteres).
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/RejectBookingRequest'
+    responses:
+      '200':
+        $ref: '#/components/responses/BookingOk'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '403':
+        $ref: '../openapi.yaml#/components/responses/Forbidden'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '409':
+        $ref: '../openapi.yaml#/components/responses/Conflict'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+cancel:
+  parameters:
+    - $ref: '#/components/parameters/BookingId'
+    - $ref: '../openapi.yaml#/components/parameters/RequestId'
+  post:
+    tags: [reservas]
+    operationId: cancelBooking
+    summary: Cancelar
+    description: |
+      `pending`: solo quien solicitó. `accepted`: cualquiera de las partes, con
+      `reason` obligatorio (3 a 200 caracteres). Libera el periodo (CA-08) y
+      conserva el motivo y el historial (RF-08). Sin cargo automático (POL-09).
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/CancelBookingRequest'
+          example:
+            reason: Ya no lo necesito, gracias.
+    responses:
+      '200':
+        $ref: '#/components/responses/BookingOk'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '403':
+        $ref: '../openapi.yaml#/components/responses/Forbidden'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '409':
+        $ref: '../openapi.yaml#/components/responses/Conflict'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+meetingPoint:
+  parameters:
+    - $ref: '#/components/parameters/BookingId'
+    - $ref: '../openapi.yaml#/components/parameters/RequestId'
+  post:
+    tags: [reservas]
+    operationId: setBookingMeetingPoint
+    summary: Punto de encuentro (propietario)
+    description: Fija o cambia el punto de encuentro de una reserva `accepted` o `in_progress` (RF-09). Solo lo ven las dos partes.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/MeetingPoint'
+    responses:
+      '200':
+        $ref: '#/components/responses/BookingOk'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '403':
+        $ref: '../openapi.yaml#/components/responses/Forbidden'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '409':
+        $ref: '../openapi.yaml#/components/responses/Conflict'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+components:
+  parameters:
+    BookingId:
+      name: id
+      in: path
+      required: true
+      description: Identificador de la solicitud o reserva.
+      schema:
+        type: string
+        pattern: '^[0-9a-f]{24}$'
+  responses:
+    BookingOk:
+      description: Solicitud o reserva.
+      headers:
+        X-Request-Id:
+          $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/Booking'

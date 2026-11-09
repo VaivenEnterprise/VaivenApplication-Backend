@@ -3,7 +3,7 @@
 - **Dueño:** BE-A · **Estado:** sin ejecutar · `[P]` = paralelizable
 - **T001 se integra el primer día** para MO-A y para BE-B (008 y 006 leen `bookings`).
 
-- [ ] **T001** Contrato OpenAPI de reservas
+- [x] **T001** Contrato OpenAPI de reservas
   - Archivos: `api/paths/bookings.yaml`, `api/openapi.yaml` (agregar `$ref`)
   - Agente: `spec-writer` · Depende de: 005-T001
   - Aceptación: las 8 rutas del plan §2; esquemas `Quote`, `Booking`, `Stage` (placeholder), estados y errores `quote_changed`; ejemplos con importes en centavos
