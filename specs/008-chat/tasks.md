@@ -33,13 +33,13 @@
   - Aceptación: ajenos → no encontrado (CA-02); `clientId` idempotente (CA-03); estado cerrado → conflicto (CA-04); `Checker` de moderación; notificación solo en el primer no leído (RF-12); contadores (CA-06); ≥ 80 %
   - Refs: RF-03…RF-08, RF-10, RF-12
 
-- [ ] **T006** Handlers, límite de tasa y rutas
+- [x] **T006** Handlers, límite de tasa y rutas
   - Archivos: `internal/chat/adapter/http/{handler.go, dto.go, routes.go, handler_test.go}`, `cmd/api/modules.go` (una línea)
   - Agente: `dev-go` · Depende de: T001, T005, 003-T009, 003-T010
   - Aceptación: 5 rutas cumplen el contrato; 429 tras 30 mensajes/min; 400 para cuerpo de 1001 caracteres (CA-05); la ruta estática `unread-count` antes de `{id}`
   - Refs: RF-11
 
-- [ ] **T007** Reemplazar `chat.Opener` vacío
+- [x] **T007** Reemplazar `chat.Opener` vacío
   - Archivos: `internal/chat/opener.go`, `cmd/api/modules.go` (cambio de una línea, acordado con BE-A)
   - Agente: `dev-go` · Depende de: T004, 007-T009
   - Aceptación: al crear una solicitud existe su conversación; si falla, la solicitud no se crea (probado con el flujo de 007)
