@@ -3,7 +3,7 @@
 - **Dueño:** BE-B · **Estado:** sin ejecutar · `[P]` = paralelizable
 - Puede arrancar con documentos de `items` sembrados a mano según el modelo de 005 plan §3; se cierra cuando 005 esté desplegada.
 
-- [ ] **T001** Contrato OpenAPI de búsqueda
+- [x] **T001** Contrato OpenAPI de búsqueda
   - Archivos: `api/paths/search.yaml`, `api/openapi.yaml` (agregar `$ref`)
   - Agente: `spec-writer` · Depende de: 005-T001
   - Aceptación: describe `GET /api/v1/items` con todos los parámetros, esquema `ItemCard` y `ItemPage`, errores de validación

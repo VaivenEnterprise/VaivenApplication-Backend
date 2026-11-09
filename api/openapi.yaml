@@ -1,14 +1,14 @@
 openapi: 3.1.0
 info:
   title: VAIVÉN API
-  version: 0.5.0
+  version: 0.6.0
   summary: API REST del backend de VAIVÉN (préstamo y renta de objetos en México).
   description: |
     Contrato de la spec 002 (arquitectura base): endpoints de infraestructura y
     el envoltorio único de errores (Art. IV de la constitución). La spec 003
     agrega la cuenta y la autenticación (`api/paths/auth.yaml` y `users.yaml`) y
     la spec 004 las imágenes (`api/paths/uploads.yaml`) y la spec 005 los objetos
-    (`api/paths/items.yaml`).
+    (`api/paths/items.yaml`); la spec 006 la búsqueda (`api/paths/search.yaml`).
 
     - Rutas de negocio bajo `/api/v1`; `/healthz` y `/readyz` fuera del prefijo.
     - JSON en `camelCase`; fechas en ISO-8601 UTC.
@@ -39,6 +39,8 @@ tags:
     description: Subida de imágenes a Cloudinary con firma del servidor (spec 004).
   - name: objetos
     description: Publicar, editar y pausar objetos; precio sugerido y categorías (spec 005).
+  - name: busqueda
+    description: Buscar objetos por texto, categoría, zona, cercanía y fechas (spec 006).
 paths:
   /healthz:
     get:
@@ -145,7 +147,8 @@ paths:
   /api/v1/uploads/signature:
     $ref: './paths/uploads.yaml#/signature'
   /api/v1/items:
-    $ref: './paths/items.yaml#/items'
+    # GET (búsqueda, 006) y POST (publicar, 005) comparten la ruta.
+    $ref: './paths/search.yaml#/items'
   /api/v1/items/price-suggestion:
     $ref: './paths/items.yaml#/priceSuggestion'
   /api/v1/items/{id}:
@@ -660,6 +663,63 @@ components:
         suggestedPricePerDayCents:
           type: integer
           minimum: 1000
+    ItemCard:
+      type: object
+      description: Tarjeta pública de un resultado de búsqueda (RF-06). Sin valor declarado ni datos de contacto.
+      required: [id, title, category, modality, pricePerDayCents, zone, approxLocation, distanceKm, thumbUrl, photoCount, owner, createdAt]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        category:
+          $ref: '#/components/schemas/CategoryKey'
+        modality:
+          $ref: '#/components/schemas/ItemModality'
+        pricePerDayCents:
+          type: integer
+        zone:
+          $ref: '#/components/schemas/Zone'
+        approxLocation:
+          oneOf:
+            - $ref: '#/components/schemas/ApproxLocation'
+            - type: 'null'
+        distanceKm:
+          type: [number, 'null']
+          description: Distancia aproximada con 1 decimal; null si no se envió lat/lng.
+        thumbUrl:
+          type: [string, 'null']
+          format: uri
+          description: Miniatura de la primera foto.
+        photoCount:
+          type: integer
+          minimum: 0
+        owner:
+          type: object
+          required: [id, displayName, ratingAverage, ratingCount]
+          properties:
+            id:
+              type: string
+            displayName:
+              type: string
+            ratingAverage:
+              type: [number, 'null']
+            ratingCount:
+              type: integer
+              minimum: 0
+        createdAt:
+          type: string
+          format: date-time
+    ItemCardPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ItemCard'
+        nextCursor:
+          type: [string, 'null']
     ErrorCode:
       type: string
       description: Códigos permitidos por el Art. IV.3 de la constitución.
