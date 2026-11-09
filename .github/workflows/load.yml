@@ -80,8 +80,13 @@ jobs:
           [[ $DURATION =~ ^([1-9]|[1-5][0-9]|60)m$ ]] || { echo "duration no válida: '$DURATION' (1m a 60m)" >&2; exit 1; }
       - name: Build and start API
         env:
-          # test: Cloudinary, TLS y JWT son opcionales; no hacen falta secretos.
+          # test: TLS y JWT son opcionales. Cloudinary también lo es para la
+          # configuración, pero el módulo de imágenes (spec 004) exige nombre,
+          # clave y secreto al arrancar: se pasan valores ficticios (la carga
+          # solo usa /healthz y /api/v1/meta, que nunca llaman a Cloudinary).
           APP_ENV: test
+          CLOUDINARY_CLOUD_NAME: vaiven-load-test
+          CLOUDINARY_API_KEY: load-test-key
           APP_VERSION: load-${{ github.sha }}
           HTTP_ADDR: 127.0.0.1:8080
           MONGO_URI: mongodb://127.0.0.1:27017/?directConnection=true
@@ -101,6 +106,10 @@ jobs:
           JWT_ACCESS_SECRET=$(openssl rand -hex 32)
           echo "::add-mask::$JWT_ACCESS_SECRET"
           export JWT_ACCESS_SECRET
+          # Secreto ficticio de Cloudinary, también efímero y enmascarado.
+          CLOUDINARY_API_SECRET=$(openssl rand -hex 16)
+          echo "::add-mask::$CLOUDINARY_API_SECRET"
+          export CLOUDINARY_API_SECRET
           nohup ./bin/api >reports/load/api.log 2>&1 &
           echo "API_PID=$!" >>"$GITHUB_ENV"
           for _ in $(seq 1 60); do
