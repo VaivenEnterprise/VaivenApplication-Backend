@@ -9,6 +9,7 @@ import (
 	itemshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/items/adapter/http"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/moderation"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/notify"
+	searchhttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/search/adapter/http"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/users"
 )
 
@@ -25,6 +26,8 @@ type moduleDeps struct {
 	Images *imageshttp.Module
 	// Items es el módulo de la spec 005 (objetos).
 	Items *itemshttp.Module
+	// Search es el módulo de la spec 006 (búsqueda).
+	Search *searchhttp.Module
 	// Users da perfiles públicos por lote y acciones de administración.
 	Users interface {
 		users.Directory
@@ -41,5 +44,6 @@ func modules(deps moduleDeps) []apihttp.Module {
 		deps.Auth,   // 003 cuenta y autenticación
 		deps.Images, // 004 imágenes
 		deps.Items,  // 005 objetos
+		deps.Search, // 006 búsqueda
 	}
 }

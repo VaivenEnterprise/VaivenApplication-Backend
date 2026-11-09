@@ -33,7 +33,7 @@
   - Aceptación: ejecuta los 3 modos y devuelve tarjetas con propietario; paginación sin repetidos (CA-01); texto con acentos (CA-02); cercanía ordenada (CA-04); excluye pausados, propios y cuentas inactivas (CA-05)
   - Refs: RF-02, RF-04…RF-07
 
-- [ ] **T006** Caso de uso y handler
+- [x] **T006** Caso de uso y handler
   - Archivos: `internal/search/usecase/{search.go, ports.go, search_test.go}`, `internal/search/adapter/http/{handler.go, dto.go, routes.go, handler_test.go}`, `cmd/api/modules.go` (una línea)
   - Agente: `dev-go` · Depende de: T001, T005, 004-T007, 003-T010
   - Aceptación: cumple el contrato; `thumbUrl` con `images.Service`; errores de validación con `details` (CA-06); módulo registrado con una línea; pruebas con repositorio falso
