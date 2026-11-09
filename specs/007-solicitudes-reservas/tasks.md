@@ -51,19 +51,19 @@
   - Aceptación: solo partes o admin ven la reserva; punto de encuentro oculto a terceros; una pendiente vencida se muestra `expired`; tarea cada 60 s con reloj inyectado (CA-06)
   - Refs: RF-06, RF-10 · P-04
 
-- [ ] **T009** Puerto `chat.Opener` vacío y verificador de actividad real
+- [x] **T009** Puerto `chat.Opener` vacío y verificador de actividad real
   - Archivos: `internal/chat/opener.go`, `internal/bookings/adapter/mongo/activity_checker.go`, `internal/bookings/adapter/mongo/activity_checker_integration_test.go`
   - Agente: `dev-go` · Depende de: T004, 003-T008, 005-T006
   - Aceptación: `Opener` con implementación vacía (devuelve id vacío); `ActivityChecker` real: ¿usuario u objeto con reservas `accepted/in_progress`?; `modules.go` reemplaza los puertos vacíos de 003 y 005 (RF-14)
   - Refs: RF-12, RF-14 · P-05
 
-- [ ] **T010** Handlers, DTO y rutas
+- [x] **T010** Handlers, DTO y rutas
   - Archivos: `internal/bookings/adapter/http/{handler.go, dto.go, routes.go, handler_test.go}`, `cmd/api/modules.go` (una línea)
   - Agente: `dev-go` · Depende de: T001, T007, T008, 003-T010
   - Aceptación: 8 rutas cumplen el contrato; `RequireActive` al crear; `viewerRole` correcto; módulo registrado con una línea; pruebas `httptest`
   - Refs: RF-01…RF-10
 
-- [ ] **T011** Prueba de integración del flujo completo
+- [x] **T011** Prueba de integración del flujo completo
   - Archivos: `internal/bookings/adapter/http/flow_integration_test.go`
   - Agente: `qa-go` · Depende de: T009, T010
   - Aceptación: cotizar→solicitar→aceptar→(cruce rechazado)→cancelar→disponible en `GET /items`; cambio de precio no altera la reserva; CA-01…CA-08 cubiertos

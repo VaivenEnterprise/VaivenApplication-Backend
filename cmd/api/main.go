@@ -22,6 +22,11 @@ import (
 	authhttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/adapter/http"
 	authmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/adapter/mongo"
 	authusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/usecase"
+	bookingshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/bookings/adapter/http"
+	bookingsmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/bookings/adapter/mongo"
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/bookings/jobs"
+	bookingsusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/bookings/usecase"
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/chat"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/config"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/images"
 	imageshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/images/adapter/http"
@@ -116,7 +121,8 @@ func run() error {
 	refreshRepo := authmongo.NewRefreshRepo(db)
 	itemRepo := itemsmongo.NewItemRepo(db)
 	// Los índices de búsqueda (006) van después de los de items (005).
-	if err := adaptermongo.EnsureAll(ctx, userRepo, refreshRepo, itemRepo, searchmongo.NewIndexes(db)); err != nil {
+	bookingRepo := bookingsmongo.NewRepo(db)
+	if err := adaptermongo.EnsureAll(ctx, userRepo, refreshRepo, itemRepo, searchmongo.NewIndexes(db), bookingRepo); err != nil {
 		return fmt.Errorf("no se pudieron crear los índices: %w", err)
 	}
 
@@ -138,7 +144,9 @@ func run() error {
 		limiter = redis.NewLimiter(rc)
 	}
 
-	authModule, err := newAuthModule(cfg, log, userRepo, refreshRepo, limiter)
+	// Reservas reales (spec 007, RF-14): impiden dar de baja una cuenta (003)
+	// o eliminar un objeto (005) con reservas aceptadas o en curso.
+	authModule, err := newAuthModule(cfg, log, userRepo, refreshRepo, limiter, bookingsmongo.NewUserActivity(db))
 	if err != nil {
 		return err
 	}
@@ -152,7 +160,7 @@ func run() error {
 	// todos los módulos reciben la misma instancia.
 	var mod moderation.Checker = moderation.AllowAll{}
 
-	itemsModule, err := newItemsModule(log, authModule, userRepo, imagesSvc, mod, itemRepo)
+	itemsModule, err := newItemsModule(log, authModule, userRepo, imagesSvc, mod, itemRepo, bookingsmongo.NewItemActivity(db))
 	if err != nil {
 		return err
 	}
@@ -162,14 +170,35 @@ func run() error {
 		return err
 	}
 
+	notifier := notify.Noop{}
+	bookingsSvc, err := bookingsusecase.NewService(bookingsusecase.Deps{
+		Repo: bookingRepo, Images: imagesSvc, Users: userRepo,
+		Chat: chat.Noop{}, Notifier: notifier, Log: log,
+	})
+	if err != nil {
+		return err
+	}
+	bookingsModule, err := bookingshttp.NewModule(bookingshttp.ModuleDeps{
+		Service:       bookingsSvc,
+		Authenticate:  authModule.Authenticate(),
+		RequireActive: authhttp.RequireActive(userRepo.ByID, nil),
+		Log:           log,
+	})
+	if err != nil {
+		return err
+	}
+	// Vencimiento de solicitudes cada 60 s (plan 007 P-04); termina con ctx.
+	go jobs.RunExpirer(ctx, bookingsSvc, nil, log)
+
 	mods := modules(moduleDeps{
 		Log:        log,
-		Notifier:   notify.Noop{},
+		Notifier:   notifier,
 		Moderation: mod,
 		Auth:       authModule,
 		Images:     imagesModule,
 		Items:      itemsModule,
 		Search:     searchModule,
+		Bookings:   bookingsModule,
 		Users:      userRepo,
 	})
 	for _, m := range mods {
@@ -235,7 +264,7 @@ func run() error {
 
 // newAuthModule arma el módulo de la spec 003: argon2id, JWT, casos de uso y
 // rutas, con el límite de register, login y refresh sobre el limitador común.
-func newAuthModule(cfg config.Config, log *slog.Logger, users *authmongo.UserRepo, refresh *authmongo.RefreshRepo, limiter ratelimit.Limiter) (*authhttp.Module, error) {
+func newAuthModule(cfg config.Config, log *slog.Logger, users *authmongo.UserRepo, refresh *authmongo.RefreshRepo, limiter ratelimit.Limiter, bookings authusecase.ActiveBookingChecker) (*authhttp.Module, error) {
 	jwt, err := security.NewJWT(cfg.Auth.AccessSecret.Reveal(), cfg.Auth.AccessTTL)
 	if err != nil {
 		return nil, fmt.Errorf("no se pudo configurar JWT: %w", err)
@@ -254,6 +283,7 @@ func newAuthModule(cfg config.Config, log *slog.Logger, users *authmongo.UserRep
 		NewRefresh:  security.NewRefreshToken,
 		HashRefresh: security.HashToken,
 		RefreshTTL:  cfg.Auth.RefreshTTL,
+		Bookings:    bookings,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("no se pudo crear el servicio de auth: %w", err)
@@ -295,14 +325,15 @@ func newImagesModule(cfg config.Config, log *slog.Logger, authModule *authhttp.M
 
 // newItemsModule arma el módulo de la spec 005: casos de uso de objetos con
 // images.Service, moderación (vacía hasta la 011), perfiles públicos y
-// RequireActive en POST /items (RF-12). Las reservas (spec 007) aún no
-// existen: NoActiveBookings.
-func newItemsModule(log *slog.Logger, authModule *authhttp.Module, userRepo *authmongo.UserRepo, imgs imgport.Service, mod moderation.Checker, repo *itemsmongo.ItemRepo) (*itemshttp.Module, error) {
+// RequireActive en POST /items (RF-12). bookings es el verificador real de
+// la spec 007 (RF-14).
+func newItemsModule(log *slog.Logger, authModule *authhttp.Module, userRepo *authmongo.UserRepo, imgs imgport.Service, mod moderation.Checker, repo *itemsmongo.ItemRepo, bookings itemsusecase.BookingChecker) (*itemshttp.Module, error) {
 	svc, err := itemsusecase.NewService(itemsusecase.Deps{
 		Items:      repo,
 		Images:     imgs,
 		Moderation: mod,
 		Users:      userRepo,
+		Bookings:   bookings,
 	})
 	if err != nil {
 		return nil, err
