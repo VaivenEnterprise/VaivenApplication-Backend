@@ -68,4 +68,4 @@ Desktop.ini
 *.swo
 
 # Reportes locales de pruebas de mutación y carga (spec 017, T010)
-reports/
+/reports/

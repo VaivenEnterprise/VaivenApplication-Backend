@@ -1,6 +1,6 @@
 # Tareas 010 — Calificaciones e incidencias (backend)
 
-- **Dueño:** BE-B · **Estado:** T001–T011 cerradas (2026-11-09); falta T012 (despliegue a staging, requiere autorización) · `[P]` = paralelizable
+- **Dueño:** BE-B · **Estado:** T001–T012 cerradas (2026-11-09); spec desplegada y verificada en staging · `[P]` = paralelizable
 - Prioridad de entrega (ROADMAP §6): **primero calificaciones (T002–T006)**, después incidencias y sanciones.
 
 - [x] **T001** Contrato OpenAPI de calificaciones, incidencias y administración
@@ -69,7 +69,7 @@
   - Aceptación: veredicto **CONFORME**; hito H4 (backend) marcado
   - Refs: DoD
 
-- [ ] **T012** Despliegue de la spec en Azure (staging)
+- [x] **T012** Despliegue de la spec en Azure (staging)
   - Archivos: `memoria.md` (solo anexar)
   - Agente: `devops-mcp` · Depende de: T011 (y todas las anteriores `[x]`)
   - Aceptación: `make fmt lint test` en verde; `scripts/deploy.sh staging` (construye, envía a la VM y reinicia la API); `/healthz` y `/readyz` devuelven 200 por HTTPS sin `-k`; cada endpoint nuevo de esta spec (`api/paths/<modulo>.yaml`) responde con una petición correcta y una inválida en el formato de error del Art. IV; registros sin secretos ni datos personales; resultado anotado en `memoria.md`. **La spec siguiente no empieza hasta que esta tarea pase.**

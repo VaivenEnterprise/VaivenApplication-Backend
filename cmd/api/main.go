@@ -45,6 +45,11 @@ import (
 	itemsmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/items/adapter/mongo"
 	itemsusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/items/usecase"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/moderation"
+	notificationsexpo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/notifications/adapter/expo"
+	notificationshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/notifications/adapter/http"
+	notificationsmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/notifications/adapter/mongo"
+	notificationsusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/notifications/usecase"
+	notificationsworker "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/notifications/worker"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/notify"
 	paymentshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/payments/adapter/http"
 	paymentsmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/payments/adapter/mongo"
@@ -58,6 +63,9 @@ import (
 	ratingshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ratings/adapter/http"
 	ratingsmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ratings/adapter/mongo"
 	ratingsusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ratings/usecase"
+	reportshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/reports/adapter/http"
+	reportsmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/reports/adapter/mongo"
+	reportsusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/reports/usecase"
 	sanctionshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/sanctions/adapter/http"
 	sanctionsmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/sanctions/adapter/mongo"
 	sanctionsusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/sanctions/usecase"
@@ -150,8 +158,12 @@ func run() error {
 	ratingsRepo := ratingsmongo.NewRepo(db, userRepo)
 	incidentsRepo := incidentsmongo.NewRepo(db)
 	sanctionsRepo := sanctionsmongo.NewRepo(db)
+	// Avisos, tokens de push y reportes (spec 011).
+	notificationsRepo := notificationsmongo.NewNotificationRepo(db)
+	pushTokensRepo := notificationsmongo.NewTokenRepo(db)
+	reportsRepo := reportsmongo.NewRepo(db)
 	if err := adaptermongo.EnsureAll(ctx, userRepo, refreshRepo, itemRepo, searchmongo.NewIndexes(db), bookingRepo, convRepo, msgRepo, paymentsRepo,
-		ratingsRepo, incidentsRepo, sanctionsRepo); err != nil {
+		ratingsRepo, incidentsRepo, sanctionsRepo, notificationsRepo, pushTokensRepo, reportsRepo); err != nil {
 		return fmt.Errorf("no se pudieron crear los índices: %w", err)
 	}
 
@@ -185,11 +197,11 @@ func run() error {
 		return err
 	}
 
-	// Puerto compartido de moderación (Art. XII.4): AllowAll hasta la spec 011;
-	// todos los módulos reciben la misma instancia.
-	var mod moderation.Checker = moderation.AllowAll{}
+	// Puerto compartido de moderación (Art. XII.4): el filtro real de la spec
+	// 011 (POL-16); todos los módulos reciben la misma instancia.
+	var mod moderation.Checker = moderation.NewFilter()
 
-	itemsModule, err := newItemsModule(log, authModule, userRepo, imagesSvc, mod, itemRepo, bookingsmongo.NewItemActivity(db))
+	itemsModule, itemsSvc, err := newItemsModule(log, authModule, userRepo, imagesSvc, mod, itemRepo, bookingsmongo.NewItemActivity(db))
 	if err != nil {
 		return err
 	}
@@ -199,7 +211,12 @@ func run() error {
 		return err
 	}
 
-	notifier := notify.Noop{}
+	// Puerto compartido de avisos (Art. XII.4): el Notifier real de la spec 011
+	// guarda el aviso y, si PUSH_ENABLED, encola el push que envía el worker.
+	notifier, pushWorker, err := newNotifier(cfg, log, notificationsRepo, pushTokensRepo, userRepo)
+	if err != nil {
+		return err
+	}
 	// Chat de cada reserva (spec 008); su servicio es el chat.Opener real que
 	// abre la conversación al crear una solicitud (reemplaza el vacío de 007).
 	chatSvc, err := chatusecase.NewService(chatusecase.Deps{
@@ -308,6 +325,39 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	// Avisos y moderación (spec 011). Las rutas /admin/reports exigen el rol
+	// admin además de la sesión (RF-10).
+	notificationsSvc, err := notificationsusecase.NewService(notificationsusecase.Deps{Repo: notificationsRepo, Tokens: pushTokensRepo})
+	if err != nil {
+		return err
+	}
+	notificationsModule, err := notificationshttp.NewModule(notificationshttp.ModuleDeps{
+		Service: notificationsSvc, Authenticate: authModule.Authenticate(), Log: log,
+	})
+	if err != nil {
+		return err
+	}
+	reportsSvc, err := reportsusecase.NewService(reportsusecase.Deps{
+		Repo: reportsRepo, Items: itemsSvc, Messages: chatmongo.NewMessageReader(db),
+		Users: userRepo, Admin: userRepo, Notifier: notifier, Log: log,
+	})
+	if err != nil {
+		return err
+	}
+	reportsModule, err := reportshttp.NewModule(reportshttp.ModuleDeps{
+		Service: reportsSvc, Authenticate: authModule.Authenticate(), RequireAdmin: requireAdmin, Log: log,
+	})
+	if err != nil {
+		return err
+	}
+	// Envío de push en segundo plano (spec 011, plan P-01); termina con ctx.
+	pushDone := make(chan struct{})
+	go func() {
+		defer close(pushDone)
+		if pushWorker != nil {
+			pushWorker.Run(ctx)
+		}
+	}()
 	// Vencimiento de solicitudes cada 60 s (plan 007 P-04); termina con ctx.
 	expirerDone := make(chan struct{})
 	go func() {
@@ -322,21 +372,23 @@ func run() error {
 	}()
 
 	mods := modules(moduleDeps{
-		Log:        log,
-		Notifier:   notifier,
-		Moderation: mod,
-		Auth:       authModule,
-		Images:     imagesModule,
-		Items:      itemsModule,
-		Search:     searchModule,
-		Bookings:   bookingsModule,
-		Chat:       chatModule,
-		Handover:   handoverModule,
-		Payments:   paymentsModule,
-		Ratings:    ratingsModule,
-		Incidents:  incidentsModule,
-		Sanctions:  sanctionsModule,
-		Users:      userRepo,
+		Log:           log,
+		Notifier:      notifier,
+		Moderation:    mod,
+		Auth:          authModule,
+		Images:        imagesModule,
+		Items:         itemsModule,
+		Search:        searchModule,
+		Bookings:      bookingsModule,
+		Chat:          chatModule,
+		Handover:      handoverModule,
+		Payments:      paymentsModule,
+		Ratings:       ratingsModule,
+		Incidents:     incidentsModule,
+		Sanctions:     sanctionsModule,
+		Notifications: notificationsModule,
+		Reports:       reportsModule,
+		Users:         userRepo,
 	})
 	for _, m := range mods {
 		log.Info("módulo registrado", "module", m.Name())
@@ -398,6 +450,7 @@ func run() error {
 	}
 	<-expirerDone // la tarea termina con ctx; se espera antes de cerrar MongoDB
 	<-lateDone
+	<-pushDone
 	log.Info("servidor detenido")
 	return nil
 }
@@ -464,10 +517,10 @@ func newImagesModule(cfg config.Config, log *slog.Logger, authModule *authhttp.M
 }
 
 // newItemsModule arma el módulo de la spec 005: casos de uso de objetos con
-// images.Service, moderación (vacía hasta la 011), perfiles públicos y
+// images.Service, moderación (el filtro de la 011), perfiles públicos y
 // RequireActive en POST /items (RF-12). bookings es el verificador real de
 // la spec 007 (RF-14).
-func newItemsModule(log *slog.Logger, authModule *authhttp.Module, userRepo *authmongo.UserRepo, imgs imgport.Service, mod moderation.Checker, repo *itemsmongo.ItemRepo, bookings itemsusecase.BookingChecker) (*itemshttp.Module, error) {
+func newItemsModule(log *slog.Logger, authModule *authhttp.Module, userRepo *authmongo.UserRepo, imgs imgport.Service, mod moderation.Checker, repo *itemsmongo.ItemRepo, bookings itemsusecase.BookingChecker) (*itemshttp.Module, *itemsusecase.Service, error) {
 	svc, err := itemsusecase.NewService(itemsusecase.Deps{
 		Items:      repo,
 		Images:     imgs,
@@ -476,14 +529,16 @@ func newItemsModule(log *slog.Logger, authModule *authhttp.Module, userRepo *aut
 		Bookings:   bookings,
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return itemshttp.NewModule(itemshttp.ModuleDeps{
+	// El servicio también es items.Moderation (spec 011): lo usan los reportes.
+	module, err := itemshttp.NewModule(itemshttp.ModuleDeps{
 		Service:       svc,
 		Authenticate:  authModule.Authenticate(),
 		RequireActive: authhttp.RequireActive(userRepo.ByID, nil),
 		Log:           log,
 	})
+	return module, svc, err
 }
 
 // newSearchModule arma el módulo de la spec 006: búsqueda de solo lectura
@@ -519,4 +574,31 @@ func docsHandler(enabled bool) http.Handler {
 		return nil
 	}
 	return docs.Handler()
+}
+
+// newNotifier arma el Notifier real de la spec 011 (RF-01, RF-05). Con
+// cfg.Push.Enabled también crea el worker que envía los push a Expo en segundo
+// plano (plan P-01, P-02); sin él devuelve nil y solo se guardan los avisos.
+// El llamador ejecuta worker.Run con el contexto del servidor.
+func newNotifier(cfg config.Config, log *slog.Logger, notifications *notificationsmongo.NotificationRepo, tokens *notificationsmongo.TokenRepo, users *authmongo.UserRepo) (notify.Notifier, *notificationsworker.Worker, error) {
+	var pusher notify.Pusher
+	var w *notificationsworker.Worker
+	if cfg.Push.Enabled {
+		var err error
+		w, err = notificationsworker.New(notificationsworker.Deps{
+			Tokens: tokens,
+			Sender: notificationsexpo.NewClient(cfg.Push.URL, cfg.Push.AccessToken.Reveal(), 0),
+			Log:    log,
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		pusher = w
+	}
+	svc, err := notify.NewService(notify.ServiceDeps{Store: notifications, Users: users, Pusher: pusher, Log: log})
+	if err != nil {
+		return nil, nil, err
+	}
+	log.Info("avisos", "push_habilitado", cfg.Push.Enabled)
+	return svc, w, nil
 }
