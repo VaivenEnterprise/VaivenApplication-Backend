@@ -8,6 +8,7 @@ import (
 	drv "go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	adaptermongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/mongo"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/notifications/domain"
 )
 
@@ -22,13 +23,23 @@ func NewTokenRepo(db *drv.Database) *TokenRepo {
 	return &TokenRepo{col: db.Collection(PushTokensCollection)}
 }
 
+// PushTokenIndexes declara los índices de PushTokensCollection: es la fuente única
+// de verdad que consumen EnsureIndexes y el catálogo de `admin indexes`
+// (spec 012, T004). Solo datos: no abre conexiones.
+func PushTokenIndexes() []adaptermongo.IndexSpec {
+	return adaptermongo.SpecsFor(PushTokensCollection, []drv.IndexModel{
+		{Keys: bson.D{{Key: "token", Value: 1}}, Options: options.Index().SetName("token_unique").SetUnique(true)},
+		{Keys: bson.D{{Key: "userId", Value: 1}}, Options: options.Index().SetName("user")},
+	}...)
+}
+
+// Indexes cumple adaptermongo.IndexDeclarer.
+func (r *TokenRepo) Indexes() []adaptermongo.IndexSpec { return PushTokenIndexes() }
+
 // EnsureIndexes crea los índices del plan §3: token único (un dispositivo
 // pertenece a una sola persona) y {userId} para buscar los de una persona.
 func (r *TokenRepo) EnsureIndexes(ctx context.Context) error {
-	_, err := r.col.Indexes().CreateMany(ctx, []drv.IndexModel{
-		{Keys: bson.D{{Key: "token", Value: 1}}, Options: options.Index().SetName("token_unique").SetUnique(true)},
-		{Keys: bson.D{{Key: "userId", Value: 1}}, Options: options.Index().SetName("user")},
-	})
+	_, err := r.col.Indexes().CreateMany(ctx, adaptermongo.Models(r.Indexes()))
 	if err != nil {
 		return fmt.Errorf("push_tokens: crear índices: %w", err)
 	}

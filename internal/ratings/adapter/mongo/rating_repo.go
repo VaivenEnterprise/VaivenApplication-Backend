@@ -14,6 +14,7 @@ import (
 	drv "go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	adaptermongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/mongo"
 	bookings "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/bookings/domain"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ratings/domain"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/users"
@@ -36,14 +37,24 @@ func NewRepo(db *drv.Database, admin users.Admin) *Repo {
 	return &Repo{client: db.Client(), col: db.Collection(RatingsCollection), admin: admin}
 }
 
+// RatingIndexes declara los índices de RatingsCollection: es la fuente única
+// de verdad que consumen EnsureIndexes y el catálogo de `admin indexes`
+// (spec 012, T004). Solo datos: no abre conexiones.
+func RatingIndexes() []adaptermongo.IndexSpec {
+	return adaptermongo.SpecsFor(RatingsCollection, []drv.IndexModel{
+		{Keys: bson.D{{Key: "bookingId", Value: 1}, {Key: "raterId", Value: 1}}, Options: options.Index().SetName("booking_rater_unique").SetUnique(true)},
+		{Keys: bson.D{{Key: "rateeId", Value: 1}, {Key: "_id", Value: -1}}, Options: options.Index().SetName("ratee_id")},
+	}...)
+}
+
+// Indexes cumple adaptermongo.IndexDeclarer.
+func (r *Repo) Indexes() []adaptermongo.IndexSpec { return RatingIndexes() }
+
 // EnsureIndexes crea los índices de ratings (plan §3): el único
 // {bookingId, raterId}, que impide calificar dos veces la misma reserva, y
 // {rateeId, _id desc} para listar las recibidas.
 func (r *Repo) EnsureIndexes(ctx context.Context) error {
-	_, err := r.col.Indexes().CreateMany(ctx, []drv.IndexModel{
-		{Keys: bson.D{{Key: "bookingId", Value: 1}, {Key: "raterId", Value: 1}}, Options: options.Index().SetName("booking_rater_unique").SetUnique(true)},
-		{Keys: bson.D{{Key: "rateeId", Value: 1}, {Key: "_id", Value: -1}}, Options: options.Index().SetName("ratee_id")},
-	})
+	_, err := r.col.Indexes().CreateMany(ctx, adaptermongo.Models(r.Indexes()))
 	if err != nil {
 		return fmt.Errorf("ratings: crear índices: %w", err)
 	}

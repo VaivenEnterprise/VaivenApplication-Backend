@@ -12,6 +12,7 @@ import (
 	drv "go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	adaptermongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/mongo"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/notifications/domain"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/notify"
 )
@@ -33,15 +34,25 @@ func NewNotificationRepo(db *drv.Database) *NotificationRepo {
 	return &NotificationRepo{col: db.Collection(NotificationsCollection)}
 }
 
+// NotificationIndexes declara los índices de NotificationsCollection: es la fuente única
+// de verdad que consumen EnsureIndexes y el catálogo de `admin indexes`
+// (spec 012, T004). Solo datos: no abre conexiones.
+func NotificationIndexes() []adaptermongo.IndexSpec {
+	return adaptermongo.SpecsFor(NotificationsCollection, []drv.IndexModel{
+		{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "_id", Value: -1}}, Options: options.Index().SetName("user_id")},
+		{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "readAt", Value: 1}}, Options: options.Index().SetName("user_read")},
+		{Keys: bson.D{{Key: "createdAt", Value: 1}}, Options: options.Index().SetName("created_ttl").SetExpireAfterSeconds(RetentionSeconds)},
+	}...)
+}
+
+// Indexes cumple adaptermongo.IndexDeclarer.
+func (r *NotificationRepo) Indexes() []adaptermongo.IndexSpec { return NotificationIndexes() }
+
 // EnsureIndexes crea los índices del plan §3: {userId, _id desc} para listar,
 // {userId, readAt} para contar los no leídos y el TTL de 90 días sobre
 // createdAt (RNF-01).
 func (r *NotificationRepo) EnsureIndexes(ctx context.Context) error {
-	_, err := r.col.Indexes().CreateMany(ctx, []drv.IndexModel{
-		{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "_id", Value: -1}}, Options: options.Index().SetName("user_id")},
-		{Keys: bson.D{{Key: "userId", Value: 1}, {Key: "readAt", Value: 1}}, Options: options.Index().SetName("user_read")},
-		{Keys: bson.D{{Key: "createdAt", Value: 1}}, Options: options.Index().SetName("created_ttl").SetExpireAfterSeconds(RetentionSeconds)},
-	})
+	_, err := r.col.Indexes().CreateMany(ctx, adaptermongo.Models(r.Indexes()))
 	if err != nil {
 		return fmt.Errorf("notifications: crear índices: %w", err)
 	}

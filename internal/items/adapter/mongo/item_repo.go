@@ -9,6 +9,7 @@ import (
 	drv "go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	adaptermongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/mongo"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/items/domain"
 )
 
@@ -22,11 +23,11 @@ func NewItemRepo(db *drv.Database) *ItemRepo {
 	return &ItemRepo{col: db.Collection(ItemsCollection)}
 }
 
-// EnsureIndexes crea los índices de este módulo (plan §3). Es idempotente. El
-// índice de texto y los de búsqueda los agrega la spec 006 en su propio
-// archivo.
-func (r *ItemRepo) EnsureIndexes(ctx context.Context) error {
-	_, err := r.col.Indexes().CreateMany(ctx, []drv.IndexModel{
+// ItemIndexes declara los índices de ItemsCollection: es la fuente única
+// de verdad que consumen EnsureIndexes y el catálogo de `admin indexes`
+// (spec 012, T004). Solo datos: no abre conexiones.
+func ItemIndexes() []adaptermongo.IndexSpec {
+	return adaptermongo.SpecsFor(ItemsCollection, []drv.IndexModel{
 		{
 			// GET /me/items: por dueño y estado, más recientes primero.
 			Keys:    bson.D{{Key: "ownerId", Value: 1}, {Key: "status", Value: 1}, {Key: "createdAt", Value: -1}},
@@ -40,7 +41,17 @@ func (r *ItemRepo) EnsureIndexes(ctx context.Context) error {
 			Keys:    bson.D{{Key: "status", Value: 1}, {Key: "category", Value: 1}, {Key: "createdAt", Value: -1}},
 			Options: options.Index().SetName("status_category_createdAt"),
 		},
-	})
+	}...)
+}
+
+// Indexes cumple adaptermongo.IndexDeclarer.
+func (r *ItemRepo) Indexes() []adaptermongo.IndexSpec { return ItemIndexes() }
+
+// EnsureIndexes crea los índices de este módulo (plan §3). Es idempotente. El
+// índice de texto y los de búsqueda los agrega la spec 006 en su propio
+// archivo.
+func (r *ItemRepo) EnsureIndexes(ctx context.Context) error {
+	_, err := r.col.Indexes().CreateMany(ctx, adaptermongo.Models(r.Indexes()))
 	if err != nil {
 		return fmt.Errorf("items: crear índices: %w", err)
 	}

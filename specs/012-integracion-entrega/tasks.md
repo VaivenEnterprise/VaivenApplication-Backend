@@ -22,11 +22,20 @@
   - Aceptación: `nosniff` en toda respuesta; `no-store` en respuestas autenticadas, sin duplicar el de `handover`; un cuerpo de más de 1 MiB responde 400 `validation_failed` «El cuerpo de la petición es demasiado grande.» en **todos** los módulos con cuerpo, sin códigos nuevos en el contrato (CA-05); probado en el límite exacto, con 1 byte de más y con cuerpo `chunked` (CA-08); no se crea otro limitador (el existente se documenta, P-07)
   - Refs: RF-04 · P-07, P-09, P-10
 
-- [ ] **T004** [P] Comando `indexes`
-  - Archivos: `cmd/admin/indexes.go`, `cmd/admin/indexes_test.go`, `cmd/admin/main.go` (subcomando)
-  - Dueño: BE-B · Agente: `modelador-mongo` · Depende de: 002-T014
-  - Aceptación: lista índices faltantes y sobrantes por colección; solo lee; código ≠ 0 si faltan; probado con una colección sin un índice (CA-03); pruebas de integración que muestran la utilidad de cada índice (`explain` con `IXSCAN` para su consulta) y que fallan si un índice es prefijo redundante de otro (CA-10)
-  - Refs: RF-03 · P-05
+- [x] **T004** [P] `Indexes()` como fuente única de verdad y comando `indexes`
+  - Archivos:
+    - `cmd/admin/testdata/indexes_baseline.json` (**primero**, con el código actual, en una base limpia)
+    - `internal/adapter/mongo/{indexes.go, indexes_test.go, indexes_compare.go, indexes_compare_test.go}`
+    - `internal/adapter/mongo/catalog/{catalog.go, catalog_test.go, purpose_test.go, catalog_integration_test.go}` (nuevo)
+    - Repositorios de BE-B (9): `search/search_indexes.go`, `chat/conversation_repo.go`, `chat/message_repo.go`, `ratings/rating_repo.go`, `incidents/incident_repo.go`, `sanctions/sanction_repo.go`, `notifications/notification_repo.go`, `notifications/token_repo.go`, `reports/report_repo.go`
+    - Repositorios de BE-A (5): `auth/refresh_repo.go`, `auth/user_repo.go`, `items/item_repo.go`, `bookings/booking_repo.go`, `payments/payment_repo.go` (**con aprobación formal de BE-A** o su autorización escrita a BE-B)
+    - `cmd/admin/{indexes.go, indexes_test.go, indexes_integration_test.go, indexes_command_integration_test.go, ensurers_test.go, main.go}`; `check_services_test.go` y `create_admin_test.go` solo ajustan la llamada a `run` (un parámetro más)
+  - Dueño: BE-B (BE-A aprobó sus 5 archivos el 2026-11-10, comunicado por BE-B) · Agente: `modelador-mongo` · Depende de: 002-T014
+  - Aceptación:
+    - los 14 repositorios declaran sus 34 índices como datos (`Indexes()`), `EnsureIndexes` consume esa declaración y `catalog.All()` las reúne todas; no se acepta un catálogo parcial (plan §7.1–7.3);
+    - el comando es de solo lectura, funciona con rol `read`, clasifica según plan §7.4, normaliza según §7.5 y sale con 0, 1 o 2; nunca muestra credenciales; `os.Exit` solo en `main`, tras cerrar la conexión;
+    - las 15 pruebas del plan §7.6 pasan, incluida la equivalencia contra `indexes_baseline.json` (CA-03, CA-10).
+  - Refs: RF-03 · P-05 · plan §7
 
 - [ ] **T005** Comando `seed`
   - Archivos: `cmd/admin/{seed.go, seed_data.go, seed_upload.go, seed_test.go}`, `cmd/admin/assets/*.jpg`, `cmd/admin/main.go` (subcomando)

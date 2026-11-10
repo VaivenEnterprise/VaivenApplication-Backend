@@ -30,7 +30,7 @@ func TestCheckServicesAllOK(t *testing.T) {
 	var out, errb bytes.Buffer
 	code := run([]string{"check-services"}, &out, &errb, loadOK, func(config.Config) []check {
 		return []check{okCheck("MongoDB"), okCheck("Redis"), okCheck("Cloudinary")}
-	}, nil, nil)
+	}, nil, nil, nil)
 	if code != 0 {
 		t.Fatalf("código = %d, want 0; stderr=%s", code, errb.String())
 	}
@@ -50,7 +50,7 @@ func TestCheckServicesFailureHidesSecret(t *testing.T) {
 			{name: "Redis", skip: "REDIS_URL no está definida"},
 			failCheck("Cloudinary", "cloudinary: credenciales rechazadas (HTTP 401)"),
 		}
-	}, nil, nil)
+	}, nil, nil, nil)
 	if code == 0 {
 		t.Fatal("con un servicio en FALLA el código debe ser ≠ 0")
 	}
@@ -67,7 +67,7 @@ func TestRunUsageAndErrors(t *testing.T) {
 
 	for _, args := range [][]string{nil, {"a", "b"}, {"otro"}} {
 		var errb bytes.Buffer
-		if code := run(args, &bytes.Buffer{}, &errb, loadOK, never, nil, nil); code != 2 {
+		if code := run(args, &bytes.Buffer{}, &errb, loadOK, never, nil, nil, nil); code != 2 {
 			t.Errorf("args %v: código = %d, want 2", args, code)
 		}
 		if !strings.Contains(errb.String(), "check-services") {
@@ -79,7 +79,7 @@ func TestRunUsageAndErrors(t *testing.T) {
 	badLoad := func() (config.Config, error) {
 		return config.Config{}, errors.New("configuración inválida: MONGO_URI: obligatoria")
 	}
-	if code := run([]string{"check-services"}, &bytes.Buffer{}, &errb, badLoad, never, nil, nil); code != 1 {
+	if code := run([]string{"check-services"}, &bytes.Buffer{}, &errb, badLoad, never, nil, nil, nil); code != 1 {
 		t.Errorf("config inválida: código = %d, want 1", code)
 	}
 	if !strings.Contains(errb.String(), "MONGO_URI") {

@@ -10,6 +10,7 @@ import (
 	drv "go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	adaptermongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/mongo"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/chat/domain"
 )
 
@@ -21,13 +22,23 @@ func NewConversationRepo(db *drv.Database) *ConversationRepo {
 	return &ConversationRepo{col: db.Collection(ConversationsCollection)}
 }
 
-// EnsureIndexes crea los índices de conversations (plan §3).
-func (r *ConversationRepo) EnsureIndexes(ctx context.Context) error {
-	_, err := r.col.Indexes().CreateMany(ctx, []drv.IndexModel{
+// ConversationIndexes declara los índices de ConversationsCollection: es la fuente única
+// de verdad que consumen EnsureIndexes y el catálogo de `admin indexes`
+// (spec 012, T004). Solo datos: no abre conexiones.
+func ConversationIndexes() []adaptermongo.IndexSpec {
+	return adaptermongo.SpecsFor(ConversationsCollection, []drv.IndexModel{
 		{Keys: bson.D{{Key: "bookingId", Value: 1}}, Options: options.Index().SetName("bookingId_unique").SetUnique(true)},
 		{Keys: bson.D{{Key: "participantIds", Value: 1}, {Key: "lastMessageAt", Value: -1}, {Key: "_id", Value: -1}},
 			Options: options.Index().SetName("participant_lastMessageAt")},
-	})
+	}...)
+}
+
+// Indexes cumple adaptermongo.IndexDeclarer.
+func (r *ConversationRepo) Indexes() []adaptermongo.IndexSpec { return ConversationIndexes() }
+
+// EnsureIndexes crea los índices de conversations (plan §3).
+func (r *ConversationRepo) EnsureIndexes(ctx context.Context) error {
+	_, err := r.col.Indexes().CreateMany(ctx, adaptermongo.Models(r.Indexes()))
 	if err != nil {
 		return fmt.Errorf("chat: crear índices de conversaciones: %w", err)
 	}
