@@ -99,6 +99,16 @@ jobs:
           node .github/scripts/coverage.mjs go
           go test -race -tags=integration ./...
           go build ./...
+      - name: Build deployable Docker image
+        if: steps.project.outputs.mode == 'full'
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker buildx build \
+            --platform linux/amd64 \
+            --build-arg "APP_VERSION=ci-${GITHUB_SHA::7}" \
+            --tag vaiven-api:ci \
+            --load .
       - name: OpenAPI bundle al día
         if: steps.project.outputs.ready == 'true'
         shell: bash
