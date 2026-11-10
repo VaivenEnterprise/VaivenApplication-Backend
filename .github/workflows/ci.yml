@@ -144,6 +144,13 @@ jobs:
         run: |
           gitleaks git --redact --no-banner --log-opts="--all --no-textconv"
           gitleaks dir --redact --no-banner .
+      # SEC-004: gitleaks no abre .tgz/.zip versionados. Este escáner los abre
+      # en memoria (sin extraer), de forma recursiva y con límites, y nunca
+      # imprime valores. Primero se prueba a sí mismo con casos ficticios.
+      - name: Test archive scanner
+        run: python3 -I -m unittest discover -s scripts -p 'scan_archives_test.py'
+      - name: Scan archives in working tree and history
+        run: python3 -I scripts/scan-archives.py --history --baseline .archive-scan-baseline
 
   sast:
     name: CodeQL

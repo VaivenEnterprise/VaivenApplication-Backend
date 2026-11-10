@@ -69,3 +69,23 @@ Desktop.ini
 
 # Reportes locales de pruebas de mutación y carga (spec 017, T010)
 /reports/
+
+# Archivos comprimidos, respaldos y volcados (SEC-005): pueden arrastrar un .env
+# real sin que se vea en el diff. Si alguno debe versionarse, se agrega con
+# una excepción explícita y pasa por scripts/scan-archives.py en CI.
+*.tgz
+*.tar
+*.tar.gz
+*.gz
+*.zip
+*.7z
+*.rar
+*.sql
+*.dump
+*.bak
+
+# Carpetas temporales y salidas de asistentes (SEC-003)
+_tmp/
+Claude outputs/
+NUL
+__pycache__/

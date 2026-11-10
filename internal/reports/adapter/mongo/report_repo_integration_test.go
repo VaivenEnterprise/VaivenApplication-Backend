@@ -247,7 +247,9 @@ func TestResolveTwiceAndMissing(t *testing.T) {
 	repo, _ := newRepo(t)
 	ctx := context.Background()
 	in := newReport(repo, reporter, domain.TargetItem, itemID)
-	repo.Create(ctx, in)
+	if _, _, err := repo.Create(ctx, in); err != nil {
+		t.Fatal(err)
+	}
 	res := domain.Resolution{Action: domain.ActionDismiss, Note: "sin falta", ByAdminID: adminID, At: time.Now()}
 	if _, err := repo.Resolve(ctx, in.ID, domain.StatusDismissed, res); err != nil {
 		t.Fatal(err)
@@ -270,7 +272,9 @@ func TestConcurrentResolveOneWins(t *testing.T) {
 	repo, _ := newRepo(t)
 	ctx := context.Background()
 	in := newReport(repo, reporter, domain.TargetItem, itemID)
-	repo.Create(ctx, in)
+	if _, _, err := repo.Create(ctx, in); err != nil {
+		t.Fatal(err)
+	}
 	var wg sync.WaitGroup
 	results := make(chan error, 8)
 	for i := 0; i < 8; i++ {

@@ -17,6 +17,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	tcmongo "github.com/testcontainers/testcontainers-go/modules/mongodb"
+	drv "go.mongodb.org/mongo-driver/v2/mongo"
 
 	apihttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/handler"
@@ -66,9 +67,17 @@ type api struct {
 // probar el vencimiento del token de acceso (CA-04).
 func newAPI(t *testing.T, accessTTL time.Duration) *api {
 	t.Helper()
-	ctx := context.Background()
 	db := flowClient.Database(fmt.Sprintf("flow_it_%d", time.Now().UnixNano()))
 	t.Cleanup(func() { _ = db.Drop(context.Background()) })
+	return newAPIOn(t, db, "clave-de-prueba-clave-de-prueba-0000", accessTTL)
+}
+
+// newAPIOn arma la API sobre una base existente con el secreto de JWT dado.
+// Dos llamadas sobre la misma base simulan reiniciar la API tras rotar
+// JWT_ACCESS_SECRET (SEC-002).
+func newAPIOn(t *testing.T, db *drv.Database, jwtSecret string, accessTTL time.Duration) *api {
+	t.Helper()
+	ctx := context.Background()
 
 	// Como cmd/api: validación $jsonSchema antes de los índices.
 	if _, err := authmongo.EnsureSchemas(ctx, db); err != nil {
@@ -78,7 +87,7 @@ func newAPI(t *testing.T, accessTTL time.Duration) *api {
 	if err := adaptermongo.EnsureAll(ctx, users, refresh); err != nil {
 		t.Fatal(err)
 	}
-	jwt, err := security.NewJWT("clave-de-prueba-clave-de-prueba-0000", accessTTL)
+	jwt, err := security.NewJWT(jwtSecret, accessTTL)
 	if err != nil {
 		t.Fatal(err)
 	}

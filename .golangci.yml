@@ -8,6 +8,10 @@ version: "2"
 run:
   timeout: 5m
   tests: true
+  # SEC-007: sin esta etiqueta el lint no compila los *_integration_test.go
+  # y no ve sus errores (p. ej. errcheck en reports). Aplica a CI y a make lint.
+  build-tags:
+    - integration
 
 linters:
   # «standard» ya trae errcheck, govet, ineffassign, staticcheck y unused.
