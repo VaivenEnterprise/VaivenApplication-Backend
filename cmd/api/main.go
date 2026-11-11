@@ -288,7 +288,7 @@ func run() error {
 	}
 	// Calificaciones, incidencias y sanciones (spec 010). Las rutas de
 	// administración exigen el rol admin además de la sesión (CA-05).
-	requireAdmin := authhttp.RequireRole(authdomain.RoleAdmin)
+	requireAdmin := authhttp.RequireRole(authdomain.RoleAdmin, userRepo.ByID) // rol también contra la base (AUD-017)
 	ratingsSvc, err := ratingsusecase.NewService(ratingsusecase.Deps{
 		Repo: ratingsRepo, Bookings: bookingRepo, Users: userRepo, Notifier: notifier, Log: log,
 	})

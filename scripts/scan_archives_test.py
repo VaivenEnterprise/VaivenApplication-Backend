@@ -189,6 +189,52 @@ class ScanArchivesTest(unittest.TestCase):
         res = self.run_scan("--history", "--baseline", "baseline", cwd=self.dir)
         self.assert_finding(res, "sensitive-file")
 
+    def test_history_detects_renamed_archives_by_signature(self) -> None:
+        # AUD-015: un .tgz renombrado (o sin extensión) que se agrega y luego
+        # se borra en el mismo PR también se revisa en el historial.
+        s1, s2 = fake(), fake()
+        self.git("init", "-q")
+        self.write("datos.bin", tgz({".env": f"JWT_ACCESS_SECRET={s1}\n".encode()}))
+        self.write("sin_extension", zipped({"config/.env": f"API_TOKEN={s2}\n".encode()}))
+        self.git("add", "-f", "datos.bin", "sin_extension")
+        self.git("commit", "-qm", "renombrados")
+        self.git("rm", "-q", "datos.bin", "sin_extension")
+        self.git("commit", "-qm", "borrados")
+
+        self.assert_clean(self.run_scan(cwd=self.dir))
+        res = self.run_scan("--history", cwd=self.dir)
+        self.assert_finding(res, "secret-assignment(JWT_ACCESS_SECRET)", s1, s2)
+        self.assert_finding(res, "secret-assignment(API_TOKEN)", s1, s2)
+        self.assertIn("historial:", res.stdout)
+        self.assertIn("datos.bin", res.stdout)
+
+    def test_unsupported_formats_fail_closed(self) -> None:
+        # 7z, rar y zstd no se pueden abrir con la biblioteca estándar: se
+        # reportan en vez de pasar en silencio, por firma o por extensión.
+        p7 = self.write("respaldo.dat", b"7z\xbc\xaf\x27\x1c" + b"\x00" * 64)
+        prar = self.write("x.rar", b"no importa el contenido")
+        pzst = self.write("y.bin", b"\x28\xb5\x2f\xfd" + b"\x00" * 16)
+        for p in (p7, prar, pzst):
+            self.assert_finding(self.run_scan(p), "unsupported-archive")
+
+        self.git("init", "-q")
+        self.git("add", "-f", "respaldo.dat")
+        self.git("commit", "-qm", "7z")
+        self.git("rm", "-q", "respaldo.dat")
+        self.git("commit", "-qm", "fuera")
+        self.assert_finding(self.run_scan("--history", cwd=self.dir), "unsupported-archive")
+
+    def test_history_ignores_plain_blobs(self) -> None:
+        # Revisar todos los blobs no debe producir falsos positivos.
+        self.git("init", "-q")
+        self.write("main.go", b"package main\n\nfunc main() {}\n")
+        self.write("logo.png", b"\x89PNG\r\n\x1a\n" + b"\x00" * 32)
+        self.git("add", "-f", "main.go", "logo.png")
+        self.git("commit", "-qm", "codigo")
+        res = self.run_scan("--history", cwd=self.dir)
+        self.assert_clean(res)
+        self.assertIn("0 comprimidos revisados", res.stdout)
+
     def test_invalid_baseline_is_usage_error(self) -> None:
         self.git("init", "-q")
         self.write("baseline", b"no-es-un-sha\n")

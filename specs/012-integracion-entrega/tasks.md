@@ -59,6 +59,7 @@
   - Archivos: `docs/seguridad.md`, `internal/auth/adapter/http/middleware.go` (+ test), `scripts/scan-archives.py`, `scripts/scan_archives_test.py`, `docs/seguridad/remediacion-2026-11.md`
   - Dueño: BE-A · Agente: `revisor-constitucion` (revisión) y `dev-go` (correcciones) · Depende de: T003
   - Aceptación: lista de comprobación del RF-05 completa y fechada; `RequireRole` comprueba el rol en la base (AUD-017, CA-06); el escáner detecta comprimidos renombrados en el historial y falla ante formatos no soportados (AUD-015); documento de remediación corregido (AUD-018); búsqueda de secretos en el historial con gitleaks y el escáner; ningún hallazgo fuera del RF-05 se agrega a esta tarea
+  - Avance (2026-11-11, hecho por BE-B a pedido del responsable): AUD-017, AUD-015 y AUD-018 implementados y probados; `docs/seguridad.md` con 9 de 10 puntos verificados. **Falta para cerrar:** el punto 10 depende de T003 (cabeceras, BE-A) y BE-A debe revisar y firmar la lista. Además de los archivos listados se tocaron `cmd/api/main.go` (una línea: `RequireRole` recibe `userRepo.ByID`), las pruebas que usan `RequireRole` (auth e incidencias) y `.gitignore` (AUD-018).
   - Refs: RF-05 · P-08, P-11
 
 - [ ] **T009** Despliegue final en staging

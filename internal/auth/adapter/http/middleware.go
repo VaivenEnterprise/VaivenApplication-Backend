@@ -44,14 +44,42 @@ func Authenticate(tokens TokenParser) func(http.Handler) http.Handler {
 
 // RequireRole deja pasar solo a la identidad con el rol indicado; las demás
 // reciben 403 forbidden (CA-07). Va después de Authenticate.
-func RequireRole(role domain.Role) func(http.Handler) http.Handler {
+//
+// El rol del token no basta (spec 012, AUD-017, CA-06): también se lee la
+// cuenta con lookup y debe tener ese rol en la base y estar activa. Así, un
+// token firmado con un secreto filtrado, o emitido antes de quitarle el rol a
+// la cuenta, no abre las rutas de administración. La lectura solo ocurre si
+// el token ya trae el rol pedido, así que las demás peticiones no tocan la
+// base. lookup es obligatorio.
+func RequireRole(role domain.Role, lookup UserLookup) func(http.Handler) http.Handler {
+	if lookup == nil {
+		panic("authhttp.RequireRole: lookup es obligatorio (AUD-017)")
+	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if _, ok := auth.UserID(r.Context()); !ok {
+			id, ok := auth.UserID(r.Context())
+			if !ok {
 				respond.Error(w, r, domain.ErrInvalidSession)
 				return
 			}
 			if auth.Role(r.Context()) != string(role) {
+				respond.Error(w, r, domain.ErrForbiddenRole)
+				return
+			}
+			u, err := lookup(r.Context(), id)
+			if err != nil {
+				if domain.Is(err, domain.ErrUserNotFound) {
+					respond.Error(w, r, domain.ErrInvalidSession)
+					return
+				}
+				respond.Error(w, r, err)
+				return
+			}
+			if u.Status != domain.StatusActive {
+				respond.Error(w, r, domain.ErrInvalidSession)
+				return
+			}
+			if u.Role != role {
 				respond.Error(w, r, domain.ErrForbiddenRole)
 				return
 			}
