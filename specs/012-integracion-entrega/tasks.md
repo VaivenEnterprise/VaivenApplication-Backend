@@ -37,9 +37,9 @@
     - las 15 pruebas del plan §7.6 pasan, incluida la equivalencia contra `indexes_baseline.json` (CA-03, CA-10).
   - Refs: RF-03 · P-05 · plan §7
 
-- [ ] **T005** Comando `seed`
-  - Archivos: `cmd/admin/{seed.go, seed_data.go, seed_upload.go, seed_test.go}`, `cmd/admin/assets/*.jpg`, `cmd/admin/main.go` (subcomando)
-  - Dueño: BE-B · Agente: `dev-go` · Depende de: 002-T014 (y los módulos 003–011 ya desplegados)
+- [x] **T005** Comando `seed`
+  - Archivos: `cmd/admin/{seed.go, seed_data.go, seed_upload.go, seed_deps.go, seed_test.go, seed_integration_test.go}`, `cmd/admin/assets/*.jpg`, `cmd/admin/main.go` (subcomando), `cmd/admin/create_admin.go` (la creación de la cuenta admin pasa a `newAdminAccount`, compartida con el seed)
+  - Dueño: BE-B · Agente: `dev-go` · Depende de: 002-T014 (y los módulos 003–011 ya desplegados); la rama se apila sobre T004 (comparten `cmd/admin/main.go` y usa `catalog.All()` para los índices)
   - Aceptación: crea 6 personas, 15 objetos con fotos (≤ 100 KB), 3 reservas en estados distintos y 1 admin con la lógica de `create-admin`; usa casos de uso reales; credenciales por `SEED_CREDENTIALS_FILE` (P-12), distintas por cuenta y nunca impresas; rechaza `APP_ENV=production`; idempotente sin sobrescribir (P-13, CA-02); fotos por firma + `Resolve` (P-14), sin archivos temporales y borrando de Cloudinary lo subido si algo falla después (CA-09); opción `--scale N` para el conjunto de rendimiento, que también se niega fuera de `development` y `test`
   - Refs: RF-02 · P-04, P-12…P-14
 
