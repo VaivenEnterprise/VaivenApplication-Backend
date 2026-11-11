@@ -10,6 +10,7 @@ import (
 	drv "go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	adaptermongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/mongo"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/domain"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/usecase"
 )
@@ -54,15 +55,25 @@ func NewRefreshRepo(db *drv.Database) *RefreshRepo {
 	return &RefreshRepo{col: db.Collection(RefreshTokensCollection)}
 }
 
-// EnsureIndexes crea los índices del plan §3 (hash único, familia y TTL) y uno
-// por usuario para revocar todas sus sesiones en la baja. Es idempotente.
-func (r *RefreshRepo) EnsureIndexes(ctx context.Context) error {
-	_, err := r.col.Indexes().CreateMany(ctx, []drv.IndexModel{
+// RefreshTokenIndexes declara los índices de RefreshTokensCollection: es la fuente única
+// de verdad que consumen EnsureIndexes y el catálogo de `admin indexes`
+// (spec 012, T004). Solo datos: no abre conexiones.
+func RefreshTokenIndexes() []adaptermongo.IndexSpec {
+	return adaptermongo.SpecsFor(RefreshTokensCollection, []drv.IndexModel{
 		{Keys: bson.D{{Key: "tokenHash", Value: 1}}, Options: options.Index().SetName("tokenHash_unique").SetUnique(true)},
 		{Keys: bson.D{{Key: "familyId", Value: 1}}, Options: options.Index().SetName("familyId")},
 		{Keys: bson.D{{Key: "userId", Value: 1}}, Options: options.Index().SetName("userId")},
 		{Keys: bson.D{{Key: "expiresAt", Value: 1}}, Options: options.Index().SetName("expiresAt_ttl").SetExpireAfterSeconds(0)},
-	})
+	}...)
+}
+
+// Indexes cumple adaptermongo.IndexDeclarer.
+func (r *RefreshRepo) Indexes() []adaptermongo.IndexSpec { return RefreshTokenIndexes() }
+
+// EnsureIndexes crea los índices del plan §3 (hash único, familia y TTL) y uno
+// por usuario para revocar todas sus sesiones en la baja. Es idempotente.
+func (r *RefreshRepo) EnsureIndexes(ctx context.Context) error {
+	_, err := r.col.Indexes().CreateMany(ctx, adaptermongo.Models(r.Indexes()))
 	if err != nil {
 		return fmt.Errorf("refresh_tokens: crear índices: %w", err)
 	}

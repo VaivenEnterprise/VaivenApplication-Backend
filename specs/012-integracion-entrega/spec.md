@@ -1,7 +1,7 @@
 # Spec 012 — Integración, endurecimiento y entrega (backend)
 
 - **Dueño:** todo el equipo (BE-A lidera integración; BE-B lidera despliegue) · **Prioridad:** P0 · **Ventana:** 19–22 nov · **Depende de:** 001–011
-- **Constitución:** v2.0.0 · **Estado:** Borrador
+- **Constitución:** v2.0.0 · **Estado:** Aprobada (2026-11-09) — BE-B aprobó la dirección técnica y BE-A dio su visto bueno a T001–T003, T008 y T011 (comunicado por BE-B). La implementación empieza por T004 solo con autorización expresa de BE-B.
 
 ## 1. Objetivo y por qué
 Convertir el conjunto de módulos en un backend **entregable**: recorrido de punta a punta automatizado, datos de demostración, endurecimiento básico de seguridad y rendimiento, despliegue verificado y documentación para la presentación. No agrega funcionalidad.
@@ -9,29 +9,35 @@ Convertir el conjunto de módulos en un backend **entregable**: recorrido de pun
 ## 2. Requisitos
 | ID | Requisito |
 |---|---|
-| RF-01 | Una prueba **E2E** (`-tags e2e`) recorre el flujo completo con Mongo real y Cloudinary simulado: registrar A y B → A publica → B busca y cotiza → solicita → A acepta → chat → evidencia y QR de entrega → pago reportado y confirmado → devolución con QR → ambas partes califican → incidencia abierta y cerrada por admin. |
-| RF-02 | `go run ./cmd/admin seed` crea datos de demostración de forma **idempotente**: 6 personas, 15 objetos con fotos de ejemplo, 3 reservas en distintos estados y 1 administrador; las fotos se suben a Cloudinary con imágenes incluidas en el repositorio (≤ 100 KB cada una). |
-| RF-03 | `go run ./cmd/admin indexes` compara los índices esperados (de `EnsureIndexes`) con los existentes y reporta faltantes o sobrantes. |
-| RF-04 | Límite global por IP (120 peticiones/min) además de los de auth, chat e imágenes; cabeceras de seguridad (`X-Content-Type-Options`, `Cache-Control: no-store` en respuestas autenticadas); tamaño máximo de cuerpo revisado. |
-| RF-05 | Revisión de seguridad documentada: ninguna ruta de datos sensibles sin autenticación, `RequireRole` en `/admin/*`, ningún secreto en logs, CORS acotado, evidencia solo con URL firmada. |
+| RF-01 | Una prueba **E2E** (`-tags e2e`) recorre el flujo completo **en local**, con Mongo real (Testcontainers) y Cloudinary simulado: registrar A y B → A publica → B busca y cotiza → solicita → A acepta → chat → evidencia y QR de entrega → pago reportado y confirmado → devolución con QR → ambas partes califican → incidencia abierta y cerrada por admin. **Nunca corre contra staging ni producción** (crea y modifica datos). |
+| RF-02 | `go run ./cmd/admin seed` crea datos de demostración de forma **idempotente**: 6 personas, 15 objetos con fotos de ejemplo, 3 reservas en distintos estados y 1 administrador. Reglas: (a) las credenciales salen de un archivo **fuera del repositorio** indicado por variable de entorno; cada cuenta tiene su propia contraseña y ninguna se comparte; (b) se niega a correr con `APP_ENV=production`; (c) lo que ya existe no se sobrescribe ni se le cambia la contraseña; (d) nunca imprime contraseñas ni tokens; (e) el administrador se crea con la misma lógica de `create-admin`; (f) las fotos (≤ 100 KB, incluidas en el repositorio) se suben con una firma de `images.Service` y se validan con `Resolve`, como lo haría la app. |
+| RF-03 | Los índices tienen **una sola fuente de verdad**: cada uno de los 14 repositorios declara sus índices como datos (`Indexes()`), y esa misma declaración la usan `EnsureIndexes` y el catálogo de los 34 índices. `go run ./cmd/admin indexes` compara el catálogo con los índices reales (`listIndexes`) y clasifica cada uno como correcto, faltante, sobrante, incompatible o con nombre distinto (informativo). Es **estrictamente de solo lectura**: funciona con un usuario de rol `read` y nunca crea, modifica ni borra índices. Sale con 0 si todo coincide, 1 si hay discrepancias y 2 ante un error de configuración, conexión o ejecución. Nunca muestra la URI ni credenciales. |
+| RF-04 | Endurecimiento HTTP: cabecera `X-Content-Type-Options: nosniff` en todas las respuestas; `Cache-Control: no-store` en las respuestas autenticadas con datos privados; el límite de cuerpo de 1 MiB se aplica a la lectura efectiva y un cuerpo mayor responde en **todos** los módulos lo que ya define el contrato: 400 `validation_failed` con el mensaje «El cuerpo de la petición es demasiado grande.» (formato del Art. IV). No se introduce 413 porque cambiaría el contrato. El límite global por IP (120 peticiones/min) **ya existe** en Redis con respaldo local (Art. XIV.2) y no se reimplementa: solo se documenta. |
+| RF-05 | Revisión de seguridad documentada: ninguna ruta de datos sensibles sin autenticación; `RequireRole` en `/admin/*` **y el rol de administrador comprobado contra la base de datos**, no solo contra el claim del token (AUD-017); ningún secreto en logs; CORS acotado; evidencia solo con URL firmada; búsqueda de secretos en el historial de Git, incluidos los archivos comprimidos (AUD-015); y el documento `docs/seguridad/remediacion-2026-11.md` corregido y al día (AUD-018). |
 | RF-06 | `api/openapi.yaml` (con todos los `paths/*.yaml`) valida sin errores con `npx @redocly/cli lint` en local. |
 | RF-07 | Staging actualizado con la versión final, conectado a MongoDB y Redis de la VM de Azure y a Cloudinary, con `check-services`, `indexes` y `seed` ejecutados. |
-| RF-08 | Rendimiento: `GET /items` y `GET /bookings` con p95 < 500 ms con los datos de `seed` ×100; sin consultas sin índice (revisar con `explain` las 10 consultas más frecuentes). |
-| RF-09 | Documentación: `README` final, `docs/api.md` (resumen de endpoints por módulo), `docs/despliegue.md`, `docs/politicas.md` (POL-xx vigentes) y `docs/demo.md` (guion de demostración con las cuentas del seed). |
+| RF-08 | Rendimiento medido, no supuesto: `GET /items` y `GET /me/bookings` con **p95 < 500 ms** (se reportan también p50 y p99, y CPU y memoria de la API y de MongoDB) sobre un conjunto de datos de `seed` ×100 en un entorno local; las 10 consultas más frecuentes usan índice (`explain` sin `COLLSCAN`). Si se optimiza algo, se documentan las cifras de antes y de después. |
+| RF-09 | Documentación: `README` final, `docs/api.md` (resumen de endpoints por módulo), `docs/despliegue.md`, `docs/politicas.md` (POL-xx vigentes) y `docs/demo.md` (guion de demostración con los **correos** de las cuentas del seed, nunca sus contraseñas). |
 | RF-10 | `docs/validacion.md`: plan breve de validación con personas usuarias (qué observar: objetos publicados, solicitudes aceptadas, devoluciones, tiempos de respuesta e incidencias), sin presentar expectativas como resultados comprobados. |
-| RNF-01 | `make fmt lint test` y `go test -tags integration ./...` pasan; cobertura global ≥ 75 %. |
+| RNF-01 | `make fmt lint test` y `go test -tags integration ./...` pasan; cobertura global ≥ 75 % (medida con `go test -cover ./...`; el 2026-11-09 era 76.9 %). No se agregan pruebas artificiales para subir el porcentaje: lo nuevo prioriza autenticación, autorización, reservas, reglas de negocio, persistencia, concurrencia y manejo de errores. |
 | RNF-02 | La revisión final de `revisor-constitucion` sobre todo el repositorio es **CONFORME**. |
 
 ## 3. Criterios de aceptación
 | ID | Dado / Cuando / Entonces |
 |---|---|
-| CA-01 | Dado el repositorio limpio, cuando ejecuto la prueba E2E, entonces el recorrido completo termina sin errores. |
-| CA-02 | Dado staging recién desplegado, cuando ejecuto `seed` dos veces, entonces no hay duplicados. |
-| CA-03 | Dado `indexes`, entonces no hay índices faltantes. |
+| CA-01 | Dado el repositorio limpio, cuando ejecuto `make e2e` en local, entonces el recorrido completo termina sin errores y no toca ningún servicio remoto. |
+| CA-02 | Dado staging recién desplegado, cuando ejecuto `seed` dos veces, entonces no hay duplicados ni contraseñas cambiadas; con `APP_ENV=production` termina con código ≠ 0 sin escribir nada. |
+| CA-03 | Dada una base creada por `EnsureIndexes`, cuando ejecuto `indexes`, entonces los 34 índices salen correctos y el código es 0; si borro un índice esperado, sale con 1 y lo nombra como faltante (aunque exista otro equivalente con otro nombre); si la conexión falla o vence el plazo, sale con 2 sin mostrar la URI. |
 | CA-04 | Dada una persona que sigue `docs/demo.md`, entonces puede recorrer la demostración sin ayuda. |
+| CA-05 | Dado un cuerpo de más de 1 MiB en cualquier endpoint con cuerpo, entonces la respuesta es 400 `validation_failed` con el mensaje de cuerpo demasiado grande, igual en todos los módulos; toda respuesta lleva `nosniff` y las autenticadas con datos privados llevan `no-store`. |
+| CA-06 | Dado un token válido con `role=admin` de una cuenta que en la base **no** es administradora, cuando llama a `/admin/*`, entonces recibe 403. |
+| CA-08 | Dado un cuerpo de **exactamente** 1 MiB válido, entonces se procesa; con 1 MiB + 1 byte, y también enviado con `Transfer-Encoding: chunked` (sin `Content-Length`), entonces 400 `validation_failed` sin leer más allá del límite. |
+| CA-09 | Dado un fallo después de subir una foto del `seed` (al validar o al crear el objeto), entonces la foto subida se borra de Cloudinary, no quedan archivos temporales en disco y la salida no muestra credenciales ni firmas. |
+| CA-10 | Dados los 34 índices declarados, entonces (a) **justificación funcional:** cada uno tiene documentado su propósito (consulta y orden, unicidad, expiración TTL, búsqueda de texto o geoespacial) y, cuando su propósito es una consulta u orden, una prueba de `explain` muestra que esa consulta lo usa; para los índices TTL, únicos, de texto y 2dsphere no se exige `IXSCAN` como condición universal; y (b) **análisis de redundancia:** cada posible redundancia queda razonada considerando orden de claves, `unique`, `sparse`, filtro parcial, TTL, collation y las consultas reales, y ningún índice se declara redundante solo por ser prefijo de otro. |
+| CA-07 | Dado el conjunto `seed` ×100, cuando corro la medición de RF-08, entonces p95 < 500 ms en las dos rutas y los resultados (p50, p95, p99, recursos, `explain`) quedan anotados. La medición es **reproducible**: semilla de datos fija, versión de k6, perfil, duración, hardware y comando exacto anotados; los escenarios mezclan lecturas representativas (búsqueda con filtros y paginación, reservas de una persona con varias) y no solo una URL repetida. |
 
 ## 4. Fuera de alcance
-Funcionalidad nueva, migración a otro hosting, monitoreo avanzado, copias de seguridad automatizadas.
+Funcionalidad nueva, migración a otro hosting, monitoreo avanzado, copias de seguridad automatizadas, un segundo limitador de tasa, una carga de imágenes desde el servidor como función de la API, y pruebas E2E contra staging (staging se verifica con `smoke.yml` y la tarea de despliegue).
 
 ## 5. Preguntas abiertas
-- [NEEDS CLARIFICATION: ¿Qué debe mostrarse en la presentación final y quién presenta? Define el guion de `docs/demo.md`.]
+- **Presentación final (resuelta de forma provisional):** el guion de `docs/demo.md` sigue 8 bloques (presentación, arquitectura, flujo, persistencia, seguridad, pruebas, despliegue y conclusiones). Reparto provisional: BE-A, arquitectura y seguridad; BE-B, persistencia, rendimiento, pruebas y despliegue. [NEEDS CLARIFICATION: presentador principal, duración y si se muestra la app móvil en vivo; lo confirma el equipo antes de cerrar T010.]

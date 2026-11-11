@@ -13,6 +13,7 @@ import (
 	drv "go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	adaptermongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/mongo"
 	images "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/images/domain"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/incidents/domain"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/incidents/usecase"
@@ -27,14 +28,24 @@ type Repo struct{ col *drv.Collection }
 // NewRepo crea el repositorio sobre db.
 func NewRepo(db *drv.Database) *Repo { return &Repo{col: db.Collection(IncidentsCollection)} }
 
-// EnsureIndexes crea los índices de incidents (plan §3).
-func (r *Repo) EnsureIndexes(ctx context.Context) error {
-	_, err := r.col.Indexes().CreateMany(ctx, []drv.IndexModel{
+// IncidentIndexes declara los índices de IncidentsCollection: es la fuente única
+// de verdad que consumen EnsureIndexes y el catálogo de `admin indexes`
+// (spec 012, T004). Solo datos: no abre conexiones.
+func IncidentIndexes() []adaptermongo.IndexSpec {
+	return adaptermongo.SpecsFor(IncidentsCollection, []drv.IndexModel{
 		{Keys: bson.D{{Key: "bookingId", Value: 1}, {Key: "status", Value: 1}}, Options: options.Index().SetName("booking_status")},
 		{Keys: bson.D{{Key: "reporterId", Value: 1}, {Key: "createdAt", Value: -1}}, Options: options.Index().SetName("reporter_createdAt")},
 		{Keys: bson.D{{Key: "reportedId", Value: 1}, {Key: "createdAt", Value: -1}}, Options: options.Index().SetName("reported_createdAt")},
 		{Keys: bson.D{{Key: "status", Value: 1}, {Key: "createdAt", Value: 1}}, Options: options.Index().SetName("status_createdAt")},
-	})
+	}...)
+}
+
+// Indexes cumple adaptermongo.IndexDeclarer.
+func (r *Repo) Indexes() []adaptermongo.IndexSpec { return IncidentIndexes() }
+
+// EnsureIndexes crea los índices de incidents (plan §3).
+func (r *Repo) EnsureIndexes(ctx context.Context) error {
+	_, err := r.col.Indexes().CreateMany(ctx, adaptermongo.Models(r.Indexes()))
 	if err != nil {
 		return fmt.Errorf("incidents: crear índices: %w", err)
 	}
