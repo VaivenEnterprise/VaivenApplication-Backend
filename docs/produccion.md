@@ -53,6 +53,19 @@ Nada se comparte entre entornos: ni proceso, ni volumen, ni red, ni credenciales
    free -m
    docker stats --no-stream --format '{{.Name}} {{.MemUsage}} {{.CPUPerc}}'
    ```
+   **Línea base (2026-11-11, solo staging encendido):**
+
+   | | Valor |
+   |---|---|
+   | RAM total / usada / disponible | 887 / 302 / 584 MB |
+   | Swap (`/swapfile`) | 2 GB, 173 MB en uso |
+   | `base-mongo-1` | 177 MB de 400 MB |
+   | `base-redis-1` | 7 MB de 192 MB |
+   | `vaiven-staging-api-1` | 8 MB de 160 MB |
+   | Disco `/` | 7,4 GB de 61 GB (13 %); imágenes 1,8 GB, 444 MB recuperables |
+
+   Estimado para producción en reposo: unos 200 MB (similar a staging), así que quedarían unos 380 MB disponibles más el swap. Los límites suman 1,3 GB contra 887 MB de RAM: es una sobreasignación que se apoya en el swap y en que ningún contenedor llega a su límite en reposo. Si la medición con los dos entornos muestra swap sostenido alto u OOM, primero se bajan los límites de staging.
+
    Anotar los valores aquí y en `memoria.md`. Si la memoria libre más el swap no da margen, ajustar los límites de producción o reducir o detener staging. **No** cambiar de talla sin consultar, porque tiene costo (Art. XIII.1).
 
 ## 3. Rotación de registros (T004, RF-13)
