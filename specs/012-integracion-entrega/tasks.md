@@ -43,8 +43,9 @@
   - Aceptación: crea 6 personas, 15 objetos con fotos (≤ 100 KB), 3 reservas en estados distintos y 1 admin con la lógica de `create-admin`; usa casos de uso reales; credenciales por `SEED_CREDENTIALS_FILE` (P-12), distintas por cuenta y nunca impresas; rechaza `APP_ENV=production`; idempotente sin sobrescribir (P-13, CA-02); fotos por firma + `Resolve` (P-14), sin archivos temporales y borrando de Cloudinary lo subido si algo falla después (CA-09); opción `--scale N` para el conjunto de rendimiento, que también se niega fuera de `development` y `test`
   - Refs: RF-02 · P-04, P-12…P-14
 
-- [ ] **T006** [P] Rendimiento y `explain`
-  - Archivos: `tests/load/` (extender el k6 existente), `docs/rendimiento.md` (no se comparte `docs/seguridad.md`, que es de T008)
+- [x] **T006** [P] Rendimiento y `explain`
+  - Archivos: `tests/load/catalog.js` (nuevo escenario junto al k6 existente), `docs/rendimiento.md` (no se comparte `docs/seguridad.md`, que es de T008)
+  - Cierre (2026-11-11): p95 de 13,2 ms en búsqueda y 6,7 ms en `GET /me/bookings` con `seed --scale 100` (0 errores, 0 respuestas 429); las 10 consultas más frecuentes, tomadas del profiler de MongoDB, usan índice y ninguna hace `COLLSCAN`; sin optimizaciones. Queda documentado el riesgo de que la búsqueda reciente recorra todos los objetos activos (el `$lookup` del dueño va antes del `$limit`). Los límites de staging no se pudieron aplicar en Podman/WSL; confirmar en la VM en T009.
   - Dueño: BE-B · Agente: `qa-go` · Depende de: T005
   - Aceptación: con `seed --scale 100` en MongoDB local, p95 < 500 ms en `GET /items` y `GET /me/bookings`; se anotan p50, p95, p99, CPU y memoria de la API y de MongoDB, y el `explain` de las 10 consultas más frecuentes (sin `COLLSCAN`); toda optimización registra cifras de antes y después; medición reproducible con escenarios representativos (CA-07)
   - Refs: RF-08 · P-15
