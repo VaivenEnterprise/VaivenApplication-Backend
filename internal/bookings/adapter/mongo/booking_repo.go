@@ -10,6 +10,7 @@ import (
 	drv "go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	adaptermongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/mongo"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/bookings/domain"
 	images "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/images/domain"
 )
@@ -29,9 +30,11 @@ func NewRepo(db *drv.Database) *Repo {
 // blocking son los estados que ocupan el periodo (RF-03).
 func blocking() bson.A { return bson.A{string(domain.StatusAccepted), string(domain.StatusInProgress)} }
 
-// EnsureIndexes crea los 4 índices del plan §3. Es idempotente.
-func (r *Repo) EnsureIndexes(ctx context.Context) error {
-	_, err := r.bookings.Indexes().CreateMany(ctx, []drv.IndexModel{
+// BookingIndexes declara los índices de BookingsCollection: es la fuente única
+// de verdad que consumen EnsureIndexes y el catálogo de `admin indexes`
+// (spec 012, T004). Solo datos: no abre conexiones.
+func BookingIndexes() []adaptermongo.IndexSpec {
+	return adaptermongo.SpecsFor(BookingsCollection, []drv.IndexModel{
 		{Keys: bson.D{{Key: "itemId", Value: 1}, {Key: "status", Value: 1}, {Key: "startDate", Value: 1}, {Key: "endDate", Value: 1}},
 			Options: options.Index().SetName("item_status_dates")},
 		{Keys: bson.D{{Key: "requesterId", Value: 1}, {Key: "status", Value: 1}, {Key: "createdAt", Value: -1}},
@@ -40,7 +43,15 @@ func (r *Repo) EnsureIndexes(ctx context.Context) error {
 			Options: options.Index().SetName("owner_status_createdAt")},
 		{Keys: bson.D{{Key: "status", Value: 1}, {Key: "expiresAt", Value: 1}},
 			Options: options.Index().SetName("status_expiresAt")},
-	})
+	}...)
+}
+
+// Indexes cumple adaptermongo.IndexDeclarer.
+func (r *Repo) Indexes() []adaptermongo.IndexSpec { return BookingIndexes() }
+
+// EnsureIndexes crea los 4 índices del plan §3. Es idempotente.
+func (r *Repo) EnsureIndexes(ctx context.Context) error {
+	_, err := r.bookings.Indexes().CreateMany(ctx, adaptermongo.Models(r.Indexes()))
 	if err != nil {
 		return fmt.Errorf("bookings: crear índices: %w", err)
 	}

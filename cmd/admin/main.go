@@ -12,6 +12,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/mongo/catalog"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/config"
 )
 
@@ -21,14 +22,20 @@ subcomandos:
   check-services   verifica MongoDB, Redis y Cloudinary (OK/FALLA por servicio)
   create-admin     crea una cuenta admin; lee correo y contraseña de la entrada
                    estándar (una línea cada uno), nunca de argumentos
+  indexes          compara los índices declarados con los de MongoDB, solo
+                   lectura (rol read); sale con 0 si coinciden, 1 si hay
+                   discrepancias y 2 ante un error
 `
 
 func main() {
-	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr, config.Load, serviceChecks, os.Stdin, mongoAdminDeps))
+	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr, config.Load, serviceChecks, os.Stdin, mongoAdminDeps, mongoIndexes))
 }
 
 // run separa la lógica de os.Exit para poder probarla. Devuelve el código de salida.
-func run(args []string, stdout, stderr io.Writer, load func() (config.Config, error), checksFor func(config.Config) []check, stdin io.Reader, admins adminFactory) int {
+//
+// Los subcomandos cierran sus conexiones con defer dentro de run, así que
+// terminan antes de que main llame a os.Exit.
+func run(args []string, stdout, stderr io.Writer, load func() (config.Config, error), checksFor func(config.Config) []check, stdin io.Reader, admins adminFactory, indexes indexesFactory) int {
 	if len(args) != 1 {
 		_, _ = fmt.Fprint(stderr, usage)
 		return 2
@@ -61,6 +68,13 @@ func run(args []string, stdout, stderr io.Writer, load func() (config.Config, er
 		}
 		defer deps.close()
 		return createAdmin(ctx, stdin, stdout, stderr, deps, time.Now())
+	case "indexes":
+		cfg, err := load()
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+			return indexesError
+		}
+		return runIndexes(stdout, stderr, cfg, indexes, catalog.All())
 	default:
 		_, _ = fmt.Fprintf(stderr, "subcomando desconocido: %q\n\n%s", args[0], usage)
 		return 2
