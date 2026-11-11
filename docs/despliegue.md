@@ -85,7 +85,11 @@ Azure solo ejecuta un Run Command a la vez por VM, y no lo acepta si la VM tiene
   - `Succeeded`: espera a que termine el comando anterior y relanza **una** vez.
   - `Failed` (por ejemplo `VMStartTimedOut`): ejecuta `az vm reapply -g rg-vaiven -n vm-vaiven`, mejor desde Azure Cloud Shell, y espera a `Succeeded`. Si sigue en `Updating` o `Failed` mucho tiempo, reinicia la VM con `az vm restart -g rg-vaiven -n vm-vaiven`. Staging queda caído 1–3 minutos; los contenedores vuelven solos porque tienen `restart: unless-stopped`.
   - Último recurso, porque apaga la VM más tiempo y la mueve de servidor: **Redeploy** desde el portal.
-- **Incidente del 2026-11-11:** el deploy #18 se canceló a mitad. Desde la 01:33 UTC la VM quedó en `Failed (VMStartTimedOut)` y todos los deploys siguientes (#21 a #23) fallaron con `Conflict`. La versión en línea siguió funcionando (`101f255`). A las 05:07 UTC se lanzó `reapply`; **al escribir esto seguía en `Updating`**. Anotar el desenlace en `memoria.md` y aquí.
+- **Incidente del 2026-11-11:** el deploy #18 se canceló a mitad. Desde la 01:33 UTC la VM quedó en `Failed (VMStartTimedOut)` y todos los deploys siguientes (#21 a #23) fallaron con `Conflict`. La versión en línea siguió funcionando (`101f255`). El `reapply` (05:07 UTC) y el `restart` (05:48 UTC) también terminaron en `VMStartTimedOut`, lo que apunta a un problema del servidor físico de Azure. La VM se recuperó sola a las 06:31 UTC (`Succeeded`, `running`), sin llegar a usar Redeploy, y el deploy #24 (`a56c642`) salió bien. **Lección:** esperar a que cada operación de Azure termine antes de lanzar la siguiente.
+
+### La CI de `develop` falla en `govulncheck` sin que el código haya cambiado
+
+La base de vulnerabilidades de Go se actualiza sola. Si aparece una vulnerabilidad nueva en la biblioteca estándar, la CI de `develop` falla, el despliegue se salta (`skipped`) y staging se queda en la versión anterior. Remedio: subir la versión en la línea `toolchain` de `go.mod` y en `ARG GO_VERSION` del `Dockerfile` (deben coincidir). Así pasó el 2026-11-11 con GO-2026-6859 (Go 1.26.10 → 1.26.11).
 
 ### `VAIVEN_DEPLOY_RESULT=rolled_back`
 

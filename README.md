@@ -177,7 +177,7 @@ Imagen `distroless` de unos 13 MB que corre como usuario no root. El despliegue 
 - **Spec 004 (imágenes):** completa y desplegada.
 - **Spec 005 (objetos):** completa y desplegada en staging; espera el visto bueno de BE-A.
 - **Specs 006 a 011** (búsqueda, reservas, chat, entrega y pagos, calificaciones e incidencias, avisos y moderación): completas, con su tarea de despliegue en staging cerrada.
-- **Spec 012 (integración y entrega):** en curso. Hechas T004 (`admin indexes`), T005 (`admin seed`), T006 (rendimiento) y T007 (`make lint-api` y `make e2e`); la documentación final (T010) espera el despliegue final (T009) y las decisiones del equipo sobre la demostración.
+- **Spec 012 (integración y entrega):** en curso. Hechas T004 (`admin indexes`), T005 (`admin seed`), T006 (rendimiento) y T007 (`make lint-api` y `make e2e`). T008 (revisión de seguridad; rol de admin contra la base) está hecha y espera la firma de BE-A. T009 (despliegue final) necesita el arreglo de Go 1.26.11 y la rotación de la llave de Cloudinary. La documentación final (T010) espera T009 y las decisiones del equipo sobre la demostración.
 - **Specs 013 a 015:** sin iniciar.
 - **Spec 017 (DevSecOps):** CI, pruebas de humo, carga, mutación y despliegue continuo a staging listos; faltan pasos de administración (ruleset, revisores y `STAGING_AUTODEPLOY`).
 - Detalle de cada tarea en `specs/<spec>/tasks.md` y decisiones en `memoria.md`.
