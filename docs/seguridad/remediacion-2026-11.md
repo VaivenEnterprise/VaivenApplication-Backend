@@ -48,6 +48,8 @@ Este procedimiento lo ejecuta solo una persona con acceso al panel de Cloudinary
 7. Revisa en el panel el uso y la actividad (Reports → Usage y los registros de acceso) desde el 9 de noviembre: subidas, borrados o transformaciones que no reconozcas.
 8. Anota en `memoria.md` la fecha y el resultado, sin valores.
 
+**Ejecutado (2026-11-11, BE-B):** llave nueva `vaiven-staging-2026-11` (rol Master Admin) creada en Cloudinary. Como no hay SSH, se aplicó con un *Managed Run Command* (`az vm run-command create`) con `--protected-parameters`: Azure guarda esos parámetros cifrados y no los devuelve. Los valores se leyeron en Cloud Shell con `read -s` y no pasaron por ningún chat ni por el repositorio. El script primero hizo `ping` a Cloudinary con la llave nueva (200) y solo entonces cambió `/opt/vaiven/staging/.env`; recreó la API (`/readyz` = `ready`, `redis: ok`), borró el respaldo y después se eliminó el run command. Falta: subida de prueba desde la app (paso 4), revocar la llave vieja (paso 6) y revisar el uso desde el 9 de noviembre (paso 7).
+
 ## 4. P-2: rotación de `JWT_ACCESS_SECRET` (operador)
 
 ### Comportamiento real
