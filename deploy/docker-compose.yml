@@ -1,14 +1,19 @@
 # =============================================================================
 # deploy/docker-compose.yml — API de VAIVÉN en la VM (spec 002, T030; Art. XIII y XIV)
 #
-# Solo la API: MongoDB y Redis son los del stack base de la spec 001
-# (deploy/base/docker-compose.yml, proyecto «base»). La VM tiene ~1 GiB de RAM y
-# no caben dos MongoDB, así que la API se une a la red de ese stack.
+# Solo la API. Cada entorno tiene su propio MongoDB y su propio Redis
+# (Art. XIII.6): staging usa los del stack base de la spec 001
+# (deploy/base/docker-compose.yml, red base_vaiven-net) y production los de
+# deploy/production/docker-compose.yml (red vaiven-production-net, spec 013).
+# La API se une a la red de su entorno; nunca a la del otro.
 #
 # Lo arranca scripts/deploy.sh desde /opt/vaiven/<entorno>/, con:
 #   VAIVEN_ENV     staging | production (proyecto de Compose vaiven-<entorno>)
 #   API_IMAGE_TAG  etiqueta de la imagen vaiven-api ya cargada en la VM
 #   API_PORT       8443 en staging, 443 en production (Art. XIII.6)
+# y VAIVEN_NETWORK, que Compose toma del .env del directorio del proyecto:
+# sin definir (staging) = base_vaiven-net; en production =
+# vaiven-production-net (deploy/.env.production.example).
 # Los secretos viven solo en /opt/vaiven/<entorno>/.env (600), nunca aquí.
 # =============================================================================
 name: vaiven-${VAIVEN_ENV:?falta VAIVEN_ENV}
@@ -45,8 +50,14 @@ services:
         limits:
           memory: 160M
           cpus: "0.5"
+    # Rotación de registros (spec 013, RF-13): sin esto crecen sin límite.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 networks:
   base:
     external: true
-    name: base_vaiven-net
+    name: ${VAIVEN_NETWORK:-base_vaiven-net}
