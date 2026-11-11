@@ -121,7 +121,7 @@ jobs:
           echo "La API no estuvo lista en 60 s" >&2
           cat reports/load/api.log >&2
           exit 1
-      - uses: grafana/setup-k6-action@43b9fc21641a76002687994433dd586f56e791b1 # v1.2.2
+      - uses: grafana/setup-k6-action@c47136d33d365efbeb9ae7266908b5dcf98cdece # v1.3.0
         with:
           k6-version: ${{ env.K6_VERSION }}
       - name: Run k6
@@ -189,7 +189,7 @@ jobs:
           persist-credentials: false
       - name: Smoke before load
         run: bash scripts/smoke.sh "$BASE_URL"
-      - uses: grafana/setup-k6-action@43b9fc21641a76002687994433dd586f56e791b1 # v1.2.2
+      - uses: grafana/setup-k6-action@c47136d33d365efbeb9ae7266908b5dcf98cdece # v1.3.0
         with:
           k6-version: ${{ env.K6_VERSION }}
       - name: Run k6
