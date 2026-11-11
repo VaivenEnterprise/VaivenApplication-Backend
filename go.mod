@@ -13,7 +13,7 @@ require (
 	github.com/testcontainers/testcontainers-go/modules/redis v0.45.0
 	go.mongodb.org/mongo-driver/v2 v2.9.3
 	golang.org/x/crypto v0.58.0
-	golang.org/x/sync v0.24.0
+	golang.org/x/sync v0.25.0
 )
 
 require (
