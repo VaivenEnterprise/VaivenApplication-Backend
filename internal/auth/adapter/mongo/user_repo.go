@@ -13,6 +13,7 @@ import (
 	drv "go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	adaptermongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/mongo"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/domain"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/usecase"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/users"
@@ -106,12 +107,24 @@ func NewUserRepo(db *drv.Database) *UserRepo {
 	return &UserRepo{col: db.Collection(UsersCollection)}
 }
 
+// UserIndexes declara los índices de UsersCollection: es la fuente única
+// de verdad que consumen EnsureIndexes y el catálogo de `admin indexes`
+// (spec 012, T004). Solo datos: no abre conexiones.
+func UserIndexes() []adaptermongo.IndexSpec {
+	return adaptermongo.SpecsFor(UsersCollection,
+		drv.IndexModel{
+			Keys:    bson.D{{Key: "email", Value: 1}},
+			Options: options.Index().SetName("email_unique").SetUnique(true),
+		},
+	)
+}
+
+// Indexes cumple adaptermongo.IndexDeclarer.
+func (r *UserRepo) Indexes() []adaptermongo.IndexSpec { return UserIndexes() }
+
 // EnsureIndexes crea el índice único de correo (RF-02). Es idempotente.
 func (r *UserRepo) EnsureIndexes(ctx context.Context) error {
-	_, err := r.col.Indexes().CreateOne(ctx, drv.IndexModel{
-		Keys:    bson.D{{Key: "email", Value: 1}},
-		Options: options.Index().SetName("email_unique").SetUnique(true),
-	})
+	_, err := r.col.Indexes().CreateMany(ctx, adaptermongo.Models(r.Indexes()))
 	if err != nil {
 		return fmt.Errorf("users: crear índices: %w", err)
 	}

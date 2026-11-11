@@ -7,6 +7,8 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	drv "go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
+
+	adaptermongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/mongo"
 )
 
 // Nombres de los índices de búsqueda sobre items (plan §4). El 2dsphere de
@@ -28,11 +30,11 @@ func NewIndexes(db *drv.Database) *Indexes {
 	return &Indexes{col: db.Collection(ItemsCollection)}
 }
 
-// EnsureIndexes crea, de forma idempotente, el índice de texto en español
-// (título peso 5, descripción peso 1; sin acentos ni mayúsculas, RF-04) y el
-// compuesto de filtros. Cumple adapter/mongo.IndexEnsurer.
-func (ix *Indexes) EnsureIndexes(ctx context.Context) error {
-	_, err := ix.col.Indexes().CreateMany(ctx, []drv.IndexModel{
+// SearchIndexes declara los índices de ItemsCollection: es la fuente única
+// de verdad que consumen EnsureIndexes y el catálogo de `admin indexes`
+// (spec 012, T004). Solo datos: no abre conexiones.
+func SearchIndexes() []adaptermongo.IndexSpec {
+	return adaptermongo.SpecsFor(ItemsCollection, []drv.IndexModel{
 		{
 			Keys: bson.D{{Key: "title", Value: "text"}, {Key: "description", Value: "text"}},
 			Options: options.Index().SetName(TextIndexName).
@@ -52,7 +54,17 @@ func (ix *Indexes) EnsureIndexes(ctx context.Context) error {
 			Keys:    bson.D{{Key: "status", Value: 1}, {Key: "createdAt", Value: -1}, {Key: "_id", Value: -1}},
 			Options: options.Index().SetName(RecentIndexName),
 		},
-	})
+	}...)
+}
+
+// Indexes cumple adaptermongo.IndexDeclarer.
+func (ix *Indexes) Indexes() []adaptermongo.IndexSpec { return SearchIndexes() }
+
+// EnsureIndexes crea, de forma idempotente, el índice de texto en español
+// (título peso 5, descripción peso 1; sin acentos ni mayúsculas, RF-04) y el
+// compuesto de filtros. Cumple adapter/mongo.IndexEnsurer.
+func (ix *Indexes) EnsureIndexes(ctx context.Context) error {
+	_, err := ix.col.Indexes().CreateMany(ctx, adaptermongo.Models(ix.Indexes()))
 	if err != nil {
 		return fmt.Errorf("search: crear índices: %w", err)
 	}

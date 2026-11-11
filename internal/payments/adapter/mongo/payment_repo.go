@@ -14,6 +14,7 @@ import (
 	drv "go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	adaptermongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/mongo"
 	bookingsmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/bookings/adapter/mongo"
 	bookings "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/bookings/domain"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/payments/domain"
@@ -32,13 +33,25 @@ func NewRepo(db *drv.Database) *Repo {
 	return &Repo{bookings: db.Collection(bookingsmongo.BookingsCollection)}
 }
 
+// PaymentIndexes declara los índices de bookingsmongo.BookingsCollection: es la fuente única
+// de verdad que consumen EnsureIndexes y el catálogo de `admin indexes`
+// (spec 012, T004). Solo datos: no abre conexiones.
+func PaymentIndexes() []adaptermongo.IndexSpec {
+	return adaptermongo.SpecsFor(bookingsmongo.BookingsCollection,
+		drv.IndexModel{
+			Keys:    bson.D{{Key: "status", Value: 1}, {Key: "lateAt", Value: 1}},
+			Options: options.Index().SetName("status_lateAt"),
+		},
+	)
+}
+
+// Indexes cumple adaptermongo.IndexDeclarer.
+func (r *Repo) Indexes() []adaptermongo.IndexSpec { return PaymentIndexes() }
+
 // EnsureIndexes crea el índice {status, lateAt} del detector de retrasos (plan
 // 009 §3). Es idempotente.
 func (r *Repo) EnsureIndexes(ctx context.Context) error {
-	_, err := r.bookings.Indexes().CreateOne(ctx, drv.IndexModel{
-		Keys:    bson.D{{Key: "status", Value: 1}, {Key: "lateAt", Value: 1}},
-		Options: options.Index().SetName("status_lateAt"),
-	})
+	_, err := r.bookings.Indexes().CreateMany(ctx, adaptermongo.Models(r.Indexes()))
 	if err != nil {
 		return fmt.Errorf("payments: crear índice: %w", err)
 	}

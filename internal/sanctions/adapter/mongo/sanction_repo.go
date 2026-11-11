@@ -12,6 +12,7 @@ import (
 	drv "go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	adaptermongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/mongo"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/sanctions/domain"
 )
 
@@ -24,13 +25,25 @@ type Repo struct{ col *drv.Collection }
 // NewRepo crea el repositorio sobre db.
 func NewRepo(db *drv.Database) *Repo { return &Repo{col: db.Collection(SanctionsCollection)} }
 
+// SanctionIndexes declara los índices de SanctionsCollection: es la fuente única
+// de verdad que consumen EnsureIndexes y el catálogo de `admin indexes`
+// (spec 012, T004). Solo datos: no abre conexiones.
+func SanctionIndexes() []adaptermongo.IndexSpec {
+	return adaptermongo.SpecsFor(SanctionsCollection,
+		drv.IndexModel{
+			Keys:    bson.D{{Key: "userId", Value: 1}, {Key: "createdAt", Value: -1}},
+			Options: options.Index().SetName("user_createdAt"),
+		},
+	)
+}
+
+// Indexes cumple adaptermongo.IndexDeclarer.
+func (r *Repo) Indexes() []adaptermongo.IndexSpec { return SanctionIndexes() }
+
 // EnsureIndexes crea el índice de sanctions (plan §3): por persona, la más
 // reciente primero.
 func (r *Repo) EnsureIndexes(ctx context.Context) error {
-	_, err := r.col.Indexes().CreateOne(ctx, drv.IndexModel{
-		Keys:    bson.D{{Key: "userId", Value: 1}, {Key: "createdAt", Value: -1}},
-		Options: options.Index().SetName("user_createdAt"),
-	})
+	_, err := r.col.Indexes().CreateMany(ctx, adaptermongo.Models(r.Indexes()))
 	if err != nil {
 		return fmt.Errorf("sanctions: crear índices: %w", err)
 	}
