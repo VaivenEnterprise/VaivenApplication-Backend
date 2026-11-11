@@ -7,10 +7,11 @@
 ## Fase 1 — Entorno
 
 - [ ] **T001** Entorno de producción en la VM, con su MongoDB y su Redis
-  - Archivos: `deploy/.env.production.example`, `deploy/production/docker-compose.yml`, `deploy/docker-compose.yml` (red configurable, `VAIVEN_NETWORK`), `docs/produccion.md` (sección servicio y capacidad)
+  - Archivos: `deploy/production/.env.example`, `deploy/production/docker-compose.yml`, `deploy/docker-compose.yml` (red configurable, `VAIVEN_NETWORK`), `docs/produccion.md` (sección servicio y capacidad)
   - Agente: `devops-mcp` (infraestructura) y `dev-go` (archivos y documentación) · Depende de: 002-T031, fase 0
   - Aceptación: proyecto `vaiven-production` con API, MongoDB y Redis propios (volúmenes y red propios, sin puertos publicados); `scripts/deploy.sh production` (puerto 443) desde `origin/main`; HTTPS válido sin `-k` en 443 y 8443 (CA-07); `/healthz` y `/readyz` (`redis: ok`) en 200 y `/api/v1/meta` con `environment: production` (CA-01); **memoria medida** con los dos entornos encendidos y límites fijados con esa medición (RF-12, CA-08); URL anotada para el móvil (mobile 013-T001)
   - Refs: RF-01, RF-01b, RF-12 · P-01, P-02, P-08, P-10
+  - Avance (2026-11-11): archivos listos y validados con `docker compose config` (staging sin cambios; producción en `vaiven-production-net` y puerto 443; MongoDB y Redis propios sin puertos). Se agregó `deploy/production/init-env.sh` (contraseñas y keyFile propios). **Falta (VM, `devops-mcp`):** fase 0 (P-1 y P-2), crear el entorno siguiendo `docs/produccion.md` §2, verificar CA-01 y CA-07 y medir la capacidad (CA-08).
 
 - [ ] **T002** [P] Base de datos de producción
   - Archivos: `docs/produccion.md` (sección base de datos)
@@ -29,6 +30,7 @@
   - Agente: `dev-go` (Compose y documentación) y `devops-mcp` · Depende de: T001
   - Aceptación: Better Stack revisa `/healthz` de producción cada 3 min y avisa por correo; `restart: unless-stopped` en todos los contenedores y Docker habilitado al arranque; rotación de registros en los dos entornos (P-09); tras reiniciar la VM ambos entornos vuelven solos (CA-05)
   - Refs: RF-06, RF-13 · P-07, P-09
+  - Avance (2026-11-11): rotación de registros agregada a la API y al stack base (y al de producción). **Falta:** recrear MongoDB y Redis de staging para aplicarla (`docs/produccion.md` §3), agregar en Better Stack el monitor de producción (el de staging ya está dado de alta desde 2026-11-11, `docs/produccion.md` §4) y probar el reinicio de la VM (CA-05).
 
 ## Fase 2 — Operación (19–22 nov)
 
