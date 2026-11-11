@@ -70,6 +70,15 @@ Better Stack, plan gratuito. Lo da de alta una persona:
 - Monitor HTTP a `https://vaiven-staging.westus2.cloudapp.azure.com/healthz`, cada 3 minutos, con aviso por correo.
 - Anotar aquí la fecha y quién recibe los avisos, sin contraseñas.
 
+**Registro de alta:**
+
+| Fecha | Monitor | Intervalo | Aviso | Alta por |
+|---|---|---|---|---|
+| 2026-11-11 | Staging: `https://vaiven-staging.westus2.cloudapp.azure.com:8443/healthz` | 3 min | correo de la cuenta del equipo | BE-B |
+| — | Producción: `https://vaiven-staging.westus2.cloudapp.azure.com/healthz` | 3 min | correo | pendiente: al crear el entorno (§2) |
+
+Plan gratuito, sin tarjeta ni teléfono (Art. XIII.1). El enlace de invitación de la cuenta no se comparte en el repositorio ni en chats: a los demás integrantes se les invita por correo desde *Team members*.
+
 ## 5. Pendiente de completar
 
 - Base de datos e índices (T002).
