@@ -77,7 +77,7 @@ Se probó con `TestIntegrationJWTRotation` en `internal/auth/adapter/http/rotati
    No borra datos; es lo mismo que hace `RevokeAllForUser`, pero para todas las cuentas.
 6. Anota en `memoria.md` la fecha y el resultado, sin valores.
 
-**Ejecutado (2026-11-11, BE-B):** secreto nuevo generado dentro de la VM con `openssl rand -hex 32` (no se mostró), la API de staging recreada con `docker compose up -d --force-recreate api`, `/readyz` = `ready` y `redis: ok` desde dentro y desde fuera, y un token ajeno en `/api/v1/me` = 401. Falta: probar con una cuenta de prueba que `/auth/refresh` seguido de `/me` responde 200 (paso 4) y borrar el respaldo `/opt/vaiven/staging/.env.bak-p2`. No se revocaron todas las sesiones (paso 5, opcional).
+**Ejecutado (2026-11-11, BE-B):** secreto nuevo generado dentro de la VM con `openssl rand -hex 32` (no se mostró), la API de staging recreada con `docker compose up -d --force-recreate api`, `/readyz` = `ready` y `redis: ok` desde dentro y desde fuera, y un token ajeno en `/api/v1/me` = 401. Falta: probar con una cuenta de prueba que `/auth/refresh` seguido de `/me` responde 200 (paso 4). El respaldo `/opt/vaiven/staging/.env.bak-p2`, que guardaba el secreto viejo, ya se borró. No se revocaron todas las sesiones (paso 5, opcional).
 
 ## 5. P-3: limpiar el historial con `git filter-repo` (operador, coordinado)
 
