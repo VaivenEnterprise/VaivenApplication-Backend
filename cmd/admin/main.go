@@ -3,6 +3,8 @@
 //
 //	go run ./cmd/admin check-services
 //	printf '%s\n%s\n' "$CORREO" "$CONTRASENA" | go run ./cmd/admin create-admin
+//	go run ./cmd/admin indexes
+//	SEED_CREDENTIALS_FILE=/ruta/fuera/del/repo go run ./cmd/admin seed
 package main
 
 import (
@@ -25,6 +27,10 @@ subcomandos:
   indexes          compara los índices declarados con los de MongoDB, solo
                    lectura (rol read); sale con 0 si coinciden, 1 si hay
                    discrepancias y 2 ante un error
+  seed [--scale N] crea los datos de demostración de forma idempotente; las
+                   contraseñas salen del archivo de SEED_CREDENTIALS_FILE;
+                   nunca con APP_ENV=production; --scale solo en development
+                   y test
 `
 
 func main() {
@@ -36,11 +42,19 @@ func main() {
 // Los subcomandos cierran sus conexiones con defer dentro de run, así que
 // terminan antes de que main llame a os.Exit.
 func run(args []string, stdout, stderr io.Writer, load func() (config.Config, error), checksFor func(config.Config) []check, stdin io.Reader, admins adminFactory, indexes indexesFactory) int {
-	if len(args) != 1 {
+	// Solo seed acepta opciones (--scale); los demás, ningún argumento extra.
+	if len(args) == 0 || (len(args) > 1 && args[0] != "seed") {
 		_, _ = fmt.Fprint(stderr, usage)
 		return 2
 	}
 	switch args[0] {
+	case "seed":
+		cfg, err := load()
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+			return 1
+		}
+		return runSeed(args[1:], stdout, stderr, cfg, os.Getenv, mongoSeedDeps)
 	case "check-services":
 		cfg, err := load()
 		if err != nil {
