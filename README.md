@@ -167,7 +167,7 @@ Levantan MongoDB 7 con Testcontainers; necesitan Docker o Podman en marcha.
 ```bash
 docker build --build-arg APP_VERSION=$(git rev-parse --short HEAD) -t vaiven-api .
 ```
-Imagen `distroless` de unos 13 MB que corre como usuario no root. El despliegue en la VM (HTTPS, Compose y `scripts/deploy.sh`) está descrito en `docs/servicios.md` §7.
+Imagen `distroless` de unos 13 MB que corre como usuario no root. El despliegue en la VM (HTTPS, Compose y `scripts/deploy.sh`) está descrito en `docs/servicios.md` §7; la guía de operación (verificar, volver atrás, utilidades de `cmd/admin` en staging y problemas conocidos) está en **`docs/despliegue.md`**.
 
 ## Estado
 
