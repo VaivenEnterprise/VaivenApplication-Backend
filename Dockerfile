@@ -10,7 +10,7 @@
 # =============================================================================
 
 # Debe coincidir con la línea `toolchain` de go.mod.
-ARG GO_VERSION=1.26.10
+ARG GO_VERSION=1.26.11
 
 # --- Etapa 1: compilación ---------------------------------------------------
 FROM golang:${GO_VERSION} AS build
