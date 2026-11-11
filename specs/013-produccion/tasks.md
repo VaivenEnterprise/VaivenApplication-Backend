@@ -7,7 +7,7 @@
 ## Fase 1 — Entorno
 
 - [ ] **T001** Entorno de producción en la VM, con su MongoDB y su Redis
-  - Archivos: `deploy/.env.production.example`, `deploy/production/docker-compose.yml`, `deploy/docker-compose.yml` (red configurable, `VAIVEN_NETWORK`), `docs/produccion.md` (sección servicio y capacidad)
+  - Archivos: `deploy/production/.env.example`, `deploy/production/docker-compose.yml`, `deploy/docker-compose.yml` (red configurable, `VAIVEN_NETWORK`), `docs/produccion.md` (sección servicio y capacidad)
   - Agente: `devops-mcp` (infraestructura) y `dev-go` (archivos y documentación) · Depende de: 002-T031, fase 0
   - Aceptación: proyecto `vaiven-production` con API, MongoDB y Redis propios (volúmenes y red propios, sin puertos publicados); `scripts/deploy.sh production` (puerto 443) desde `origin/main`; HTTPS válido sin `-k` en 443 y 8443 (CA-07); `/healthz` y `/readyz` (`redis: ok`) en 200 y `/api/v1/meta` con `environment: production` (CA-01); **memoria medida** con los dos entornos encendidos y límites fijados con esa medición (RF-12, CA-08); URL anotada para el móvil (mobile 013-T001)
   - Refs: RF-01, RF-01b, RF-12 · P-01, P-02, P-08, P-10

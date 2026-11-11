@@ -40,7 +40,7 @@ Nada se comparte entre entornos: ni proceso, ni volumen, ni red, ni credenciales
      mongosh -u root -p --authenticationDatabase admin --eval \
      'db.getSiblingDB("vaiven_prod").createUser({user:"vaiven_app",pwd:passwordPrompt(),roles:[{role:"readWrite",db:"vaiven_prod"}]})'
    ```
-5. **`.env` de la API:** crear `/opt/vaiven/production/.env` (600, dueño `deploy`) a partir de `deploy/.env.production.example`, con secretos **nuevos** (`openssl rand -hex 32` para el JWT, generado en la VM). Debe incluir `VAIVEN_NETWORK=vaiven-production-net`.
+5. **`.env` de la API:** crear `/opt/vaiven/production/.env` (600, dueño `deploy`) a partir de `deploy/production/.env.example`, con secretos **nuevos** (`openssl rand -hex 32` para el JWT, generado en la VM). Debe incluir `VAIVEN_NETWORK=vaiven-production-net`.
 6. **Desplegar la API:** `scripts/deploy.sh production`, desde un commit ya fusionado en `main`.
 7. **Verificar** (CA-01, CA-07):
    ```bash

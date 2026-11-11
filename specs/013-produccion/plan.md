@@ -4,7 +4,7 @@
 
 ## 1. Archivos
 ```
-deploy/.env.production.example        (solo nombres de variables, sin valores; junto a deploy/.env.example)
+deploy/production/.env.example        (solo nombres de variables, sin valores; el nombre exacto `.env.example` lo exige .github/scripts/policy.mjs)
 deploy/docker-compose.yml             (modificar: red configurable —hoy fija en base_vaiven-net, la de staging— y rotación de registros; lo usan staging y producción)
 deploy/production/docker-compose.yml  (nuevo: MongoDB y Redis propios de producción, sin puertos publicados)
 deploy/base/docker-compose.yml        (modificar: rotación de registros de MongoDB y Redis de staging)

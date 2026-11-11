@@ -13,7 +13,7 @@
 #   API_PORT       8443 en staging, 443 en production (Art. XIII.6)
 # y VAIVEN_NETWORK, que Compose toma del .env del directorio del proyecto:
 # sin definir (staging) = base_vaiven-net; en production =
-# vaiven-production-net (deploy/.env.production.example).
+# vaiven-production-net (deploy/production/.env.example).
 # Los secretos viven solo en /opt/vaiven/<entorno>/.env (600), nunca aquí.
 # =============================================================================
 name: vaiven-${VAIVEN_ENV:?falta VAIVEN_ENV}
