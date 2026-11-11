@@ -11,6 +11,7 @@ import (
 	authmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/adapter/mongo"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/domain"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/config"
+	shared "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/domain"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/platform/mongodb"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/platform/security"
 )
@@ -82,19 +83,36 @@ func createAdmin(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer,
 	password := strings.TrimRight(readLine(sc), "\r")
 	_, _ = fmt.Fprintln(stderr)
 
-	email = domain.NormalizeEmail(email)
-	problems := append(domain.ValidateEmail(email), domain.ValidatePassword(password)...)
+	u, problems, err := newAdminAccount(ctx, d, email, password, now)
 	if len(problems) > 0 {
 		for _, p := range problems {
 			_, _ = fmt.Fprintf(stderr, "error: %s %s\n", p.Field, p.Issue)
 		}
 		return 1
 	}
-
-	hash, err := d.hasher.Hash(ctx, password)
 	if err != nil {
+		if domain.Is(err, domain.ErrEmailTaken) {
+			_, _ = fmt.Fprintln(stderr, "Ya existe una cuenta con ese correo; no se modificó.")
+			return 1
+		}
 		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
 		return 1
+	}
+	_, _ = fmt.Fprintf(stdout, "Administrador creado (id %s).\n", u.ID)
+	return 0
+}
+
+// newAdminAccount valida, cifra con argon2id y guarda una cuenta admin. La
+// usan create-admin y seed (spec 012, RF-02e): misma lógica en los dos. Si el
+// correo ya existe devuelve ErrEmailTaken y no modifica nada.
+func newAdminAccount(ctx context.Context, d adminDeps, email, password string, now time.Time) (domain.User, []shared.Detail, error) {
+	email = domain.NormalizeEmail(email)
+	if problems := append(domain.ValidateEmail(email), domain.ValidatePassword(password)...); len(problems) > 0 {
+		return domain.User{}, problems, nil
+	}
+	hash, err := d.hasher.Hash(ctx, password)
+	if err != nil {
+		return domain.User{}, nil, err
 	}
 	now = now.UTC().Truncate(time.Millisecond)
 	u, err := d.store.Create(ctx, domain.User{
@@ -108,16 +126,7 @@ func createAdmin(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer,
 		UpdatedAt:       now,
 		Version:         1,
 	})
-	if err != nil {
-		if domain.Is(err, domain.ErrEmailTaken) {
-			_, _ = fmt.Fprintln(stderr, "Ya existe una cuenta con ese correo; no se modificó.")
-			return 1
-		}
-		_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
-		return 1
-	}
-	_, _ = fmt.Fprintf(stdout, "Administrador creado (id %s).\n", u.ID)
-	return 0
+	return u, nil, err
 }
 
 func readLine(sc *bufio.Scanner) string {
