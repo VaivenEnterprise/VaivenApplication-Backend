@@ -9,6 +9,7 @@ import (
 	drv "go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	adaptermongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/mongo"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/chat/domain"
 )
 
@@ -20,17 +21,27 @@ func NewMessageRepo(db *drv.Database) *MessageRepo {
 	return &MessageRepo{col: db.Collection(MessagesCollection)}
 }
 
-// EnsureIndexes crea los índices de messages (plan §3): por conversación y
-// seq (orden de las páginas), y el único parcial de idempotencia por clientId.
-func (r *MessageRepo) EnsureIndexes(ctx context.Context) error {
-	_, err := r.col.Indexes().CreateMany(ctx, []drv.IndexModel{
+// MessageIndexes declara los índices de MessagesCollection: es la fuente única
+// de verdad que consumen EnsureIndexes y el catálogo de `admin indexes`
+// (spec 012, T004). Solo datos: no abre conexiones.
+func MessageIndexes() []adaptermongo.IndexSpec {
+	return adaptermongo.SpecsFor(MessagesCollection, []drv.IndexModel{
 		{Keys: bson.D{{Key: "conversationId", Value: 1}, {Key: "seq", Value: -1}, {Key: "_id", Value: -1}}, Options: options.Index().SetName("conversation_seq")},
 		{
 			Keys: bson.D{{Key: "conversationId", Value: 1}, {Key: "senderId", Value: 1}, {Key: "clientId", Value: 1}},
 			Options: options.Index().SetName("conversation_sender_clientId_unique").SetUnique(true).
 				SetPartialFilterExpression(bson.D{{Key: "clientId", Value: bson.D{{Key: "$type", Value: "string"}}}}),
 		},
-	})
+	}...)
+}
+
+// Indexes cumple adaptermongo.IndexDeclarer.
+func (r *MessageRepo) Indexes() []adaptermongo.IndexSpec { return MessageIndexes() }
+
+// EnsureIndexes crea los índices de messages (plan §3): por conversación y
+// seq (orden de las páginas), y el único parcial de idempotencia por clientId.
+func (r *MessageRepo) EnsureIndexes(ctx context.Context) error {
+	_, err := r.col.Indexes().CreateMany(ctx, adaptermongo.Models(r.Indexes()))
 	if err != nil {
 		return fmt.Errorf("chat: crear índices de mensajes: %w", err)
 	}

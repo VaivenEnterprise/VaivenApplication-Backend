@@ -97,19 +97,19 @@ func TestRunCreateAdmin(t *testing.T) {
 	store := &memStore{users: map[string]domain.User{}}
 	factory := func(context.Context, config.Config) (adminDeps, error) { return newAdminDeps(store, fakeHasher{}), nil }
 	stdin := strings.NewReader("admin@example.com\n" + adminPwd + "\n")
-	if code := run([]string{"create-admin"}, &bytes.Buffer{}, &bytes.Buffer{}, loadOK, never, stdin, factory); code != 0 {
+	if code := run([]string{"create-admin"}, &bytes.Buffer{}, &bytes.Buffer{}, loadOK, never, stdin, factory, nil); code != 0 {
 		t.Fatalf("código = %d", code)
 	}
 	// La contraseña nunca se acepta como argumento.
-	if code := run([]string{"create-admin", adminPwd}, &bytes.Buffer{}, &bytes.Buffer{}, loadOK, never, stdin, factory); code != 2 {
+	if code := run([]string{"create-admin", adminPwd}, &bytes.Buffer{}, &bytes.Buffer{}, loadOK, never, stdin, factory, nil); code != 2 {
 		t.Errorf("con argumento extra: código = %d, want 2", code)
 	}
 	badLoad := func() (config.Config, error) { return config.Config{}, errors.New("sin MONGO_URI") }
-	if code := run([]string{"create-admin"}, &bytes.Buffer{}, &bytes.Buffer{}, badLoad, never, stdin, factory); code != 1 {
+	if code := run([]string{"create-admin"}, &bytes.Buffer{}, &bytes.Buffer{}, badLoad, never, stdin, factory, nil); code != 1 {
 		t.Errorf("config inválida: código = %d", code)
 	}
 	failing := func(context.Context, config.Config) (adminDeps, error) { return adminDeps{}, errors.New("sin Mongo") }
-	if code := run([]string{"create-admin"}, &bytes.Buffer{}, &bytes.Buffer{}, loadOK, never, stdin, failing); code != 1 {
+	if code := run([]string{"create-admin"}, &bytes.Buffer{}, &bytes.Buffer{}, loadOK, never, stdin, failing, nil); code != 1 {
 		t.Errorf("Mongo caído: código = %d", code)
 	}
 }

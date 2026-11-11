@@ -12,6 +12,7 @@ import (
 	drv "go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	adaptermongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/mongo"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/reports/domain"
 )
 
@@ -24,17 +25,27 @@ type Repo struct{ col *drv.Collection }
 // NewRepo crea el repositorio sobre db.
 func NewRepo(db *drv.Database) *Repo { return &Repo{col: db.Collection(ReportsCollection)} }
 
-// EnsureIndexes crea los índices del plan §3: el único
-// {reporterId, targetType, targetId}, que impide reportar dos veces lo mismo, y
-// {status, createdAt} para la cola de revisión.
-func (r *Repo) EnsureIndexes(ctx context.Context) error {
-	_, err := r.col.Indexes().CreateMany(ctx, []drv.IndexModel{
+// ReportIndexes declara los índices de ReportsCollection: es la fuente única
+// de verdad que consumen EnsureIndexes y el catálogo de `admin indexes`
+// (spec 012, T004). Solo datos: no abre conexiones.
+func ReportIndexes() []adaptermongo.IndexSpec {
+	return adaptermongo.SpecsFor(ReportsCollection, []drv.IndexModel{
 		{
 			Keys:    bson.D{{Key: "reporterId", Value: 1}, {Key: "targetType", Value: 1}, {Key: "targetId", Value: 1}},
 			Options: options.Index().SetName("reporter_target_unique").SetUnique(true),
 		},
 		{Keys: bson.D{{Key: "status", Value: 1}, {Key: "createdAt", Value: 1}}, Options: options.Index().SetName("status_created")},
-	})
+	}...)
+}
+
+// Indexes cumple adaptermongo.IndexDeclarer.
+func (r *Repo) Indexes() []adaptermongo.IndexSpec { return ReportIndexes() }
+
+// EnsureIndexes crea los índices del plan §3: el único
+// {reporterId, targetType, targetId}, que impide reportar dos veces lo mismo, y
+// {status, createdAt} para la cola de revisión.
+func (r *Repo) EnsureIndexes(ctx context.Context) error {
+	_, err := r.col.Indexes().CreateMany(ctx, adaptermongo.Models(r.Indexes()))
 	if err != nil {
 		return fmt.Errorf("reports: crear índices: %w", err)
 	}
