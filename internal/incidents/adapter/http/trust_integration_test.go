@@ -193,7 +193,7 @@ func newTrust(t *testing.T) *trust {
 	if err != nil {
 		t.Fatal(err)
 	}
-	requireAdmin := authhttp.RequireRole(authdomain.RoleAdmin)
+	requireAdmin := authhttp.RequireRole(authdomain.RoleAdmin, userRepo.ByID)
 	incMod, err := NewModule(ModuleDeps{Service: incSvc, Authenticate: itAuth, RequireAdmin: requireAdmin, Log: quiet})
 	if err != nil {
 		t.Fatal(err)

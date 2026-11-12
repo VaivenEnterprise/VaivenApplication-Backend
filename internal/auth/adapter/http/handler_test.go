@@ -412,8 +412,17 @@ func TestRequireRoleAndActive(t *testing.T) { // CA-07, RF-13
 	now := time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC)
 	later := now.Add(time.Hour)
 	users := map[string]domain.User{
-		"activa":     {ID: "activa", Status: domain.StatusActive},
+		"activa":     {ID: "activa", Status: domain.StatusActive, Role: domain.RoleUser},
 		"suspendida": {ID: "suspendida", Status: domain.StatusActive, SuspendedUntil: &later},
+		"admin":      {ID: "admin", Status: domain.StatusActive, Role: domain.RoleAdmin},
+		"admin-baja": {ID: "admin-baja", Status: domain.StatusDeactivated, Role: domain.RoleAdmin},
+	}
+	adminLookup := func(_ context.Context, id string) (domain.User, error) {
+		u, ok := users[id]
+		if !ok {
+			return domain.User{}, domain.ErrUserNotFound
+		}
+		return u, nil
 	}
 	lookup := func(_ context.Context, id string) (domain.User, error) {
 		u, ok := users[id]
@@ -426,9 +435,9 @@ func TestRequireRoleAndActive(t *testing.T) { // CA-07, RF-13
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
-	r.With(Authenticate(hs.jwt), RequireRole(domain.RoleAdmin)).Get("/admin", ok)
+	r.With(Authenticate(hs.jwt), RequireRole(domain.RoleAdmin, adminLookup)).Get("/admin", ok)
 	r.With(Authenticate(hs.jwt), RequireActive(lookup, func() time.Time { return now })).Post("/items", ok)
-	r.With(RequireRole(domain.RoleAdmin)).Get("/sin-auth-admin", ok)
+	r.With(RequireRole(domain.RoleAdmin, adminLookup)).Get("/sin-auth-admin", ok)
 	r.With(RequireActive(lookup, nil)).Post("/sin-auth-items", ok)
 
 	run := func(method, path, authz string) int {
@@ -445,7 +454,11 @@ func TestRequireRoleAndActive(t *testing.T) { // CA-07, RF-13
 		want                      int
 	}{
 		{"admin con rol user", http.MethodGet, "/admin", hs.bearer(t, "activa", "user"), http.StatusForbidden},
-		{"admin con rol admin", http.MethodGet, "/admin", hs.bearer(t, "activa", "admin"), http.StatusTeapot},
+		{"admin con rol admin", http.MethodGet, "/admin", hs.bearer(t, "admin", "admin"), http.StatusTeapot},
+		// CA-06 (AUD-017): el token dice admin pero la cuenta en la base no lo es.
+		{"token admin de cuenta user", http.MethodGet, "/admin", hs.bearer(t, "activa", "admin"), http.StatusForbidden},
+		{"token admin de cuenta dada de baja", http.MethodGet, "/admin", hs.bearer(t, "admin-baja", "admin"), http.StatusUnauthorized},
+		{"token admin de cuenta inexistente", http.MethodGet, "/admin", hs.bearer(t, "nadie", "admin"), http.StatusUnauthorized},
 		{"admin sin token", http.MethodGet, "/admin", "", http.StatusUnauthorized},
 		{"role sin identidad", http.MethodGet, "/sin-auth-admin", "", http.StatusUnauthorized},
 		{"crear activa", http.MethodPost, "/items", hs.bearer(t, "activa", "user"), http.StatusTeapot},
@@ -546,4 +559,45 @@ func TestAccountLimiterFallbacks(t *testing.T) {
 	if !(accountLimiter{primary: errLimiter{}, fallback: errLimiter{}, limit: 1}).allow(ctx, "a@b.mx") {
 		t.Error("sin limitadores disponibles debe dejar pasar")
 	}
+}
+
+// AUD-017: RequireRole solo lee la base si el token ya trae el rol pedido, y
+// un fallo de la base no deja pasar.
+func TestRequireRoleLooksUpOnlyAdminTokens(t *testing.T) {
+	hs := newHarness(t, 100)
+	calls := 0
+	boom := errors.New("mongo caído")
+	lookup := func(_ context.Context, id string) (domain.User, error) {
+		calls++
+		if id == "falla" {
+			return domain.User{}, boom
+		}
+		return domain.User{ID: id, Status: domain.StatusActive, Role: domain.RoleAdmin}, nil
+	}
+	ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusTeapot) })
+	r := chi.NewRouter()
+	r.Use(middleware.RequestID)
+	r.With(Authenticate(hs.jwt), RequireRole(domain.RoleAdmin, lookup)).Get("/admin", ok)
+	get := func(authz string) int {
+		req := httptest.NewRequest(http.MethodGet, "/admin", nil)
+		req.Header.Set("Authorization", authz)
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	if got := get(hs.bearer(t, "x", "user")); got != http.StatusForbidden || calls != 0 {
+		t.Fatalf("token user: código %d, lecturas %d; want 403 sin leer la base", got, calls)
+	}
+	if got := get(hs.bearer(t, "falla", "admin")); got == http.StatusTeapot || got < 500 {
+		t.Fatalf("fallo de la base: código %d, want 5xx", got)
+	}
+	if got := get(hs.bearer(t, "ok", "admin")); got != http.StatusTeapot {
+		t.Fatalf("admin válido: código %d", got)
+	}
+	defer func() {
+		if recover() == nil {
+			t.Fatal("RequireRole sin lookup debe fallar al armarse")
+		}
+	}()
+	RequireRole(domain.RoleAdmin, nil)
 }

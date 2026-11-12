@@ -27,7 +27,7 @@ El blob es `36f7ffe68452c5d6b4bbc0d52a523abbe222cf19`. Está en el historial de 
 | SEC-002 | `JWT_ACCESS_SECRET` en el historial | Se probó el comportamiento real de la rotación (sección 4) | **P-2** (rotar en staging) y **P-3** |
 | SEC-003 | Artefactos `Claude outputs/` versionados | Los dos tgz y el ps1 salieron del árbol | P-3 para el historial |
 | SEC-004 | CI no revisa archivos comprimidos ni el formato `cloudinary://` | `scripts/scan-archives.py` con pruebas, su paso en CI y la regla `.gitleaks.toml` | — |
-| SEC-005 | `.gitignore` no ignora archivos comprimidos ni volcados | Se agregaron `*.tgz`, `*.zip`, `*.tar*`, `*.gz`, `*.sql`, `*.dump`, `_tmp/` y `Claude outputs/` | — |
+| SEC-005 | `.gitignore` no ignora archivos comprimidos ni volcados | Se agregaron `*.tgz`, `*.tar`, `*.tar.*`, `*.tbz2`, `*.txz`, `*.gz`, `*.bz2`, `*.xz`, `*.zst`, `*.zip`, `*.7z`, `*.rar`, `*.sql`, `*.dump`, `*.bak`, `_tmp/` y `Claude outputs/` (los de compresión `bz2`, `xz` y `zst` se sumaron en la spec 012, T008, AUD-018) | — |
 | SEC-006 | El script de prueba tenía una contraseña fija y dejaba cuentas sin borrar | Ahora es `scripts/chat-e2e.ps1`: credenciales por entorno, guarda de entorno y limpieza en `finally` | Correrlo de punta a punta contra una API local (no se hizo) |
 | SEC-007 | El lint no compilaba las pruebas de integración | Se agregó `build-tags: [integration]` en `.golangci.yml` y se corrigieron dos `errcheck` | — |
 
@@ -113,7 +113,8 @@ Se probó con `TestIntegrationJWTRotation` en `internal/auth/adapter/http/rotati
   - profundidad 4;
   - 10,000 entradas;
   - 50 MiB por entrada y 300 MiB en total.
-- Falla cerrado: si supera un límite, el archivo está corrupto o una entrada de zip está cifrada, lo trata como hallazgo.
+- Falla cerrado: si supera un límite, el archivo está corrupto o una entrada de zip está cifrada, lo trata como hallazgo. Lo mismo con los formatos que no sabe abrir (`7z`, `rar` y `zstd`, por firma o por extensión): `unsupported-archive` (spec 012, T008, AUD-015).
+- En el historial revisa **todos** los blobs alcanzables y reconoce los comprimidos por su firma de bytes, no solo por la extensión: un `.tgz` renombrado a `.bin`, o sin extensión, que se agrega y se borra en el mismo PR también se detecta (AUD-015). Un blob de más de 300 MiB es un hallazgo.
 - Detecta:
   - nombres sensibles: `.env` (sin incluir `.env.example`), llaves privadas y `credentials.json`;
   - URLs `cloudinary://` y URIs con contraseña;
@@ -121,4 +122,4 @@ Se probó con `TestIntegrationJWTRotation` en `internal/auth/adapter/http/rotati
   - asignaciones `*SECRET*`, `*PASSWORD*`, `*TOKEN*` y `*API_KEY*` con un valor real; los marcadores como `<x>`, `${X}` o `changeme` no cuentan.
 - **Nunca imprime el valor:** solo `regla  contenedor!ruta:línea`.
 - `.archive-scan-baseline` lista los blobs ya reportados que solo esperan P-3. No se agrega un blob nuevo para que CI pase: un secreto nuevo se rota y se retira.
-- Las pruebas están en `scripts/scan_archives_test.py`: 15 casos positivos y negativos con secretos ficticios generados al vuelo, que además comprueban que el valor no aparezca en la salida.
+- Las pruebas están en `scripts/scan_archives_test.py`: 18 casos positivos y negativos con secretos ficticios generados al vuelo, que además comprueban que el valor no aparezca en la salida.

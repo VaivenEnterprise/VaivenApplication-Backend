@@ -43,14 +43,16 @@
   - Aceptación: crea 6 personas, 15 objetos con fotos (≤ 100 KB), 3 reservas en estados distintos y 1 admin con la lógica de `create-admin`; usa casos de uso reales; credenciales por `SEED_CREDENTIALS_FILE` (P-12), distintas por cuenta y nunca impresas; rechaza `APP_ENV=production`; idempotente sin sobrescribir (P-13, CA-02); fotos por firma + `Resolve` (P-14), sin archivos temporales y borrando de Cloudinary lo subido si algo falla después (CA-09); opción `--scale N` para el conjunto de rendimiento, que también se niega fuera de `development` y `test`
   - Refs: RF-02 · P-04, P-12…P-14
 
-- [ ] **T006** [P] Rendimiento y `explain`
-  - Archivos: `tests/load/` (extender el k6 existente), `docs/rendimiento.md` (no se comparte `docs/seguridad.md`, que es de T008)
+- [x] **T006** [P] Rendimiento y `explain`
+  - Archivos: `tests/load/catalog.js` (nuevo escenario junto al k6 existente), `docs/rendimiento.md` (no se comparte `docs/seguridad.md`, que es de T008)
+  - Cierre (2026-11-11): p95 de 13,2 ms en búsqueda y 6,7 ms en `GET /me/bookings` con `seed --scale 100` (0 errores, 0 respuestas 429); las 10 consultas más frecuentes, tomadas del profiler de MongoDB, usan índice y ninguna hace `COLLSCAN`; sin optimizaciones. Queda documentado el riesgo de que la búsqueda reciente recorra todos los objetos activos (el `$lookup` del dueño va antes del `$limit`). Los límites de staging no se pudieron aplicar en Podman/WSL; confirmar en la VM en T009.
   - Dueño: BE-B · Agente: `qa-go` · Depende de: T005
   - Aceptación: con `seed --scale 100` en MongoDB local, p95 < 500 ms en `GET /items` y `GET /me/bookings`; se anotan p50, p95, p99, CPU y memoria de la API y de MongoDB, y el `explain` de las 10 consultas más frecuentes (sin `COLLSCAN`); toda optimización registra cifras de antes y después; medición reproducible con escenarios representativos (CA-07)
   - Refs: RF-08 · P-15
 
-- [ ] **T007** [P] Validación OpenAPI y E2E en local
+- [x] **T007** [P] Validación OpenAPI y E2E en local
   - Archivos: `Makefile` (objetivos `lint-api` y `e2e`)
+  - Cierre (2026-11-11): `lint-api` usa el mismo Redocly fijo del CI (1.34.5); el contrato actual es válido (2 avisos, 0 errores) y un contrato roto falla. `e2e` termina con error y un mensaje claro mientras no exista `test/e2e`; correrá el recorrido cuando BE-A cierre T001 y T002.
   - Dueño: BE-B · Agente: `dev-go` · Depende de: 002-T020 (y T002 para que `make e2e` tenga qué correr)
   - Aceptación: `make lint-api` (`npx @redocly/cli lint api/openapi.yaml`) falla ante errores; `make e2e` ejecuta `go test -tags e2e ./test/e2e/...` en local con Testcontainers y **no** apunta a staging; las pruebas de humo de staging siguen en `smoke.yml`
   - Refs: RF-06 · P-01, P-06
@@ -59,6 +61,7 @@
   - Archivos: `docs/seguridad.md`, `internal/auth/adapter/http/middleware.go` (+ test), `scripts/scan-archives.py`, `scripts/scan_archives_test.py`, `docs/seguridad/remediacion-2026-11.md`
   - Dueño: BE-A · Agente: `revisor-constitucion` (revisión) y `dev-go` (correcciones) · Depende de: T003
   - Aceptación: lista de comprobación del RF-05 completa y fechada; `RequireRole` comprueba el rol en la base (AUD-017, CA-06); el escáner detecta comprimidos renombrados en el historial y falla ante formatos no soportados (AUD-015); documento de remediación corregido (AUD-018); búsqueda de secretos en el historial con gitleaks y el escáner; ningún hallazgo fuera del RF-05 se agrega a esta tarea
+  - Avance (2026-11-11, hecho por BE-B a pedido del responsable): AUD-017, AUD-015 y AUD-018 implementados y probados; `docs/seguridad.md` con 9 de 10 puntos verificados. **Falta para cerrar:** el punto 10 depende de T003 (cabeceras, BE-A) y BE-A debe revisar y firmar la lista. Además de los archivos listados se tocaron `cmd/api/main.go` (una línea: `RequireRole` recibe `userRepo.ByID`), las pruebas que usan `RequireRole` (auth e incidencias) y `.gitignore` (AUD-018).
   - Refs: RF-05 · P-08, P-11
 
 - [ ] **T009** Despliegue final en staging
@@ -71,6 +74,7 @@
   - Archivos: `README.md`, `docs/api.md`, `docs/politicas.md`, `docs/demo.md`, `docs/validacion.md`
   - Dueño: BE-B · Agente: `spec-writer` · Depende de: T009
   - Aceptación: RF-09 y RF-10; `demo.md` (parte del borrador del 2026-11-09) seguido por una persona ajena al backend sin ayuda (CA-04) y sin contraseñas; presentador principal confirmado por el equipo; `politicas.md` lista el valor vigente de cada POL-xx
+  - Avance (2026-11-11): `docs/api.md` (generado del contrato 0.11.0), `docs/politicas.md` (POL-01 a POL-17 con su constante), `docs/validacion.md` y `README.md` listos; `docs/demo.md` con las cuentas del seed. **Falta para cerrar:** T009 (despliegue final y `docs/despliegue.md`), la confirmación del presentador principal, la duración y la app en vivo, y la prueba de `demo.md` con una persona ajena (CA-04).
   - Refs: RF-09, RF-10
 
 - [ ] **T011** Revisión final y congelamiento
