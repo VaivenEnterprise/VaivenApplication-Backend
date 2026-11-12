@@ -8,7 +8,7 @@ LDFLAGS     := -s -w -X main.version=$(APP_VERSION)
 # -race necesita cgo (un compilador de C). Sin él (p. ej. Windows): make test RACE=
 RACE        ?= -race
 
-.PHONY: run up down test test-integration lint fmt build docs-bundle
+.PHONY: run up down test test-integration e2e lint lint-api fmt build docs-bundle
 
 run: ## Levanta la API (requiere MongoDB en marcha)
 	go run ./cmd/api
@@ -25,8 +25,21 @@ test: ## Pruebas unitarias con detector de carreras y cobertura
 test-integration: ## Pruebas con MongoDB real (Testcontainers; requiere Docker o Podman)
 	go test -tags=integration ./... $(RACE)
 
+# Recorrido de punta a punta (spec 012, RF-01, T001/T002). Corre SOLO en local:
+# el router real en proceso, MongoDB con Testcontainers y Cloudinary falso.
+# Nunca apunta a staging (crea y modifica datos); staging se verifica con
+# smoke.yml y la tarea de despliegue.
+E2E_DIR := test/e2e
+
+e2e: ## Recorrido E2E en local (Testcontainers; requiere Docker o Podman); nunca contra staging
+	@test -d $(E2E_DIR) || { echo "make e2e: falta $(E2E_DIR) (lo crean T001 y T002 de la spec 012)"; exit 1; }
+	go test -tags=e2e -count=1 ./$(E2E_DIR)/... $(RACE)
+
 lint: ## Analisis estatico con golangci-lint
 	golangci-lint run
+
+lint-api: ## Valida api/openapi.yaml con Redocly; termina con error si el contrato tiene errores
+	$(REDOCLY) lint api/openapi.yaml
 
 fmt: ## Formatea el codigo
 	gofmt -s -w .

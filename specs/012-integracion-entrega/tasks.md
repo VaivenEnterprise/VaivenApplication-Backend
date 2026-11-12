@@ -50,8 +50,9 @@
   - Aceptación: con `seed --scale 100` en MongoDB local, p95 < 500 ms en `GET /items` y `GET /me/bookings`; se anotan p50, p95, p99, CPU y memoria de la API y de MongoDB, y el `explain` de las 10 consultas más frecuentes (sin `COLLSCAN`); toda optimización registra cifras de antes y después; medición reproducible con escenarios representativos (CA-07)
   - Refs: RF-08 · P-15
 
-- [ ] **T007** [P] Validación OpenAPI y E2E en local
+- [x] **T007** [P] Validación OpenAPI y E2E en local
   - Archivos: `Makefile` (objetivos `lint-api` y `e2e`)
+  - Cierre (2026-11-11): `lint-api` usa el mismo Redocly fijo del CI (1.34.5); el contrato actual es válido (2 avisos, 0 errores) y un contrato roto falla. `e2e` termina con error y un mensaje claro mientras no exista `test/e2e`; correrá el recorrido cuando BE-A cierre T001 y T002.
   - Dueño: BE-B · Agente: `dev-go` · Depende de: 002-T020 (y T002 para que `make e2e` tenga qué correr)
   - Aceptación: `make lint-api` (`npx @redocly/cli lint api/openapi.yaml`) falla ante errores; `make e2e` ejecuta `go test -tags e2e ./test/e2e/...` en local con Testcontainers y **no** apunta a staging; las pruebas de humo de staging siguen en `smoke.yml`
   - Refs: RF-06 · P-01, P-06
