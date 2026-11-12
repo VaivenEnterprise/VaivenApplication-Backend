@@ -20,6 +20,24 @@ Nada se comparte entre entornos: ni proceso, ni volumen, ni red, ni credenciales
 
 ## 2. Crear el entorno (T001) — una sola vez, en la VM
 
+### 2.0 Sin SSH: pasos 1 a 5 con `az vm run-command` (camino usado)
+
+La VM no tiene SSH, así que los pasos 1 a 5 los hace `deploy/production/provision-data.sh` en una sola ejecución de Run Command: contraseñas y keyFile, stack de datos, replica set, usuario `vaiven_app` y `.env` de la API. Este último parte del de staging, pero con MongoDB, Redis y JWT nuevos, la carpeta `vaiven/production` y `DOCS_ENABLED=false`. El script es idempotente y no imprime valores. Desde Cloud Shell (Bash), con `C` = el commit (completo) de `develop` que contiene los tres archivos:
+
+```bash
+C=<commit completo>
+B=https://raw.githubusercontent.com/VaivenEnterprise/VaivenApplication-Backend/$C/deploy/production
+mkdir -p ~/vaiven-prod && cd ~/vaiven-prod
+for f in docker-compose.yml init-env.sh provision-data.sh; do curl -fsSL "$B/$f" -o "$f"; done
+sha256sum docker-compose.yml init-env.sh provision-data.sh   # comparar con las huellas del PR
+{ echo "COMPOSE_B64=$(base64 -w0 docker-compose.yml)"; echo "INIT_B64=$(base64 -w0 init-env.sh)"; cat provision-data.sh; } > payload.sh
+az vm run-command invoke -g rg-vaiven -n vm-vaiven --command-id RunShellScript   --scripts @payload.sh --query "value[0].message" -o tsv
+```
+
+La salida debe mostrar `mongo: healthy`, `primario: true`, el usuario creado, el `.env` creado y la lista de variables copiadas de staging **solo por nombre**. Si alguna de esas copiadas es un secreto, se cambia por uno propio de producción (CA-02). Luego, seguir con el paso 6.
+
+### 2.1 Pasos manuales (referencia, con acceso a la VM)
+
 1. **Contraseñas y keyFile propios:** `sudo deploy/production/init-env.sh`. Crea `/opt/vaiven/production/data.env` y el keyFile; no imprime valores ni toca los de staging.
 2. **Levantar MongoDB y Redis de producción:**
    ```bash
