@@ -66,6 +66,12 @@ services:
       - /etc/mongo/keyfile
       - --wiredTigerCacheSizeGB
       - "0.25"
+    # Rotación de registros (spec 013, RF-13).
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     # Red interna de Compose
     networks:
       - vaiven-net
@@ -95,6 +101,12 @@ services:
       timeout: 5s
       retries: 5
     # Sin `ports:` — Redis nunca publica puertos (Art. XIV).
+    # Rotación de registros (spec 013, RF-13).
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     # Red interna de Compose
     networks:
       - vaiven-net
