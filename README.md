@@ -111,7 +111,7 @@ Una variable vacía equivale a no definida. Si faltan varias, el error las lista
 | `GET /readyz` | 200 `{"status":"ready"}` si MongoDB responde; 503 `service_unavailable` si no |
 | `GET /api/v1/meta` | 200 con `name`, `version`, `environment` y `serverTime` (UTC) |
 
-Contrato completo: `api/openapi.yaml`. Toda respuesta trae `X-Request-Id` y todo error usa `{"error":{"code","message","details","requestId"}}`.
+Contrato completo: `api/openapi.yaml` (63 operaciones en 17 grupos); resumen por módulo en **`docs/api.md`** y políticas vigentes (POL-01 a POL-17) en **`docs/politicas.md`**. Toda respuesta trae `X-Request-Id` y todo error usa `{"error":{"code","message","details","requestId"}}`.
 
 ### Comandos
 
@@ -124,6 +124,17 @@ Contrato completo: `api/openapi.yaml`. Toda respuesta trae `X-Request-Id` y todo
 | `make test-integration` | `go test -tags=integration ./... -race` | Pruebas con MongoDB real (Testcontainers) |
 | `make build` | `go build -ldflags "-s -w -X main.version=dev" -o bin/api ./cmd/api` | Compila el binario |
 | `make up` / `make down` | `docker compose up -d` / `docker compose down` | MongoDB local |
+| `make lint-api` | `npx --yes @redocly/cli@1.34.5 lint api/openapi.yaml` | Valida el contrato OpenAPI (falla ante errores) |
+| `make e2e` | `go test -tags=e2e -count=1 ./test/e2e/... -race` | Recorrido de punta a punta en local (Testcontainers); nunca contra staging |
+
+Utilidades de operación (`go run ./cmd/admin <subcomando>`):
+
+| Subcomando | Qué hace |
+|---|---|
+| `check-services` | Verifica MongoDB, Redis y Cloudinary (OK/FALLA por servicio) |
+| `create-admin` | Crea una cuenta de administración; lee correo y contraseña de la entrada estándar |
+| `indexes` | Compara los 34 índices declarados con los reales; solo lectura (rol `read`); sale con 0, 1 o 2 |
+| `seed [--scale N]` | Datos de demostración idempotentes; contraseñas del archivo de `SEED_CREDENTIALS_FILE` (fuera del repo); nunca con `APP_ENV=production` |
 
 La CI ejecuta además `go test -race`, la cobertura mínima de `domain` y `usecase` (80 %), `govulncheck` y CodeQL.
 
@@ -135,6 +146,7 @@ Workflows aparte de la CI, visibles en la pestaña *Actions* (detalle en `docs/p
 |---|---|---|
 | **Smoke**: `/healthz`, `/readyz`, `/api/v1/meta` y error 404 de staging por HTTPS | a mano, diario y tras push a `develop` | `bash scripts/smoke.sh https://vaiven-staging.westus2.cloudapp.azure.com:8443` |
 | **Load**: estrés y fatiga con k6, contra la API en el runner o contra staging | solo a mano | `k6 run -e BASE_URL=... -e PROFILE=smoke tests/load/api.js` |
+| **Catálogo** (spec 012, T006): búsqueda y `GET /me/bookings` con datos de `seed --scale 100`; solo local, crea datos | a mano | `k6 run -e BASE_URL=http://localhost:8080 ... tests/load/catalog.js` (detalle y resultados en `docs/rendimiento.md`) |
 | **Mutation**: gremlins sobre `domain`, `usecase` y `platform/security` | a mano y semanal | `bash scripts/mutation.sh` (en Linux) |
 
 ### Pruebas de integración
@@ -155,7 +167,7 @@ Levantan MongoDB 7 con Testcontainers; necesitan Docker o Podman en marcha.
 ```bash
 docker build --build-arg APP_VERSION=$(git rev-parse --short HEAD) -t vaiven-api .
 ```
-Imagen `distroless` de unos 13 MB que corre como usuario no root. El despliegue en la VM (HTTPS, Compose y `scripts/deploy.sh`) está descrito en `docs/servicios.md` §7.
+Imagen `distroless` de unos 13 MB que corre como usuario no root. El despliegue en la VM (HTTPS, Compose y `scripts/deploy.sh`) está descrito en `docs/servicios.md` §7; la guía de operación (verificar, volver atrás, utilidades de `cmd/admin` en staging y problemas conocidos) está en **`docs/despliegue.md`**.
 
 ## Estado
 
@@ -164,6 +176,8 @@ Imagen `distroless` de unos 13 MB que corre como usuario no root. El despliegue 
 - **Spec 003 (cuenta y autenticación):** completa y desplegada; los ajustes del plan esperan el visto bueno de BE-A.
 - **Spec 004 (imágenes):** completa y desplegada.
 - **Spec 005 (objetos):** completa y desplegada en staging; espera el visto bueno de BE-A.
-- **Specs 006 a 015:** sin iniciar; la siguiente es la 006 (búsqueda).
+- **Specs 006 a 011** (búsqueda, reservas, chat, entrega y pagos, calificaciones e incidencias, avisos y moderación): completas, con su tarea de despliegue en staging cerrada.
+- **Spec 012 (integración y entrega):** en curso. Hechas T004 (`admin indexes`), T005 (`admin seed`), T006 (rendimiento) y T007 (`make lint-api` y `make e2e`). T008 (revisión de seguridad; rol de admin contra la base) está hecha y espera la firma de BE-A. T009 (despliegue final) necesita el arreglo de Go 1.26.11 y la rotación de la llave de Cloudinary. La documentación final (T010) espera T009 y las decisiones del equipo sobre la demostración.
+- **Specs 013 a 015:** sin iniciar.
 - **Spec 017 (DevSecOps):** CI, pruebas de humo, carga, mutación y despliegue continuo a staging listos; faltan pasos de administración (ruleset, revisores y `STAGING_AUTODEPLOY`).
 - Detalle de cada tarea en `specs/<spec>/tasks.md` y decisiones en `memoria.md`.

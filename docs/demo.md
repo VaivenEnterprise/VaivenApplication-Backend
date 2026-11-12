@@ -1,6 +1,6 @@
 # Guion de demostración — VAIVÉN backend
 
-> **Borrador provisional (2026-11-09, spec 012).** Lo completa y cierra la tarea T010.
+> **Versión de T010 (2026-11-11).** Falta solo lo que debe decidir el equipo (abajo) y probarlo con una persona ajena al backend (CA-04).
 > **Pendiente de confirmar por el equipo:** presentador principal, duración total y si se muestra la app móvil en vivo.
 > Este documento **nunca** lleva contraseñas: solo correos de las cuentas del `seed`. Las contraseñas viven en el archivo de `SEED_CREDENTIALS_FILE` de quien presenta, fuera del repositorio.
 
@@ -37,18 +37,34 @@
 - Infraestructura: VM de Azure con Docker Compose (API, MongoDB y Redis), HTTPS servido por la propia API.
 
 ## 3. Flujo funcional
-Recorrido con las cuentas del `seed` (los correos se anotan aquí al cerrar T005):
 
-| Paso | Cuenta | Acción |
+### Datos que deja el `seed` (T005)
+
+| Cuenta | Rol en la demo | Lo que ya tiene |
 |---|---|---|
-| 1 | Persona A | Inicia sesión y publica un objeto con fotos |
-| 2 | Persona B | Busca, cotiza y solicita la reserva |
-| 3 | Persona A | Acepta la solicitud |
-| 4 | A y B | Conversan por el chat de la reserva |
-| 5 | A y B | Entrega con evidencia y QR; pago reportado y confirmado |
-| 6 | A y B | Devolución con QR |
-| 7 | A y B | Se califican |
-| 8 | B y admin | B abre una incidencia y el admin la cierra |
+| `ana.demo@vaiven.example` | Dueña | Taladro, escalera y juego de desarmadores (Guadalajara); el taladro tiene una solicitud **pendiente** de Beto |
+| `beto.demo@vaiven.example` | Dueño y solicitante | Bicicleta, tienda de campaña y podadora (Zapopan); su bicicleta tiene una reserva **aceptada** de Carla |
+| `carla.demo@vaiven.example` | Solicitante | Reserva aceptada de la bicicleta de Beto (entra en 14 días); además publica la hidrolavadora, la mesa y la sierra |
+| `diego.demo@vaiven.example` | Solicitante | Solicitud **cancelada** de los desarmadores de Ana; publica los patines y la carretilla |
+| `elena.demo@vaiven.example`, `fer.demo@vaiven.example` | Dueñas | Licuadora y scooter (Elena); caja de herramientas y proyector (Fer) |
+| `admin.demo@vaiven.example` | Administración | Cola de incidencias y reportes |
+
+Las contraseñas **no** están aquí: están en el archivo de `SEED_CREDENTIALS_FILE` de quien presenta. Para no gastar tiempo, conviene tener las sesiones abiertas antes de empezar.
+
+### Recorrido
+
+| Paso | Cuenta | Acción | Qué mostrar |
+|---|---|---|---|
+| 1 | Ana | Inicia sesión y publica un objeto nuevo con foto | Firma de subida, validación de la foto y moderación del texto |
+| 2 | Diego | Busca el objeto (por texto o categoría), cotiza y lo solicita | Búsqueda que nunca muestra los objetos propios; cotización en centavos de MXN |
+| 3 | Ana | Acepta la solicitud | Cambio de estado y aviso a Diego |
+| 4 | Ana y Diego | Conversan por el chat de la reserva | Conversación abierta automáticamente al solicitar |
+| 5 | Ana y Diego | Entrega: evidencia, QR de un solo uso y confirmación; pago reportado y confirmado | QR de 15 min (POL-06); el pago se registra, no se cobra |
+| 6 | Diego y Ana | Devolución con evidencia y QR | Detección de retraso (POL-07) |
+| 7 | Ana y Diego | Se califican | Promedio en el perfil público |
+| 8 | Diego y admin | Diego abre una incidencia y la administración la cierra | Rutas `/admin/*` protegidas por rol |
+
+**Si falta tiempo:** se puede saltar de 3 a 7 usando la reserva aceptada que ya trae el seed (Carla y Beto) para mostrar el chat, y dejar la entrega y la devolución para la sección de pruebas (el recorrido E2E automatizado cubre los 8 pasos).
 
 ## 4. Persistencia
 - MongoDB como única fuente de verdad; Redis solo para límite de tasa y caché (Art. XIV).
@@ -64,7 +80,8 @@ Recorrido con las cuentas del `seed` (los correos se anotan aquí al cerrar T005
 ## 6. Pruebas
 - Unitarias, de integración con MongoDB real (Testcontainers) y E2E del recorrido completo (`make e2e`).
 - Cobertura global (RNF-01, ≥ 75 %) y umbral por capa en CI.
-- Rendimiento: p50, p95 y p99 de `GET /items` y `GET /me/bookings` (de `docs/rendimiento.md`).
+- Rendimiento (de `docs/rendimiento.md`): con 1515 objetos, p95 de 13,2 ms en la búsqueda y 6,7 ms en `GET /me/bookings` (umbral de 500 ms); las 10 consultas más frecuentes usan índice.
+- Índices: `go run ./cmd/admin indexes` compara los 34 índices declarados con los reales, solo con permiso de lectura.
 
 ## 7. Despliegue
 - Pipeline: PR → CI (Policy, Quality, Secrets, CodeQL) → `develop` → `deploy-staging.yml`.

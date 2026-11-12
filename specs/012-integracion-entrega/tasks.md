@@ -74,6 +74,7 @@
   - Archivos: `README.md`, `docs/api.md`, `docs/politicas.md`, `docs/demo.md`, `docs/validacion.md`
   - Dueño: BE-B · Agente: `spec-writer` · Depende de: T009
   - Aceptación: RF-09 y RF-10; `demo.md` (parte del borrador del 2026-11-09) seguido por una persona ajena al backend sin ayuda (CA-04) y sin contraseñas; presentador principal confirmado por el equipo; `politicas.md` lista el valor vigente de cada POL-xx
+  - Avance (2026-11-11): `docs/api.md` (generado del contrato 0.11.0), `docs/politicas.md` (POL-01 a POL-17 con su constante), `docs/validacion.md` y `README.md` listos; `docs/demo.md` con las cuentas del seed. **Falta para cerrar:** T009 (despliegue final y `docs/despliegue.md`), la confirmación del presentador principal, la duración y la app en vivo, y la prueba de `demo.md` con una persona ajena (CA-04).
   - Refs: RF-09, RF-10
 
 - [ ] **T011** Revisión final y congelamiento
