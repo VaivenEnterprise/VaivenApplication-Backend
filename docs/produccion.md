@@ -36,6 +36,8 @@ az vm run-command invoke -g rg-vaiven -n vm-vaiven --command-id RunShellScript  
 
 La salida debe mostrar `mongo: healthy`, `primario: true`, el usuario creado, el `.env` creado y la lista de variables copiadas de staging **solo por nombre**. Si alguna de esas copiadas es un secreto, se cambia por uno propio de producción (CA-02). Luego, seguir con el paso 6.
 
+**Llave de Cloudinary propia (CA-02):** el script copia de staging `CLOUDINARY_API_KEY` y `CLOUDINARY_API_SECRET`. Se reemplazan por una llave propia de producción, creada en la misma cuenta (rol Master Admin), con un *Managed Run Command* y `--protected-parameters`, igual que P-1 en `docs/seguridad/remediacion-2026-11.md` §3. El script se niega si la llave es la de staging y solo escribe si el `ping` a Cloudinary da 200. Hecho el 2026-11-11 con la llave `vaiven-production-2026-11`.
+
 ### 2.1 Pasos manuales (referencia, con acceso a la VM)
 
 1. **Contraseñas y keyFile propios:** `sudo deploy/production/init-env.sh`. Crea `/opt/vaiven/production/data.env` y el keyFile; no imprime valores ni toca los de staging.
