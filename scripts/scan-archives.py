@@ -45,7 +45,14 @@ MAX_MEMBER_BYTES = 50 * 1024 * 1024  # una entrada descomprimida
 MAX_TOTAL_BYTES = 300 * 1024 * 1024  # todo lo descomprimido de un archivo
 MAX_TEXT_BYTES = 5 * 1024 * 1024  # solo se revisa el contenido de textos menores
 
-ARCHIVE_SUFFIXES = (".tgz", ".tar.gz", ".tar", ".tar.bz2", ".tbz2", ".tar.xz", ".txz", ".gz", ".zip", ".jar", ".war")
+ARCHIVE_SUFFIXES = (".tgz", ".tar.gz", ".tar", ".tar.bz2", ".tbz2", ".tar.xz", ".txz", ".gz", ".zip", ".jar", ".war",
+                    ".7z", ".rar", ".zst")
+
+# Formatos comprimidos que este escáner NO sabe abrir (solo usa la biblioteca
+# estándar). Se reconocen por firma o extensión y se reportan como hallazgo:
+# falla cerrado (AUD-015).
+UNSUPPORTED_SIGNATURES = (b"7z\xbc\xaf\x27\x1c", b"Rar!\x1a\x07", b"\x28\xb5\x2f\xfd")
+UNSUPPORTED_SUFFIXES = (".7z", ".rar", ".zst")
 
 # Nombres que nunca deben ir dentro de un comprimido versionado.
 SENSITIVE_NAME = re.compile(
@@ -104,10 +111,14 @@ def kind_of(name: str, data: bytes) -> str | None:
         return "bz2"
     if head.startswith(b"\xfd7zXZ\x00"):
         return "xz"
+    if head.startswith(UNSUPPORTED_SIGNATURES):
+        return "unsupported"
     if len(data) >= 262 and data[257:262] == b"ustar":
         return "tar"
     if name.lower().endswith(".tar"):
         return "tar"
+    if name.lower().endswith(UNSUPPORTED_SUFFIXES):
+        return "unsupported"
     return None
 
 
@@ -158,6 +169,9 @@ def scan_archive(where: str, name: str, data: bytes, depth: int, budget: Budget,
         report.add("limit-depth", where)
         return
     kind = kind_of(name, data)
+    if kind == "unsupported":
+        report.add("unsupported-archive", where)  # no se puede revisar por dentro: falla cerrado
+        return
     try:
         if kind in ("gzip", "bz2", "xz"):
             opener = {"gzip": gzip.GzipFile, "bz2": bz2.BZ2File, "xz": lzma.LZMAFile}[kind]
@@ -260,21 +274,61 @@ def scan_worktree(report: Report, paths: list[str]) -> None:
 
 
 def scan_history(report: Report, baseline: set[str]) -> None:
-    seen: dict[str, str] = {}
+    """Revisa TODOS los blobs alcanzables del historial, no solo los que
+    tienen extensión de comprimido: un .tgz renombrado a .bin o sin extensión
+    también se detecta por su firma (AUD-015). Lee los blobs con un único
+    `git cat-file --batch`. Un blob mayor que MAX_TOTAL_BYTES es un hallazgo
+    (falla cerrado), tenga o no extensión de comprimido."""
+    names: dict[str, str] = {}
     for line in git("rev-list", "--all", "--objects").decode("utf-8", "surrogateescape").splitlines():
         sha, _, path = line.partition(" ")
-        if path and is_candidate(path) and sha not in seen:
-            seen[sha] = path
-    for sha, path in seen.items():
-        where = f"historial:{sha[:12]}:{path}"
+        if path and sha not in names:
+            names[sha] = path
+    if not names:
+        return
+    blobs: list[str] = []
+    for sha, kind, size in git_batch_check(list(names)):
+        if kind != "blob":
+            continue
+        where = f"historial:{sha[:12]}:{names[sha]}"
         if sha in baseline:
             report.known.append(where)
-            continue
-        size = int(git("cat-file", "-s", sha))
-        if size > MAX_TOTAL_BYTES:
+        elif size > MAX_TOTAL_BYTES:
             report.add("limit-total-size", where)
-            continue
-        scan_blob(where, path, git("cat-file", "blob", sha), report)
+        else:
+            blobs.append(sha)
+    for sha, data in git_blobs(blobs):
+        path = names[sha]
+        if is_candidate(path) or kind_of(path, data[:262]):
+            scan_blob(f"historial:{sha[:12]}:{path}", path, data, report)
+
+
+def git_batch_check(shas: list[str]) -> list[tuple[str, str, int]]:
+    """`git cat-file --batch-check`: (sha, tipo, tamaño) de cada objeto."""
+    out = subprocess.run(["git", "cat-file", "--batch-check"], input="\n".join(shas).encode() + b"\n",
+                         check=True, capture_output=True).stdout
+    rows = []
+    for line in out.decode().splitlines():
+        parts = line.split()
+        if len(parts) == 3:
+            rows.append((parts[0], parts[1], int(parts[2])))
+    return rows
+
+
+def git_blobs(shas: list[str]):
+    """Lee el contenido de los blobs con un solo `git cat-file --batch`."""
+    if not shas:
+        return
+    out = subprocess.run(["git", "cat-file", "--batch"], input="\n".join(shas).encode() + b"\n",
+                         check=True, capture_output=True).stdout
+    pos = 0
+    while pos < len(out):
+        nl = out.index(b"\n", pos)
+        header = out[pos:nl].split()
+        sha, size = header[0].decode(), int(header[2])
+        start = nl + 1
+        yield sha, out[start:start + size]
+        pos = start + size + 1  # el contenido va seguido de un salto de línea
 
 
 def load_baseline(path: str | None) -> set[str]:

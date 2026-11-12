@@ -111,7 +111,7 @@ func newAPIOn(t *testing.T, db *drv.Database, jwtSecret string, accessTTL time.D
 	router := apihttp.NewRouter(apihttp.Deps{
 		Log: log, Pinger: flowClient, Meta: handler.MetaInfo{Name: "vaiven-backend"},
 		Limiter: limiter, LimiterFallback: redis.NewMemoryLimiter(),
-		Modules: []apihttp.Module{mod, adminProbe{auth: mod.Authenticate()}},
+		Modules: []apihttp.Module{mod, adminProbe{auth: mod.Authenticate(), lookup: users.ByID}},
 	})
 	srv := httptest.NewServer(router)
 	t.Cleanup(srv.Close)
@@ -120,13 +120,14 @@ func newAPIOn(t *testing.T, db *drv.Database, jwtSecret string, accessTTL time.D
 
 // adminProbe es una ruta de administración de prueba (CA-07).
 type adminProbe struct {
-	auth func(http.Handler) http.Handler
+	auth   func(http.Handler) http.Handler
+	lookup UserLookup
 }
 
 func (adminProbe) Name() string { return "admin-probe" }
 
 func (p adminProbe) Register(r chi.Router) {
-	r.With(p.auth, RequireRole(domain.RoleAdmin)).Get("/admin/probe", func(w http.ResponseWriter, _ *http.Request) {
+	r.With(p.auth, RequireRole(domain.RoleAdmin, p.lookup)).Get("/admin/probe", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 }

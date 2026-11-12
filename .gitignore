@@ -75,8 +75,13 @@ Desktop.ini
 # una excepción explícita y pasa por scripts/scan-archives.py en CI.
 *.tgz
 *.tar
-*.tar.gz
+*.tar.*
+*.tbz2
+*.txz
 *.gz
+*.bz2
+*.xz
+*.zst
 *.zip
 *.7z
 *.rar
