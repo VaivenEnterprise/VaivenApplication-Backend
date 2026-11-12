@@ -12,6 +12,7 @@
   - Aceptación: proyecto `vaiven-production` con API, MongoDB y Redis propios (volúmenes y red propios, sin puertos publicados); `scripts/deploy.sh production` (puerto 443) desde `origin/main`; HTTPS válido sin `-k` en 443 y 8443 (CA-07); `/healthz` y `/readyz` (`redis: ok`) en 200 y `/api/v1/meta` con `environment: production` (CA-01); **memoria medida** con los dos entornos encendidos y límites fijados con esa medición (RF-12, CA-08); URL anotada para el móvil (mobile 013-T001)
   - Refs: RF-01, RF-01b, RF-12 · P-01, P-02, P-08, P-10
   - Avance (2026-11-11): archivos listos y validados con `docker compose config` (staging sin cambios; producción en `vaiven-production-net` y puerto 443; MongoDB y Redis propios sin puertos). Se agregó `deploy/production/init-env.sh` (contraseñas y keyFile propios). **Falta (VM, `devops-mcp`):** fase 0 (P-1 y P-2), crear el entorno siguiendo `docs/produccion.md` §2, verificar CA-01 y CA-07 y medir la capacidad (CA-08).
+  - Decisión del equipo (2026-11-11): se sigue desarrollando y desplegando todo en `develop` → staging; el PR `develop` → `main` y el despliegue de la API de producción (paso 6) se hacen **al final**, una sola vez. Mientras tanto, los datos de producción (MongoDB, Redis, usuario y `.env`) ya se pueden crear con `deploy/production/provision-data.sh` (§2.0) y quedan listos.
 
 - [ ] **T002** [P] Base de datos de producción
   - Archivos: `docs/produccion.md` (sección base de datos)
