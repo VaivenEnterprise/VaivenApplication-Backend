@@ -84,6 +84,18 @@ La salida debe mostrar `mongo: healthy`, `primario: true`, el usuario creado, el
 
    Estimado para producción en reposo: unos 200 MB (similar a staging), así que quedarían unos 380 MB disponibles más el swap. Los límites suman 1,3 GB contra 887 MB de RAM: es una sobreasignación que se apoya en el swap y en que ningún contenedor llega a su límite en reposo. Si la medición con los dos entornos muestra swap sostenido alto u OOM, primero se bajan los límites de staging.
 
+   **Con los datos de producción encendidos (2026-11-11, sin la API de producción):**
+
+   | | Valor |
+   |---|---|
+   | RAM disponible | 592 MB de 887 MB |
+   | Swap | 302 MB de 2 GB en uso |
+   | `vaiven-production-data-mongo-1` | 25 MB de 400 MB (recién creado, base vacía) |
+   | `vaiven-production-data-redis-1` | 4 MB de 96 MB |
+   | `base-mongo-1` / `base-redis-1` / `vaiven-staging-api-1` | 183 / 5 / 10 MB |
+
+   Falta repetir la medición con la API de producción (paso 6) y con datos (CA-08).
+
    Anotar los valores aquí y en `memoria.md`. Si la memoria libre más el swap no da margen, ajustar los límites de producción o reducir o detener staging. **No** cambiar de talla sin consultar, porque tiene costo (Art. XIII.1).
 
 ## 3. Rotación de registros (T004, RF-13)

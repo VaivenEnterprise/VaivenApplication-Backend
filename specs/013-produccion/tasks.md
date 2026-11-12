@@ -13,6 +13,7 @@
   - Refs: RF-01, RF-01b, RF-12 · P-01, P-02, P-08, P-10
   - Avance (2026-11-11): archivos listos y validados con `docker compose config` (staging sin cambios; producción en `vaiven-production-net` y puerto 443; MongoDB y Redis propios sin puertos). Se agregó `deploy/production/init-env.sh` (contraseñas y keyFile propios). **Falta (VM, `devops-mcp`):** fase 0 (P-1 y P-2), crear el entorno siguiendo `docs/produccion.md` §2, verificar CA-01 y CA-07 y medir la capacidad (CA-08).
   - Decisión del equipo (2026-11-11): se sigue desarrollando y desplegando todo en `develop` → staging; el PR `develop` → `main` y el despliegue de la API de producción (paso 6) se hacen **al final**, una sola vez. Mientras tanto, los datos de producción (MongoDB, Redis, usuario y `.env`) ya se pueden crear con `deploy/production/provision-data.sh` (§2.0) y quedan listos.
+  - Hecho (2026-11-11): `provision-data.sh` por Run Command: MongoDB (replica set `rs0`, primario) y Redis de producción sanos, usuario `vaiven_app` con `readWrite` solo en `vaiven_prod` y `/opt/vaiven/production/.env` (600) con MongoDB, Redis y JWT propios. Se copiaron de staging `CLOUDINARY_*`, `CORS_ALLOWED_ORIGINS` y `LOG_LEVEL`. La llave de Cloudinary es la misma que la de staging: pendiente darle a producción una propia (CA-02). **Falta:** paso 6 (API, al final) y las mediciones con la API.
 
 - [ ] **T002** [P] Base de datos de producción
   - Archivos: `docs/produccion.md` (sección base de datos)
