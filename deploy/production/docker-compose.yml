@@ -1,0 +1,113 @@
+# =============================================================================
+# deploy/production/docker-compose.yml — MongoDB y Redis PROPIOS de producción
+# (spec 013, T001; Art. XIII.6 y XIV).
+#
+# Producción no comparte proceso, volumen, red ni credenciales con staging:
+# este stack es el equivalente de deploy/base/docker-compose.yml, con nombres,
+# red, volumen, keyFile y contraseñas propios, y límites de memoria más
+# ajustados (plan P-08; se ajustan con la medición de T001, RF-12).
+#
+# Cómo se arranca (en la VM, lo hace devops-mcp; Art. XIII.4):
+#   1. sudo deploy/production/init-env.sh        # contraseñas y keyFile, una vez
+#   2. docker compose --env-file /opt/vaiven/production/data.env \
+#        -f deploy/production/docker-compose.yml up -d
+#   3. replica set, una sola vez, autenticado como root (-p pide la contraseña):
+#      docker compose --env-file /opt/vaiven/production/data.env \
+#        -f deploy/production/docker-compose.yml exec mongo \
+#        mongosh -u root -p --authenticationDatabase admin \
+#        --eval 'rs.initiate({_id:"rs0",members:[{_id:0,host:"mongo:27017"}]})'
+#   4. usuario de la aplicación con permisos solo sobre vaiven_prod (RF-02):
+#      ver docs/produccion.md (no se escribe aquí para no fijar contraseñas).
+# La API de producción (deploy/docker-compose.yml, proyecto vaiven-production)
+# se une a la red vaiven-production-net con VAIVEN_NETWORK en su .env.
+# =============================================================================
+name: vaiven-production-data
+
+networks:
+  vaiven-net:
+    name: vaiven-production-net
+    driver: bridge
+
+services:
+
+  # -------------------------------------------------------------------------
+  # MongoDB de producción — replica set de un nodo con keyFile propio
+  # -------------------------------------------------------------------------
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?falta MONGO_ROOT_PASSWORD}
+    # keyFile propio de producción (lo crea init-env.sh; nunca en el repo).
+    volumes:
+      - /opt/vaiven/production/secrets/mongo-keyfile:/etc/mongo/keyfile:ro
+      - mongo-data:/data/db
+    # Punto de partida de P-08: se ajusta con la medición de T001 (RF-12).
+    deploy:
+      resources:
+        limits:
+          memory: 300M
+          cpus: '0.5'
+        reservations:
+          memory: 192M
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Sin `ports:` — MongoDB nunca publica puertos (Art. XIV.4).
+    command:
+      - mongod
+      - --replSet
+      - rs0
+      - --bind_ip_all
+      - --keyFile
+      - /etc/mongo/keyfile
+      - --wiredTigerCacheSizeGB
+      - "0.15"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - vaiven-net
+
+  # -------------------------------------------------------------------------
+  # Redis 7 de producción — contraseña propia, memoria acotada, allkeys-lru
+  # -------------------------------------------------------------------------
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    command:
+      - sh
+      - -c
+      - exec redis-server --requirepass "$$REDIS_PASSWORD" --maxmemory 64mb --maxmemory-policy allkeys-lru
+    env_file:
+      - /opt/vaiven/production/data.env
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Sin `ports:` — Redis nunca publica puertos (Art. XIV.4).
+    deploy:
+      resources:
+        limits:
+          memory: 96M
+          cpus: '0.3'
+        reservations:
+          memory: 64M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - vaiven-net
+
+volumes:
+  mongo-data:
+    name: vaiven-production-mongo-data
+    driver: local
