@@ -6,24 +6,23 @@
 
 ## Fase 1 — Entorno
 
-- [ ] **T001** Entorno de producción en la VM, con su MongoDB y su Redis
-  - Archivos: `deploy/production/.env.example`, `deploy/production/docker-compose.yml`, `deploy/docker-compose.yml` (red configurable, `VAIVEN_NETWORK`), `docs/produccion.md` (sección servicio y capacidad)
+- [x] **T001** Entorno de datos de producción en la VM: su MongoDB y su Redis
+  - Archivos: `deploy/production/.env.example`, `deploy/production/docker-compose.yml`, `deploy/production/init-env.sh`, `deploy/production/provision-data.sh`, `deploy/docker-compose.yml` (red configurable, `VAIVEN_NETWORK`), `docs/produccion.md` (sección servicio y capacidad)
   - Agente: `devops-mcp` (infraestructura) y `dev-go` (archivos y documentación) · Depende de: 002-T031, fase 0
-  - Aceptación: proyecto `vaiven-production` con API, MongoDB y Redis propios (volúmenes y red propios, sin puertos publicados); `scripts/deploy.sh production` (puerto 443) desde `origin/main`; HTTPS válido sin `-k` en 443 y 8443 (CA-07); `/healthz` y `/readyz` (`redis: ok`) en 200 y `/api/v1/meta` con `environment: production` (CA-01); **memoria medida** con los dos entornos encendidos y límites fijados con esa medición (RF-12, CA-08); URL anotada para el móvil (mobile 013-T001)
+  - Aceptación: MongoDB y Redis de producción propios (proyecto `vaiven-production-data`, volumen y red propios, sin puertos publicados); replica set iniciado; usuario `vaiven_app` solo con `readWrite` en `vaiven_prod`; `/opt/vaiven/production/.env` (600) sin ningún secreto en común con staging (CA-02); memoria medida con los dos stacks de datos encendidos (RF-12)
   - Refs: RF-01, RF-01b, RF-12 · P-01, P-02, P-08, P-10
-  - Avance (2026-11-11): archivos listos y validados con `docker compose config` (staging sin cambios; producción en `vaiven-production-net` y puerto 443; MongoDB y Redis propios sin puertos). Se agregó `deploy/production/init-env.sh` (contraseñas y keyFile propios). **Falta (VM, `devops-mcp`):** fase 0 (P-1 y P-2), crear el entorno siguiendo `docs/produccion.md` §2, verificar CA-01 y CA-07 y medir la capacidad (CA-08).
-  - Decisión del equipo (2026-11-11): se sigue desarrollando y desplegando todo en `develop` → staging; el PR `develop` → `main` y el despliegue de la API de producción (paso 6) se hacen **al final**, una sola vez. Mientras tanto, los datos de producción (MongoDB, Redis, usuario y `.env`) ya se pueden crear con `deploy/production/provision-data.sh` (§2.0) y quedan listos.
-  - Hecho (2026-11-11): `provision-data.sh` por Run Command: MongoDB (replica set `rs0`, primario) y Redis de producción sanos, usuario `vaiven_app` con `readWrite` solo en `vaiven_prod` y `/opt/vaiven/production/.env` (600) con MongoDB, Redis y JWT propios. Se copiaron de staging `CLOUDINARY_*`, `CORS_ALLOWED_ORIGINS` y `LOG_LEVEL`. Producción ya tiene su propia llave de Cloudinary, `vaiven-production-2026-11`, en la misma cuenta: se validó con ping 200 y es distinta de la de staging (CA-02). **Falta:** paso 6 (API, al final) y las mediciones con la API.
+  - Ajuste (2026-11-12): el equipo decidió desplegar `main` y la API de producción **al final** (ver T010). Por eso T001 se limita al entorno de datos, y lo que exigía la API (paso 6, CA-01, CA-07, la medición con la API y la URL para el móvil) pasa a **T010**.
+  - Hecho (2026-11-11): con `provision-data.sh` por Run Command y sin SSH (`docs/produccion.md` §2.0). MongoDB de producción `healthy` y primario del replica set `rs0`. Redis `healthy`. Usuario `vaiven_app` creado. `.env` con MongoDB, Redis y JWT propios, y llave de Cloudinary propia `vaiven-production-2026-11` (ping 200, distinta de la de staging). Memoria: 592 MB disponibles con los dos stacks de datos. Corrección en el camino: MongoDB 7 exige una caché de al menos 0,25 GB.
 
 - [ ] **T002** [P] Base de datos de producción
   - Archivos: `docs/produccion.md` (sección base de datos)
-  - Agente: `modelador-mongo` (documentación) y `devops-mcp` · Depende de: T001
+  - Agente: `modelador-mongo` (documentación) y `devops-mcp` · Depende de: T010
   - Aceptación: base `vaiven_prod` con usuario de permisos mínimos y contraseña distinta de staging (CA-02); `admin indexes` en producción con código 0
   - Refs: RF-02 · P-02
 
 - [ ] **T003** [P] Carpeta de Cloudinary de producción
   - Archivos: `docs/produccion.md` (sección imágenes)
-  - Agente: `dev-go` (documentación y prueba de firma) y `devops-mcp` · Depende de: T001, P-1
+  - Agente: `dev-go` (documentación y prueba de firma) y `devops-mcp` · Depende de: T010, P-1
   - Aceptación: `CLOUDINARY_BASE_FOLDER=vaiven/production`; `admin check-services` en `OK`; una subida de prueba con firma real, borrada después; el secreto solo en el `.env` de producción
   - Refs: RF-03 · P-03
 
@@ -62,14 +61,20 @@
 
 - [ ] **T009** Lista de comprobación de producción y conformidad
   - Archivos: `docs/produccion.md` (lista firmada), `memoria.md` (solo anexar)
-  - Agente: `revisor-constitucion` · Depende de: T008, 012-T011
+  - Agente: `revisor-constitucion` · Depende de: T008, T010, 012-T011
   - Aceptación: lista completa (secretos, índices, sin seed, monitor, respaldo, humo, registros, HTTPS, capacidad, disco); p95 < 800 ms en producción (RNF-01); costo adicional cero en *Cost Management* (RNF-02); veredicto **CONFORME**; hito H5 (producción) marcado
   - Refs: RNF-01, RNF-02
+
+- [ ] **T010** API de producción y paso a `main` (al final)
+  - Archivos: `docs/produccion.md` (paso 6 y mediciones), `memoria.md` (solo anexar); y, si se aprueba, el mecanismo de despliegue de producción sin SSH (`deploy/remote-deploy.sh` o equivalente)
+  - Agente: `devops-mcp` · Depende de: T001, PR `develop` → `main` (decisión del equipo: al terminar el desarrollo)
+  - Aceptación: API de producción (proyecto `vaiven-production`) desplegada en el puerto 443 desde un commit de `origin/main`; HTTPS válido sin `-k` en 443 y 8443 (CA-07); `/healthz` y `/readyz` (`redis: ok`) en 200 y `/api/v1/meta` con `environment: production` (CA-01); memoria medida con los dos entornos completos y límites fijados con esa medición (RF-12, CA-08); URL anotada para el móvil (mobile 013-T001); la limpieza de imágenes de un entorno no borra la del otro
+  - Refs: RF-01, RF-12 · CA-01, CA-07, CA-08
 
 ## Trazabilidad
 | Requisito | Tarea |
 |---|---|
-| RF-01, RF-01b, RF-12 | T001 |
+| RF-01, RF-01b, RF-12 | T001 (datos), T010 (API) |
 | RF-02 | T002 |
 | RF-03 | T003 |
 | RF-06, RF-13 | T004 |
@@ -79,5 +84,5 @@
 | RF-09, RF-10, RF-11 | T008 |
 | RNF-01, RNF-02 | T009 |
 
-| Total | 9 tareas |
+| Total | 10 tareas |
 |---|---|
