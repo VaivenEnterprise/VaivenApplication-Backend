@@ -65,7 +65,7 @@
   - Refs: RF-05 · P-08, P-11
 
 - [ ] **T009** Despliegue final en staging
-  - Archivos: `docs/despliegue.md`
+  - Archivos: `docs/despliegue.md`, `Dockerfile` (agregado el 2026-11-11 con visto bueno de BE-B: la imagen incluye `/admin` porque MongoDB y Redis no publican puertos y la VM no tiene SSH; así `check-services`, `indexes` y `seed` corren con `az vm run-command`)
   - Dueño: BE-B · Agente: `devops-mcp` · Depende de: T004, T005, T007
   - Aceptación: versión final desplegada; `check-services`, `indexes` y `seed` ejecutados (el archivo de credenciales vive solo en quien ejecuta); `/readyz` 200; pasos documentados (RF-07)
   - Refs: RF-07

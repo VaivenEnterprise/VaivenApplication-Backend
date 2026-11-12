@@ -10,6 +10,11 @@ RACE        ?= -race
 
 .PHONY: run up down test test-integration e2e lint lint-api fmt build docs-bundle
 
+# `make` sin objetivo compila (no levanta la API). El autobuild de CodeQL corre
+# `make` sin argumentos: con `run` como primer objetivo intentaba arrancar la
+# API y podía quedarse colgado hasta su límite de tiempo.
+.DEFAULT_GOAL := build
+
 run: ## Levanta la API (requiere MongoDB en marcha)
 	go run ./cmd/api
 

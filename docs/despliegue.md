@@ -33,31 +33,56 @@ bash scripts/smoke.sh https://vaiven-staging.westus2.cloudapp.azure.com:8443
 
 `version` en `/api/v1/meta` debe ser el commit desplegado. Si sigue el anterior, el despliegue no se aplicó o volvió atrás: revisar el resumen del run («Resultado en la VM»).
 
-## 3. Utilidades de `cmd/admin` en staging (procedimiento propuesto para T009)
+## 3. Utilidades de `cmd/admin` en staging (T009)
 
-- **Por qué no se corren desde una laptop:** MongoDB y Redis no publican puertos (Art. XIV.4) y la imagen de la API no incluye `cmd/admin`. Hay que correrlas **dentro de la VM**, en la red de Docker del stack.
-- **Quién y cuándo:** lo hace `@devops-mcp` por SSH, o una persona con acceso a la VM, después de un despliegue en verde.
+- **Por qué en la VM:** MongoDB y Redis no publican puertos (Art. XIV.4), así que no se alcanzan desde una laptop.
+- **Cómo:** la imagen de la API trae también `/admin` (ver `Dockerfile`). Se corre en un contenedor de un solo uso con `--entrypoint /admin`, la misma imagen que corre la API, las mismas variables y la red del stack. **No hace falta SSH ni copiar binarios:** basta con `az vm run-command` desde Cloud Shell.
+- **Quién y cuándo:** `@devops-mcp` o una persona con acceso a Azure, después de un despliegue en verde de una versión que ya incluya `/admin`.
+- `APP_ENV`, `TLS_CERT_FILE` y `TLS_KEY_FILE` no están en el `.env` (los pone `deploy/docker-compose.yml`), así que se pasan con `-e`. La configuración solo exige que existan; `/admin` no abre los certificados.
 
-1. Compilar el binario para Linux en tu equipo y copiarlo a la VM:
+### 3.1 `check-services` e `indexes`
+
+En Cloud Shell (Bash):
+
+```bash
+az vm run-command invoke -g rg-vaiven -n vm-vaiven --command-id RunShellScript --query "value[0].message" -o tsv --scripts '
+IMG=$(docker inspect -f "{{.Config.Image}}" vaiven-staging-api-1)
+adm() { docker run --rm --network base_vaiven-net --env-file /opt/vaiven/staging/.env   -e APP_ENV=staging -e TLS_CERT_FILE=/certs/fullchain.pem -e TLS_KEY_FILE=/certs/privkey.pem   --entrypoint /admin "$IMG" "$@"; }
+echo "imagen: $IMG"
+adm check-services; echo "check-services exit=$?"
+adm indexes; echo "indexes exit=$?"'
+```
+
+Esperado: MongoDB, Redis y Cloudinary en `OK` (`exit=0`); `indexes exit=0`.
+
+### 3.2 `seed` (solo staging; se niega con `APP_ENV=production`)
+
+Las contraseñas de las 7 cuentas (`admin.demo@` y `ana`…`fer.demo@vaiven.example`) viven solo en el archivo de quien presenta, **nunca en el repositorio ni en chats**.
+
+1. **Generar el archivo en Cloud Shell** (es el almacenamiento propio de quien opera). Ejecútalo una sola vez; si ya existe, reutilízalo para no cambiar contraseñas:
    ```bash
-   CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /tmp/vaiven-admin ./cmd/admin
-   scp -i ~/.ssh/vaiven_azure /tmp/vaiven-admin azureuser@vaiven-staging.westus2.cloudapp.azure.com:/tmp/
+   umask 077; F=~/vaiven-seed-creds.txt
+   [ -e "$F" ] || for e in admin ana beto carla diego elena fer; do
+     printf '%s.demo@vaiven.example=%s
+' "$e" "$(openssl rand -base64 18)"; done > "$F"
+   wc -l "$F"   # 7
    ```
-2. En la VM, correrlo en un contenedor de un solo uso, con las mismas variables de la API y en la red del stack:
+2. **Correr el seed dos veces** (la segunda no debe crear nada, CA-02). El archivo viaja como parámetro protegido (Azure lo guarda cifrado y no lo devuelve), se escribe con permisos 600, se monta de solo lectura y se borra al terminar:
    ```bash
-   sudo docker run --rm --network base_vaiven-net \
-     --env-file /opt/vaiven/staging/.env \
-     -v /tmp/vaiven-admin:/admin:ro --entrypoint /admin \
-     gcr.io/distroless/static-debian12 check-services
-   # luego: ... indexes   (debe salir con código 0)
+   az vm run-command create -g rg-vaiven --vm-name vm-vaiven --location westus2      --name vaiven-seed --async-execution false --timeout-in-seconds 1500      --protected-parameters SEED_B64="$(base64 -w0 ~/vaiven-seed-creds.txt)"      --script '
+   set -u
+   C=$(mktemp); chmod 644 "$C"; printf "%s" "$SEED_B64" | base64 -d > "$C"; chmod 444 "$C"
+   IMG=$(docker inspect -f "{{.Config.Image}}" vaiven-staging-api-1)
+   adm() { docker run --rm --network base_vaiven-net --env-file /opt/vaiven/staging/.env      -e APP_ENV=staging -e TLS_CERT_FILE=/certs/fullchain.pem -e TLS_KEY_FILE=/certs/privkey.pem      -v "$C":/creds.txt:ro -e SEED_CREDENTIALS_FILE=/creds.txt --entrypoint /admin "$IMG" "$@"; }
+   adm seed; echo "seed 1 exit=$?"
+   adm seed; echo "seed 2 exit=$?"
+   rm -f "$C"; echo "credenciales borradas de la VM"'
+   az vm run-command show -g rg-vaiven --vm-name vm-vaiven --name vaiven-seed --instance-view      --query "instanceView.{estado:executionState,salida:output,error:error}"
+   az vm run-command delete -g rg-vaiven --vm-name vm-vaiven --name vaiven-seed --yes
    ```
-3. **Seed:** solo en staging (se niega con `APP_ENV=production`).
-   1. Crea el archivo de credenciales **en la VM**, con permisos `600`, una contraseña distinta por cuenta y **sin pegarlas en ningún chat**.
-   2. Móntalo en el contenedor y apunta `SEED_CREDENTIALS_FILE` a esa ruta. Por ejemplo, con el archivo en `/root/seed-creds.txt`, agrega `-v /root/seed-creds.txt:/creds.txt:ro -e SEED_CREDENTIALS_FILE=/creds.txt` y usa el subcomando `seed`.
-   3. Al terminar, guarda el archivo **fuera de la VM**, en tu gestor de contraseñas, y bórralo de la VM.
-   4. Antes del seed hay que haber rotado la llave de Cloudinary (P-1 de `docs/seguridad/remediacion-2026-11.md`): el seed sube fotos reales.
-4. Borrar `/tmp/vaiven-admin` de la VM al terminar.
-5. Anotar en `memoria.md` el resultado (códigos de salida y resumen del seed), sin valores secretos.
+   El archivo temporal es legible por el usuario `nonroot` del contenedor (444) solo mientras dura el comando; vive en `/tmp` de la VM y se borra al final.
+3. **Guardar las contraseñas** de `~/vaiven-seed-creds.txt` en el gestor de contraseñas de quien presenta (descárgalo desde Cloud Shell: *Manage files → Download*). Se puede dejar en Cloud Shell, que es privado, pero nunca subirlo al repositorio.
+4. Anotar en `memoria.md` los códigos de salida y el resumen del seed, sin valores.
 
 ## 4. Lista de comprobación de T009 (RF-07)
 
