@@ -30,9 +30,19 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
     go build -trimpath -ldflags "-s -w -X main.version=${APP_VERSION}" \
     -o /out/api ./cmd/api
 
+# Utilidades de administración (check-services, indexes, seed, create-admin;
+# spec 012 T009). Viajan en la misma imagen porque MongoDB y Redis no publican
+# puertos (Art. XIV.4) y la VM no tiene SSH: se corren en un contenedor de un
+# solo uso con `--entrypoint /admin` en la red del entorno (docs/despliegue.md
+# §3). La API no las usa; el ENTRYPOINT sigue siendo /api.
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
+    go build -trimpath -ldflags "-s -w" \
+    -o /out/admin ./cmd/admin
+
 # --- Etapa 2: ejecución -----------------------------------------------------
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/api /api
+COPY --from=build /out/admin /admin
 USER nonroot:nonroot
 EXPOSE 8080
 ENTRYPOINT ["/api"]
