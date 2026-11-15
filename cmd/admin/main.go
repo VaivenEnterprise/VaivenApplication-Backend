@@ -5,6 +5,7 @@
 //	printf '%s\n%s\n' "$CORREO" "$CONTRASENA" | go run ./cmd/admin create-admin
 //	go run ./cmd/admin indexes
 //	SEED_CREDENTIALS_FILE=/ruta/fuera/del/repo go run ./cmd/admin seed
+//	go run ./cmd/admin smoke --base-url https://host:8443
 package main
 
 import (
@@ -31,6 +32,9 @@ subcomandos:
                    contraseñas salen del archivo de SEED_CREDENTIALS_FILE;
                    nunca con APP_ENV=production; --scale solo en development
                    y test
+  smoke --base-url URL [--connect-to host:puerto]
+                   prueba de humo que escribe: cuenta desechable, foto,
+                   objeto y baja, limpiando todo; se niega en producción
 `
 
 func main() {
@@ -42,8 +46,9 @@ func main() {
 // Los subcomandos cierran sus conexiones con defer dentro de run, así que
 // terminan antes de que main llame a os.Exit.
 func run(args []string, stdout, stderr io.Writer, load func() (config.Config, error), checksFor func(config.Config) []check, stdin io.Reader, admins adminFactory, indexes indexesFactory) int {
-	// Solo seed acepta opciones (--scale); los demás, ningún argumento extra.
-	if len(args) == 0 || (len(args) > 1 && args[0] != "seed") {
+	// Solo seed (--scale) y smoke (--base-url) aceptan opciones; los demás,
+	// ningún argumento extra.
+	if len(args) == 0 || (len(args) > 1 && args[0] != "seed" && args[0] != "smoke") {
 		_, _ = fmt.Fprint(stderr, usage)
 		return 2
 	}
@@ -55,6 +60,13 @@ func run(args []string, stdout, stderr io.Writer, load func() (config.Config, er
 			return 1
 		}
 		return runSeed(args[1:], stdout, stderr, cfg, os.Getenv, mongoSeedDeps)
+	case "smoke":
+		cfg, err := load()
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+			return 1
+		}
+		return runSmoke(args[1:], stdout, stderr, cfg, newSmokeDeps)
 	case "check-services":
 		cfg, err := load()
 		if err != nil {
