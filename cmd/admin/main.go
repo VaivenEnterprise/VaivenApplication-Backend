@@ -32,6 +32,8 @@ subcomandos:
                    contraseñas salen del archivo de SEED_CREDENTIALS_FILE;
                    nunca con APP_ENV=production; --scale solo en development
                    y test
+  upload-test      sube una foto con firma real del entorno, la verifica y la
+                   borra (sin escribir en MongoDB; se permite en producción)
   smoke --base-url URL [--connect-to host:puerto]
                    prueba de humo que escribe: cuenta desechable, foto,
                    objeto y baja, limpiando todo; se niega en producción
@@ -67,6 +69,13 @@ func run(args []string, stdout, stderr io.Writer, load func() (config.Config, er
 			return 1
 		}
 		return runSmoke(args[1:], stdout, stderr, cfg, newSmokeDeps)
+	case "upload-test":
+		cfg, err := load()
+		if err != nil {
+			_, _ = fmt.Fprintf(stderr, "error: %v\n", err)
+			return 1
+		}
+		return runUploadTest(stdout, cfg, newUploadTestDeps)
 	case "check-services":
 		cfg, err := load()
 		if err != nil {
