@@ -48,11 +48,12 @@
   - Refs: RF-01, RF-07
   - Hecho (2026-11-16, BE-B): `POST /api/v1/ai/listing-suggestions` con sesión, `validator/v10`, campos desconocidos rechazados (`additionalProperties: false`) y 10 peticiones por minuto por persona (Redis con respaldo local). `ErrDailyLimit` → 429 `rate_limited` con `Retry-After` hasta la medianoche de Ciudad de México; los errores de dominio usan el envoltorio del Art. IV. Los registros no llevan la foto, el publicId ni la sugerencia; solo la causa interna cuando el proveedor cae. `GET /meta` expone `features.aiSuggestions` y `features.projectAssistant`. Una línea en `modules.go`. Con `AI_ENABLED=false` no se crea el cliente de Gemini. Handler al 95 %; todas las pruebas unitarias del repositorio y el lint en verde.
 
-- [ ] **T007** Prueba de integración (A)
+- [x] **T007** Prueba de integración (A)
   - Archivos: `internal/suggest/integration_test.go`
   - Agente: `qa-go` · Depende de: T006
   - Aceptación: CA-01 a CA-06 con proveedor falso; sin red; limpia sus datos
   - Refs: RNF-01
+  - Hecho (2026-11-16, BE-B): `internal/suggest/integration_test.go` recorre el endpoint real (router, JWT real, `images.Service` contra un Cloudinary simulado, contador en MongoDB 7 real con Testcontainers y proveedor de IA falso, sin red): CA-01 (la miniatura la arma el servidor con https://res.cloudinary.com), CA-02 (foto ajena, evidencia o inexistente → 404 sin llamar al proveedor), CA-03, CA-04 (apagada, proveedor caído y Cloudinary caído → 503), CA-05 (con límite 3: la cuarta → 429; otra persona tiene su propio cupo) y CA-06 (`git grep --untracked` no encuentra un valor de `AI_API_KEY`; verificado que falla si se siembra una clave). Cada caso usa su propia base. Corre en la CI con `-tags=integration`.
 
 ## Parte B — Asistente de proyectos
 
