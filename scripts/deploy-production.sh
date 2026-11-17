@@ -63,6 +63,8 @@ grep -q 'production:443' "$work/remote-deploy.sh" ||
     die "deploy/remote-deploy.sh de $ref no admite production (requiere spec 013 T010)"
 
 {
+    # Primera línea: shebang de bash (Run Command corre el archivo directamente).
+    echo '#!/usr/bin/env bash'
     printf 'export MODE=%q ENV_NAME=production API_PORT=443 AZURE_HOST=%q TAG=%q\n' \
         "$mode" "$AZURE_HOST" "$tag"
     printf 'export COMPOSE_B64=%q\n' "$(base64 -w0 "$work/docker-compose.yml")"
