@@ -65,6 +65,8 @@ tags:
     description: Avisos dentro de la app y tokens de push (spec 011).
   - name: reportes
     description: Reportar objetos, mensajes, perfiles y decisiones de moderación (spec 011).
+  - name: ia
+    description: IA generativa (spec 014) — sugerencias al publicar y asistente de proyectos; detrás de interruptores.
 paths:
   /healthz:
     get:
@@ -168,6 +170,12 @@ paths:
     $ref: './paths/auth.yaml#/me'
   /api/v1/users/{id}:
     $ref: './paths/users.yaml#/userById'
+  /api/v1/ai/listing-suggestions:
+    $ref: './paths/ai.yaml#/listingSuggestions'
+  /api/v1/ai/assistant/messages:
+    $ref: './paths/ai.yaml#/assistantMessages'
+  /api/v1/ai/assistant/conversations/{id}:
+    $ref: './paths/ai.yaml#/assistantConversation'
   /api/v1/uploads/signature:
     $ref: './paths/uploads.yaml#/signature'
   /api/v1/items:
@@ -374,6 +382,16 @@ components:
           type: string
           format: date-time
           description: Hora del servidor en UTC (ISO-8601).
+        features:
+          type: object
+          description: Funciones opcionales encendidas en este entorno (spec 014). Si falta, la app las trata como apagadas.
+          properties:
+            aiSuggestions:
+              type: boolean
+              description: Sugerencias de título y categoría a partir de una foto (`AI_ENABLED`).
+            projectAssistant:
+              type: boolean
+              description: Asistente de proyectos (`ASSISTANT_ENABLED`).
     Role:
       type: string
       enum: [user, admin]
@@ -1555,6 +1573,105 @@ components:
         createdAt:
           type: string
           format: date-time
+    ListingSuggestionRequest:
+      type: object
+      required: [imagePublicId]
+      additionalProperties: false
+      properties:
+        imagePublicId:
+          type: string
+          maxLength: 255
+          description: publicId de una foto `item_photo` propia, ya subida (spec 004). No se aceptan URL.
+    ListingSuggestion:
+      type: object
+      description: Propuesta para revisar; quien publica la acepta, la edita o la ignora (spec 014, RF-01).
+      required: [title]
+      properties:
+        title:
+          type: string
+          maxLength: 80
+        category:
+          $ref: '#/components/schemas/CategoryKey'
+        description:
+          type: string
+          maxLength: 1000
+    AssistantMessageRequest:
+      type: object
+      required: [message]
+      additionalProperties: false
+      properties:
+        conversationId:
+          type: string
+          pattern: '^[0-9a-f]{24}$'
+          description: Para continuar una conversación propia; sin él se abre una nueva.
+        message:
+          type: string
+          minLength: 2
+          maxLength: 500
+          description: Lo que la persona quiere realizar. No incluyas datos personales.
+        location:
+          type: object
+          description: Solo se usa para buscar cerca; nunca se envía al proveedor de IA ni se guarda (RF-18).
+          required: [lat, lng]
+          properties:
+            lat:
+              type: number
+              minimum: -90
+              maximum: 90
+            lng:
+              type: number
+              minimum: -180
+              maximum: 180
+    AssistantNeed:
+      type: object
+      required: [name, category, optional, matches]
+      properties:
+        name:
+          type: string
+          maxLength: 60
+          description: Lo que se necesita, como lo propone el modelo.
+        category:
+          $ref: '#/components/schemas/CategoryKey'
+        optional:
+          type: boolean
+        matches:
+          type: array
+          maxItems: 5
+          description: Quién lo tiene disponible. Sale de la búsqueda (spec 006), nunca del modelo; vacío si nadie lo tiene cerca.
+          items:
+            $ref: '#/components/schemas/ItemCard'
+    AssistantReply:
+      type: object
+      required: [summary, needs, steps, safetyNotes]
+      properties:
+        summary:
+          type: string
+          maxLength: 600
+        needs:
+          type: array
+          maxItems: 8
+          items:
+            $ref: '#/components/schemas/AssistantNeed'
+        steps:
+          type: array
+          maxItems: 10
+          items:
+            type: string
+            maxLength: 200
+        safetyNotes:
+          type: array
+          maxItems: 3
+          items:
+            type: string
+            maxLength: 200
+    AssistantMessageResponse:
+      type: object
+      required: [conversationId, reply]
+      properties:
+        conversationId:
+          type: string
+        reply:
+          $ref: '#/components/schemas/AssistantReply'
     ErrorCode:
       type: string
       description: Códigos permitidos por el Art. IV.3 de la constitución.

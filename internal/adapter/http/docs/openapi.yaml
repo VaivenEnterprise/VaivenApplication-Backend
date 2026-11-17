@@ -65,6 +65,8 @@ tags:
     description: Avisos dentro de la app y tokens de push (spec 011).
   - name: reportes
     description: Reportar objetos, mensajes, perfiles y decisiones de moderación (spec 011).
+  - name: ia
+    description: IA generativa (spec 014) — sugerencias al publicar y asistente de proyectos; detrás de interruptores.
 paths:
   /healthz:
     get:
@@ -521,6 +523,202 @@ paths:
                   code: not_found
                   message: No encontramos a esa persona.
                   requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/ai/listing-suggestions:
+    post:
+      tags:
+        - ia
+      operationId: createListingSuggestion
+      summary: Sugerir título y categoría a partir de una foto
+      description: |
+        Propone un título y una categoría de POL-14 a partir de una foto **propia**
+        ya subida con finalidad `item_photo` (RF-01, RF-02). El servidor **no acepta
+        URL**: recibe el `publicId` y construye él mismo la miniatura. La sugerencia
+        es solo una propuesta; quien publica la acepta, la edita o la ignora.
+
+        - Si la categoría que propone el modelo no es una clave válida, se omite; el
+          título se recorta a 80 caracteres y el texto que el filtro de contenido no
+          permita se descarta (RF-04).
+        - Límite: 20 sugerencias por persona y día (`AI_DAILY_LIMIT`, RF-05).
+        - Apagada (`AI_ENABLED=false`) o con el proveedor sin responder en 10 s:
+          `503 service_unavailable` (RF-06). La app sigue sin sugerencias.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListingSuggestionRequest'
+            example:
+              imagePublicId: vaiven/production/item_photo/6730f1c2a9b3e4d5f6a7b8c9/9b2f6c1e4a7d4c0e8f3b5a2d1c6e7f80
+      responses:
+        '200':
+          description: Sugerencia para revisar antes de publicar.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListingSuggestion'
+              example:
+                title: Taladro inalámbrico 18 V con dos baterías
+                category: herramientas_electricas
+                description: Taladro con estuche, cargador y dos baterías.
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/ai/assistant/messages:
+    post:
+      tags:
+        - ia
+      operationId: sendAssistantMessage
+      summary: Enviar un mensaje al asistente de proyectos
+      description: |
+        La persona describe lo que quiere realizar («quiero pintar mi cuarto») y el
+        asistente responde (RF-09 a RF-12):
+
+        - `needs`: qué objetos necesita (los propone el modelo, máximo 8, con
+          categoría de POL-14).
+        - `matches` dentro de cada necesidad: **quién los tiene disponibles**. Salen
+          de la búsqueda de la spec 006, **nunca del modelo**: misma tarjeta pública
+          (`ItemCard`), solo objetos `active` de otras personas con cuenta activa,
+          hasta 5 por necesidad, ordenados por distancia si se envía `location`
+          (radio `ASSISTANT_RADIUS_KM`, 10 km por omisión). `matches: []` si nadie
+          lo tiene cerca. Con `approxLocation` la app los dibuja en un mapa; la
+          solicitud sigue el flujo normal de la spec 007.
+        - `steps`: pasos en orden para completar la tarea, y `safetyNotes` cuando hay
+          riesgo.
+
+        Sin `conversationId` se abre una conversación nueva; con él se continúa (el
+        modelo recibe los últimos 6 turnos). La conversación dura 24 h (RF-13).
+
+        Privacidad (RF-18): la **ubicación nunca se envía al proveedor de IA**; solo
+        se usa para buscar. No escribas datos personales en el mensaje.
+
+        Peticiones fuera de alcance, peligrosas o ilegales reciben una negativa con
+        `needs` y `steps` vacíos (RF-14). Límites: 30 mensajes por persona y día y
+        10 por minuto (RF-15). Apagado (`ASSISTANT_ENABLED=false`) o con el
+        proveedor sin responder en 12 s: `503 service_unavailable` (RF-16).
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssistantMessageRequest'
+            example:
+              message: Quiero pintar mi cuarto este fin de semana
+              location:
+                lat: 25.67
+                lng: -100.31
+      responses:
+        '200':
+          description: Respuesta del asistente con necesidades, quién las tiene y pasos.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssistantMessageResponse'
+              example:
+                conversationId: 6735a0c1b2d3e4f5a6b7c8d9
+                reply:
+                  summary: Para pintar un cuarto necesitas una escalera, un rodillo con charola y una lona. Encontré escaleras y rodillos cerca de ti; nadie presta lonas en tu zona por ahora.
+                  needs:
+                    - name: Escalera de tijera
+                      category: hogar
+                      optional: false
+                      matches:
+                        - id: 6730f1c2a9b3e4d5f6a7b8c9
+                          title: Escalera de aluminio 5 peldaños
+                          category: hogar
+                          modality: rent
+                          pricePerDayCents: 5000
+                          zone:
+                            municipality: Monterrey
+                            neighborhood: Centro
+                          approxLocation:
+                            lat: 25.67
+                            lng: -100.31
+                          distanceKm: 1.2
+                          thumbUrl: https://res.cloudinary.com/vaiven/image/upload/c_fill,w_400,h_400/vaiven/production/item_photo/6730f1c2a9b3e4d5f6a7b8c9/a1.jpg
+                          photoCount: 2
+                          owner:
+                            id: 6730f0aa9b3e4d5f6a7b8c90
+                            displayName: Ana
+                            ratingAverage: 4.8
+                            ratingCount: 12
+                          createdAt: '2026-11-10T18:00:00Z'
+                    - name: Lona protectora
+                      category: hogar
+                      optional: true
+                      matches: []
+                  steps:
+                    - Retira los muebles y cubre el piso con la lona.
+                    - Lija y limpia las paredes; deja secar.
+                    - Aplica una mano con el rodillo y espera el tiempo de secado del fabricante.
+                    - Aplica la segunda mano y ventila el cuarto.
+                  safetyNotes:
+                    - Abre la escalera por completo y no te pares en el último peldaño.
+                    - Ventila el cuarto mientras pintas y al terminar.
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/ai/assistant/conversations/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Identificador de la conversación.
+        schema:
+          type: string
+          pattern: ^[0-9a-f]{24}$
+      - $ref: '#/components/parameters/RequestId'
+    delete:
+      tags:
+        - ia
+      operationId: deleteAssistantConversation
+      summary: Borrar una conversación con el asistente
+      description: |
+        Borra la conversación propia y sus turnos (RF-13). Una conversación de otra
+        persona, o que ya caducó (24 h), responde `404`.
+      responses:
+        '204':
+          description: Conversación borrada.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '429':
           $ref: '#/components/responses/RateLimited'
         '500':
@@ -3059,6 +3257,16 @@ components:
           type: string
           format: date-time
           description: Hora del servidor en UTC (ISO-8601).
+        features:
+          type: object
+          description: Funciones opcionales encendidas en este entorno (spec 014). Si falta, la app las trata como apagadas.
+          properties:
+            aiSuggestions:
+              type: boolean
+              description: Sugerencias de título y categoría a partir de una foto (`AI_ENABLED`).
+            projectAssistant:
+              type: boolean
+              description: Asistente de proyectos (`ASSISTANT_ENABLED`).
     Role:
       type: string
       enum:
@@ -4663,6 +4871,120 @@ components:
         createdAt:
           type: string
           format: date-time
+    ListingSuggestionRequest:
+      type: object
+      required:
+        - imagePublicId
+      additionalProperties: false
+      properties:
+        imagePublicId:
+          type: string
+          maxLength: 255
+          description: publicId de una foto `item_photo` propia, ya subida (spec 004). No se aceptan URL.
+    ListingSuggestion:
+      type: object
+      description: Propuesta para revisar; quien publica la acepta, la edita o la ignora (spec 014, RF-01).
+      required:
+        - title
+      properties:
+        title:
+          type: string
+          maxLength: 80
+        category:
+          $ref: '#/components/schemas/CategoryKey'
+        description:
+          type: string
+          maxLength: 1000
+    AssistantMessageRequest:
+      type: object
+      required:
+        - message
+      additionalProperties: false
+      properties:
+        conversationId:
+          type: string
+          pattern: ^[0-9a-f]{24}$
+          description: Para continuar una conversación propia; sin él se abre una nueva.
+        message:
+          type: string
+          minLength: 2
+          maxLength: 500
+          description: Lo que la persona quiere realizar. No incluyas datos personales.
+        location:
+          type: object
+          description: Solo se usa para buscar cerca; nunca se envía al proveedor de IA ni se guarda (RF-18).
+          required:
+            - lat
+            - lng
+          properties:
+            lat:
+              type: number
+              minimum: -90
+              maximum: 90
+            lng:
+              type: number
+              minimum: -180
+              maximum: 180
+    AssistantNeed:
+      type: object
+      required:
+        - name
+        - category
+        - optional
+        - matches
+      properties:
+        name:
+          type: string
+          maxLength: 60
+          description: Lo que se necesita, como lo propone el modelo.
+        category:
+          $ref: '#/components/schemas/CategoryKey'
+        optional:
+          type: boolean
+        matches:
+          type: array
+          maxItems: 5
+          description: Quién lo tiene disponible. Sale de la búsqueda (spec 006), nunca del modelo; vacío si nadie lo tiene cerca.
+          items:
+            $ref: '#/components/schemas/ItemCard'
+    AssistantReply:
+      type: object
+      required:
+        - summary
+        - needs
+        - steps
+        - safetyNotes
+      properties:
+        summary:
+          type: string
+          maxLength: 600
+        needs:
+          type: array
+          maxItems: 8
+          items:
+            $ref: '#/components/schemas/AssistantNeed'
+        steps:
+          type: array
+          maxItems: 10
+          items:
+            type: string
+            maxLength: 200
+        safetyNotes:
+          type: array
+          maxItems: 3
+          items:
+            type: string
+            maxLength: 200
+    AssistantMessageResponse:
+      type: object
+      required:
+        - conversationId
+        - reply
+      properties:
+        conversationId:
+          type: string
+        reply:
+          $ref: '#/components/schemas/AssistantReply'
     ErrorCode:
       type: string
       description: Códigos permitidos por el Art. IV.3 de la constitución.
