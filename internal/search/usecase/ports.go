@@ -11,6 +11,8 @@ import (
 // Repository ejecuta la búsqueda (implementación: adapter/mongo.Repo).
 type Repository interface {
 	Search(ctx context.Context, q domain.Query) (domain.Page, error)
+	// CardsByIDs devuelve las tarjetas visibles de ids, en ese orden (spec 015).
+	CardsByIDs(ctx context.Context, viewerID string, ids []string) ([]domain.Card, error)
 }
 
 // CardView es una tarjeta lista para responder: la miniatura de la primera
