@@ -43,11 +43,14 @@ services:
     volumes:
       - /opt/vaiven/production/secrets/mongo-keyfile:/etc/mongo/keyfile:ro
       - mongo-data:/data/db
-    # Punto de partida de P-08: se ajusta con la medición de T001 (RF-12).
+    # P-08: igual que staging. MongoDB 7 exige --wiredTigerCacheSizeGB >= 0.25
+    # (con 0.15 no arranca: «cacheSizeGB must be greater than or equal to 0.25»),
+    # y la caché de 256 MB necesita margen: límite de 400 MB. Se ajusta con la
+    # medición de T001 (RF-12).
     deploy:
       resources:
         limits:
-          memory: 300M
+          memory: 400M
           cpus: '0.5'
         reservations:
           memory: 192M
@@ -65,7 +68,7 @@ services:
       - --keyFile
       - /etc/mongo/keyfile
       - --wiredTigerCacheSizeGB
-      - "0.15"
+      - "0.25"
     logging:
       driver: json-file
       options:
