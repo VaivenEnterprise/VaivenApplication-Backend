@@ -112,7 +112,7 @@
 
 - [ ] **T015** Despliegue de la spec en Azure (staging)
   - Archivos: `memoria.md` (solo anexar)
-  - Agente: `devops-mcp` · Depende de: T014, T016 (y todas las anteriores `[x]`)
+  - Agente: `devops-mcp` · Depende de: T014, T016, T017 (y todas las anteriores `[x]`)
   - Aceptación: `make fmt lint test` en verde; al fusionar en `develop`, `deploy-staging.yml` despliega staging; `/healthz` y `/readyz` devuelven 200 por HTTPS sin `-k`; cada endpoint nuevo de `api/paths/ai.yaml` responde con una petición correcta y una inválida en el formato de error del Art. IV; una conversación real con Gemini en staging devuelve necesidades, coincidencias y pasos; registros sin secretos ni datos personales; resultado anotado en `memoria.md`. **La spec siguiente no empieza hasta que esta tarea pase.**
   - Refs: Art. XIII.5
 
@@ -123,14 +123,21 @@
   - Refs: RF-03, RF-07, RF-17, RF-18 · P-01, P-05, P-06
   - Hecho (2026-11-17, BE-B): `internal/ai/adapter/openai` (90,2 %) y `internal/ai/adapter/imagefetch` (91,7 %; Gemini pasó a usarlo, sin duplicar código). `AI_PROVIDER` acepta `openai` (por defecto: Groq, modelo de texto e imagen), `gemini` (alternativa) y `ollama` (solo development); en `cmd/api/main.go`, `newAIProvider` elige el adaptador. `set-ai-key.sh` valida con Groq (lista de modelos y generación mínima con el modelo real) antes de tocar la VM y escribe proveedor, URL, modelo y clave; probado con archivos de prueba. Guía §11 y `.env.example` al día. Unitarias e integración de la IA en verde, lint en 0 y `go.mod` sin cambios.
 
+- [x] **T017** Proveedor propio para las sugerencias por foto (OpenRouter, modelo gratuito con visión)
+  - Archivos: `internal/config/ai.go` (+ test), `cmd/api/main.go`, `scripts/set-ai-key.sh`, `.env.example`, `deploy/*.env.example`, `docs/produccion.md` §11
+  - Agente: `dev-go` · Depende de: T016
+  - Aceptación: variables `SUGGEST_PROVIDER`, `SUGGEST_BASE_URL`, `SUGGEST_MODEL` y `SUGGEST_API_KEY` (clave como `Secret`) que, si faltan, toman las `AI_*`; la parte A crea su propio cliente y la B sigue igual; `set-ai-key.sh` con `PROVIDER=openrouter` valida la clave y hace una prueba **con una imagen** antes de tocar la VM, escribe las `SUGGEST_*` y enciende o apaga solo `AI_ENABLED`; sin dependencias nuevas; pruebas de configuración
+  - Refs: RF-03, RF-07 · P-01
+  - Hecho (2026-11-17, BE-B): `config.AI.Suggest` y `config.AI.Assistant()` (`config.Provider`) con herencia de `AI_*`; cada proveedor exige su clave solo si su parte está encendida, y los errores nombran la variable que de verdad falta. `main.go` crea un cliente por parte. `set-ai-key.sh` con `PROVIDER=openrouter` valida la clave (`/key`) y hace una prueba **con una imagen** antes de tocar la VM; escribe solo las `SUGGEST_*` y `--enable`/`--disable` tocan solo `AI_ENABLED` (probado: la clave de Groq queda intacta). Modelo elegido de la lista pública de OpenRouter (8 gratuitos con imagen): `google/gemma-4-31b-it:free`, con respaldos `google/gemma-4-26b-a4b-it:free` y `nvidia/nemotron-3.5-super-vl:free`. Configuración al 100 %.
+
 ## Trazabilidad
 | Requisito | Tareas |
 |---|---|
 | RF-01, RF-02, RF-04, RF-05, RF-06, RF-07 | T001, T005, T006, T007 |
-| RF-03, RF-17 | T002, T003, T008, T016 |
+| RF-03, RF-17 | T002, T003, T008, T016, T017 |
 | RF-08 | T001 |
 | RF-09 a RF-16, RF-18 | T008 a T013 |
 | RNF-01 | T007, T010, T013 |
 
-| Total | 16 tareas |
+| Total | 17 tareas |
 |---|---|

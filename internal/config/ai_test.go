@@ -145,3 +145,76 @@ func deployedEnv(appEnv string) env {
 	e["REDIS_URL"] = "redis://:clave@redis:6379/0"
 	return e
 }
+
+func TestSuggestProviderOverridesAndFallback(t *testing.T) {
+	// Sin SUGGEST_*: las sugerencias usan el mismo proveedor que el asistente.
+	e := valid()
+	e["AI_API_KEY"] = "gsk_groq"
+	cfg, err := load(e.lookup)
+	if err != nil || cfg.AI.Suggest != cfg.AI.Assistant() {
+		t.Fatalf("herencia: %+v %v", cfg.AI.Suggest, err)
+	}
+	// Con SUGGEST_*: OpenRouter para la parte A y Groq para la B.
+	e = valid()
+	e["AI_ENABLED"], e["ASSISTANT_ENABLED"] = "true", "true"
+	e["AI_API_KEY"] = "gsk_groq"
+	e["SUGGEST_BASE_URL"] = "https://openrouter.ai/api/v1/"
+	e["SUGGEST_MODEL"] = "google/gemma-4-31b-it:free"
+	e["SUGGEST_API_KEY"] = "sk-or-clave"
+	cfg, err = load(e.lookup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, a := cfg.AI.Suggest, cfg.AI.Assistant()
+	if s.Name != AIProviderOpenAI || s.BaseURL != "https://openrouter.ai/api/v1" || s.Model != "google/gemma-4-31b-it:free" || s.APIKey.Reveal() != "sk-or-clave" {
+		t.Errorf("sugerencias = %+v", s)
+	}
+	if a.BaseURL != DefaultOpenAIBaseURL || a.APIKey.Reveal() != "gsk_groq" {
+		t.Errorf("el asistente no cambia: %+v", a)
+	}
+	if strings.Contains(fmt.Sprintf("%+v", cfg.AI), "sk-or-clave") {
+		t.Error("la clave de las sugerencias se imprime")
+	}
+}
+
+func TestSuggestOnlyEnabledNeedsOnlyItsKey(t *testing.T) {
+	e := valid()
+	e["AI_ENABLED"] = "true"
+	e["SUGGEST_API_KEY"] = "sk-or-clave"
+	if _, err := load(e.lookup); err != nil {
+		t.Errorf("solo sugerencias con su clave, sin AI_API_KEY: %v", err)
+	}
+	e = valid()
+	e["ASSISTANT_ENABLED"] = "true"
+	e["SUGGEST_API_KEY"] = "sk-or-clave"
+	if _, err := load(e.lookup); err == nil || !strings.Contains(err.Error(), "AI_API_KEY") {
+		t.Errorf("el asistente necesita AI_API_KEY: %v", err)
+	}
+}
+
+func TestSuggestProviderRules(t *testing.T) {
+	for key, bad := range map[string]string{"SUGGEST_PROVIDER": "otro", "SUGGEST_BASE_URL": "ftp://x"} {
+		e := valid()
+		e[key] = bad
+		if _, err := load(e.lookup); err == nil || !strings.Contains(err.Error(), key) {
+			t.Errorf("%s=%s: %v", key, bad, err)
+		}
+	}
+	e := deployedEnv(EnvStaging)
+	e["SUGGEST_BASE_URL"] = "http://inseguro"
+	if _, err := load(e.lookup); err == nil || !strings.Contains(err.Error(), "SUGGEST_BASE_URL") {
+		t.Errorf("http en staging: %v", err)
+	}
+	e = deployedEnv(EnvStaging)
+	e["SUGGEST_PROVIDER"] = "ollama"
+	if _, err := load(e.lookup); err == nil || !strings.Contains(err.Error(), "SUGGEST_PROVIDER") {
+		t.Errorf("ollama en staging: %v", err)
+	}
+	// Ollama en local sin modelo propio ni heredado: el error nombra AI_MODEL.
+	e = valid()
+	e["AI_PROVIDER"] = "ollama"
+	e["AI_ENABLED"] = "true"
+	if _, err := load(e.lookup); err == nil || !strings.Contains(err.Error(), "AI_MODEL") {
+		t.Errorf("sin modelo: %v", err)
+	}
+}

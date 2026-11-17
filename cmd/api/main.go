@@ -646,7 +646,7 @@ func newSuggestModule(cfg config.Config, log *slog.Logger, authModule *authhttp.
 	imgs imgport.Service, usage *aimongo.UsageRepo, mod moderation.Checker) (*suggesthttp.Module, error) {
 	var gen suggestusecase.Describer
 	if cfg.AI.SuggestionsEnabled {
-		c, err := newAIProvider(cfg.AI)
+		c, err := newAIProvider(cfg.AI.Suggest)
 		if err != nil {
 			return nil, err
 		}
@@ -674,7 +674,7 @@ func newAssistantModule(cfg config.Config, log *slog.Logger, authModule *authhtt
 	convs *assistantmongo.ConversationRepo, mod moderation.Checker) (*assistanthttp.Module, error) {
 	var planner assistantusecase.Planner
 	if cfg.AI.AssistantEnabled {
-		c, err := newAIProvider(cfg.AI)
+		c, err := newAIProvider(cfg.AI.Assistant())
 		if err != nil {
 			return nil, err
 		}
@@ -706,12 +706,13 @@ type aiGenerator interface {
 	Generate(ctx context.Context, req aidomain.Request) ([]byte, error)
 }
 
-// newAIProvider elige el adaptador según AI_PROVIDER (spec 014, RF-03 y T016):
-// openai (Groq en staging) y ollama (local) usan el adaptador compatible con
-// OpenAI; gemini, el suyo. Cambiar de proveedor es cambiar variables.
-func newAIProvider(ai config.AI) (aiGenerator, error) {
-	if ai.Provider == config.AIProviderGemini {
-		return gemini.New(gemini.Config{BaseURL: ai.BaseURL, Model: ai.Model, APIKey: ai.APIKey.Reveal()})
+// newAIProvider crea el cliente de un proveedor (spec 014, RF-03, T016 y
+// T017): openai (Groq, OpenRouter u otro compatible) y ollama (local) usan el
+// adaptador compatible con OpenAI; gemini, el suyo. Cada parte tiene su
+// proveedor (AI_* para el asistente, SUGGEST_* para las sugerencias).
+func newAIProvider(p config.Provider) (aiGenerator, error) {
+	if p.Name == config.AIProviderGemini {
+		return gemini.New(gemini.Config{BaseURL: p.BaseURL, Model: p.Model, APIKey: p.APIKey.Reveal()})
 	}
-	return aiopenai.New(aiopenai.Config{BaseURL: ai.BaseURL, Model: ai.Model, APIKey: ai.APIKey.Reveal()})
+	return aiopenai.New(aiopenai.Config{BaseURL: p.BaseURL, Model: p.Model, APIKey: p.APIKey.Reveal()})
 }
