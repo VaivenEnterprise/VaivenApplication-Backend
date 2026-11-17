@@ -9,7 +9,7 @@ internal/ai/domain/{schema.go, schema_test.go}                     (validación 
 internal/ai/adapter/gemini/{client.go, client_test.go}             (HTTP a Gemini: visión y JSON con esquema)
 internal/ai/adapter/ollama/{client.go, client_test.go}             (solo desarrollo y demostración local)
 internal/ai/adapter/mongo/usage.go (+ test)                        (contador diario común, TTL)
-internal/suggest/{domain.go, usecase.go, usecase_test.go}          (parte A)
+internal/suggest/usecase/{suggest.go, suggest_test.go}             (parte A; capa usecase vigilada por la prueba de arquitectura)
 internal/suggest/adapter/http/{handler.go, dto.go, routes.go}
 internal/assistant/{domain.go, prompt.go, usecase.go, usecase_test.go}   (parte B: reglas, instrucciones fijas, armado de la respuesta)
 internal/assistant/adapter/mongo/conversations.go (+ test)         (ai_conversations, TTL 24 h)

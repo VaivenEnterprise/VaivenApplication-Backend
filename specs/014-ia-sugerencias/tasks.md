@@ -34,11 +34,12 @@
   - Refs: RF-05, RF-15 · P-04
   - Hecho (2026-11-16, BE-B): `internal/ai/adapter/mongo/usage.go` (`ai_usage`: `{userId, feature, day, count, createdAt, updatedAt}`). `Take` es atómico con un solo FindOneAndUpdate con upsert y filtro `count < limit`; la clave duplicada del índice único significa «sin cupo». Índices `user_feature_day_unique` y `created_ttl` (3 días) en el catálogo (36 índices) y creados al arrancar la API (`cmd/api/main.go`), para que `admin indexes` coincida aunque la IA esté apagada. Integración con MongoDB 7 real: 50 peticiones simultáneas con límite 20 → exactamente 20 pasan. Se actualizaron las pruebas de la 012 que fijaban 34 índices y el fixture (solo se agregaron las 2 entradas de `ai_usage`).
 
-- [ ] **T005** Caso de uso de sugerencias (A)
-  - Archivos: `internal/suggest/{domain.go, usecase.go, usecase_test.go}`
+- [x] **T005** Caso de uso de sugerencias (A)
+  - Archivos: `internal/suggest/usecase/{suggest.go, suggest_test.go}`
   - Agente: `dev-go` · Depende de: T003, T004, 004-T007, 011 (filtro)
   - Aceptación: declara el puerto `Describer` (Art. III.3); verifica que la imagen es `item_photo` de esa persona (CA-02); construye la URL; aplica el límite (CA-05) y el filtro (CA-03); apagado o caída → `service_unavailable` (CA-04); cobertura ≥ 80 % (Art. VII.1)
   - Refs: RF-02, RF-04, RF-05, RF-06
+  - Hecho (2026-11-16, BE-B): el caso de uso declara sus puertos `Describer`, `Images` y `Usage` (Art. III.3). Orden: apagado → validación del `publicId` → `OwnedBy` (foto ajena, evidencia, otra carpeta o una URL → 404 sin llamar al proveedor ni gastar cupo, CA-02) → `Resolve` (Cloudinary caído → 503) → cupo diario por día de **Ciudad de México** (CA-05; `ErrDailyLimit`, que la capa HTTP traduce a 429) → miniatura → Gemini con tiempo de espera de 10 s → validación de la salida → filtro de contenido (título rechazado → no hay sugerencia, CA-03; descripción rechazada → se quita). Caída, bloqueo o salida inválida → 503 con causa interna (CA-04). Cobertura 96,8 %; arquitectura y lint en verde.
 
 - [ ] **T006** Handler, rutas y registro (A)
   - Archivos: `internal/suggest/adapter/http/{handler.go, dto.go, routes.go}`, `cmd/api/modules.go` (una línea)
