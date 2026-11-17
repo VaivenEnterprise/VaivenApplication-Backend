@@ -62,3 +62,5 @@ Solo con aprobación de la persona responsable y anotándolo en `memoria.md`:
 
 | Fecha | Entorno | Archivo | Fuera de la VM | Restauración en staging | Quién |
 |---|---|---|---|---|---|
+| 2026-11-16 | production | `vaiven_production_20261117T021736Z` (antes del primer despliegue, base vacía) | sí | — | BE-B |
+| 2026-11-16 | production | respaldo con la cuenta de administrador | sí | ✅ desde Cloudinary: 12 colecciones, 0 diferencias | BE-B |
