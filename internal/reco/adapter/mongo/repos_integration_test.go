@@ -284,12 +284,12 @@ func TestIntegrationRecoRepositories(t *testing.T) {
 				t.Errorf("rasgos = %+v", f)
 			}
 		}
-		titles, err := src.Titles(ctx, []string{i1.Hex(), i2.Hex(), "no-es-id"})
-		if err != nil || len(titles) != 2 || titles[i2.Hex()] != "Escalera" {
-			t.Errorf("Titles = %v %v", titles, err)
+		briefs, err := src.Briefs(ctx, []string{i1.Hex(), i2.Hex(), "no-es-id"})
+		if err != nil || len(briefs) != 2 || briefs[i2.Hex()].Title != "Escalera" || briefs[i1.Hex()].Category != "herramientas_electricas" {
+			t.Errorf("Briefs = %v %v", briefs, err)
 		}
-		if empty, _ := src.Titles(ctx, []string{"demo"}); len(empty) != 0 {
-			t.Error("Titles con ids inválidos")
+		if empty, _ := src.Briefs(ctx, []string{"demo"}); len(empty) != 0 {
+			t.Error("Briefs con ids inválidos")
 		}
 		gone, err := src.Deactivated(ctx, []string{u1.Hex(), u2.Hex(), "demo-001"})
 		if err != nil || len(gone) != 1 || gone[0] != u2.Hex() {

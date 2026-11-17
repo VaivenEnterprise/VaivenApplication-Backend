@@ -1,6 +1,6 @@
 # Tareas 015 — Recomendaciones con ML (backend)
 
-- **Dueño:** BE-B · **Estado:** en curso (5/11) · `[P]` = paralelizable
+- **Dueño:** BE-B · **Estado:** en curso (6/11) · `[P]` = paralelizable
 - Ventana del ROADMAP: 23 nov–1 dic (v1.1, detrás de `RECO_ENABLED`). No empieza hasta que la 014 termine su despliegue verificado (Art. XIII.5) y la spec esté aprobada (Art. I).
 - Cada tarea termina con `make fmt lint test` (y `go test -tags=integration` del paquete si tiene integración) en verde.
 
@@ -39,11 +39,12 @@
   - Refs: RF-05, CA-03 · P-06
   - **Hecho (2026-11-17, BE-B):** `BuildByIDsPipeline` reutiliza `ownerStages` y `projectStage` de la búsqueda (sin copiar filtros); `Repo.CardsByIDs` devuelve en el orden pedido, sin repetidos, y omite ids inválidos o no visibles; `Service.CardsByIDs` valida ids, acota a 50 y agrega la miniatura con el mismo código que `Search` (extraído a `views`); `internal/reco/adapter/search.Cards` (100 %). Integración con MongoDB real: excluye pausados, propios, cuentas dadas de baja y suspendidas. Búsqueda y asistente siguen en verde; lint 0.
 
-- [ ] **T006** Casos de uso: eventos, recomendar, historial y recálculo
+- [x] **T006** Casos de uso: eventos, recomendar, historial y recálculo
   - Archivos: `internal/reco/usecase/{ports.go, events.go, recommend.go, history.go, recompute.go, eval.go}` y pruebas
   - Agente: `dev-go` · Depende de: T003, T004, T005
   - Aceptación: CA-01 a CA-03, CA-05 y CA-08 con dobles; arranque en frío; exclusiones (propios, reservas activas); diversidad (≤ 3 por categoría); `reason`; el recálculo perezoso nunca bloquea y solo uno toma el candado; purga de eventos de cuentas dadas de baja; cobertura ≥ 80 %
   - Refs: RF-01, RF-04–RF-07, RF-09 · P-04, P-09
+  - **Hecho (2026-11-17, BE-B):** `internal/reco/usecase` (99,6 %): puertos declarados aquí (Art. III.3); `RecordView` y `DeleteHistory` en `service.go` (en lugar de `events.go` e `history.go`, por ser cortos); `Recommend` (historial de vistas y de solicitudes posteriores al borrado, híbrido con ≥ 2 objetos, arranque en frío por municipio, categorías vistas y generales, exclusión de historial y reservas activas, tarjetas desde la búsqueda, ≤ 3 por categoría, motivo con título; sin modelo todavía calcula populares al momento); `Recompute` (candado, ventana de 90 días, borrados de historial, purga de cuentas dadas de baja, `Build` puro, publicación solo si el candado sigue siendo suyo); recálculo perezoso con `Deps.Go`, que nunca bloquea la petición; `Evaluate` de los cuatro modelos. CA-01, CA-02, CA-03, CA-05 y CA-08 con dobles en memoria. Ajuste en T003: `Titles` pasó a `Briefs` (título y categoría).
 
 - [ ] **T007** Handlers, rutas, `/meta` y registro
   - Archivos: `internal/reco/adapter/http/{handler.go, dto.go, routes.go}` y pruebas, `internal/adapter/http/handler/meta.go` (`features.recommendations`), `cmd/api/modules.go` (una línea), cableado en `cmd/api/main.go`
