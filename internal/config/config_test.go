@@ -61,8 +61,12 @@ func TestLoadDefaults(t *testing.T) {
 			RateLimitPerMin:         10,
 			LoginAttemptsPerAccount: 20,
 		},
-		Images:      Images{MaxBytes: 5 * 1024 * 1024, SignaturesPerHour: 30},
-		Push:        Push{Enabled: false, URL: DefaultExpoPushURL},
+		Images: Images{MaxBytes: 5 * 1024 * 1024, SignaturesPerHour: 30},
+		Push:   Push{Enabled: false, URL: DefaultExpoPushURL},
+		AI: AI{
+			Provider: AIProviderGemini, BaseURL: DefaultGeminiBaseURL, Model: DefaultGeminiModel,
+			DailyLimit: 20, AssistantDailyLimit: 30, AssistantRadiusKm: 10,
+		},
 		DocsEnabled: true,
 	}
 	if !reflect.DeepEqual(cfg, want) {

@@ -13,11 +13,12 @@
   - Refs: RF-01, RF-06, RF-08, RF-09, RF-13, RF-16
   - Hecho (2026-11-16, BE-B): `api/paths/ai.yaml` con `listing-suggestions`, `assistant/messages` y `assistant/conversations/{id}` (DELETE); esquemas en `api/openapi.yaml` (`ItemCard` reutilizada para las coincidencias); `Meta.features` opcional (compatible, Art. IV.6); etiqueta `ia`; contrato empaquetado para `/docs`. Redocly válido (solo los 2 avisos que ya existían). **Avisar a MO-A** para que lo consuma.
 
-- [ ] **T002** [P] Validación de salida y configuración
-  - Archivos: `internal/ai/{schema.go, schema_test.go}`, `internal/config/…` (variables `AI_*` y `ASSISTANT_*`), `.env.example`
+- [x] **T002** [P] Validación de salida y configuración
+  - Archivos: `internal/ai/domain/{schema.go, schema_test.go}`, `internal/config/…` (variables `AI_*` y `ASSISTANT_*`), `.env.example`
   - Agente: `dev-go` · Depende de: T001
   - Aceptación: validación de esquemas de A y B, sin infraestructura (Art. III) (categoría POL-14, longitudes, conteos, campos extra fuera); valores por defecto seguros (`AI_ENABLED=false`, `ASSISTANT_ENABLED=false`); sin secretos
   - Refs: RF-03, RF-04, RF-10, RF-17 · P-01, P-03
+  - Hecho (2026-11-16, BE-B): `internal/ai/domain` (ParseSuggestion/ValidateSuggestion, ParsePlan/ValidatePlan: categorías de POL-14 desde `internal/policy`, recortes por runas, máximo 8 necesidades, 10 pasos y 3 avisos, campos fuera del esquema descartados, listas vacías como `[]`, negativa válida, ErrNothingValid y ErrMalformed); `internal/config/ai.go` (AI_* y ASSISTANT_*, apagadas por defecto, clave como `Secret`, Ollama solo en development, HTTPS en staging y production). Cobertura del 100 % en los dos paquetes; prueba de arquitectura y lint en verde. La ruta pasó a `internal/ai/domain` para que la prueba de arquitectura la vigile (Art. III).
 
 - [ ] **T003** [P] Adaptador Gemini (y Ollama opcional, P2)
   - Archivos: `internal/ai/adapter/gemini/{client.go, client_test.go}`, `internal/ai/adapter/ollama/{client.go, client_test.go}`

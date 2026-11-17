@@ -5,7 +5,7 @@
 ## 1. Archivos
 ```
 api/paths/ai.yaml                                                  (A y B)
-internal/ai/{schema.go, schema_test.go}                            (validación de la salida del modelo; sin infraestructura)
+internal/ai/domain/{schema.go, schema_test.go}                     (validación de la salida del modelo; capa domain, sin infraestructura)
 internal/ai/adapter/gemini/{client.go, client_test.go}             (HTTP a Gemini: visión y JSON con esquema)
 internal/ai/adapter/ollama/{client.go, client_test.go}             (solo desarrollo y demostración local)
 internal/ai/adapter/mongo/usage.go (+ test)                        (contador diario común, TTL)
