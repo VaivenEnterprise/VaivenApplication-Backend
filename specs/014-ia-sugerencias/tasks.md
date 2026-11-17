@@ -41,11 +41,12 @@
   - Refs: RF-02, RF-04, RF-05, RF-06
   - Hecho (2026-11-16, BE-B): el caso de uso declara sus puertos `Describer`, `Images` y `Usage` (Art. III.3). Orden: apagado → validación del `publicId` → `OwnedBy` (foto ajena, evidencia, otra carpeta o una URL → 404 sin llamar al proveedor ni gastar cupo, CA-02) → `Resolve` (Cloudinary caído → 503) → cupo diario por día de **Ciudad de México** (CA-05; `ErrDailyLimit`, que la capa HTTP traduce a 429) → miniatura → Gemini con tiempo de espera de 10 s → validación de la salida → filtro de contenido (título rechazado → no hay sugerencia, CA-03; descripción rechazada → se quita). Caída, bloqueo o salida inválida → 503 con causa interna (CA-04). Cobertura 96,8 %; arquitectura y lint en verde.
 
-- [ ] **T006** Handler, rutas y registro (A)
-  - Archivos: `internal/suggest/adapter/http/{handler.go, dto.go, routes.go}`, `cmd/api/modules.go` (una línea)
+- [x] **T006** Handler, rutas y registro (A)
+  - Archivos: `internal/suggest/adapter/http/handler.go` (DTO y rutas en el mismo archivo, como el módulo de imágenes), `cmd/api/modules.go` (una línea), `cmd/api/main.go` (composición), `internal/adapter/http/handler/meta.go` (`features`)
   - Agente: `dev-go` · Depende de: T001, T005
   - Aceptación: cumple el contrato; autenticada; límite de tasa por ruta; registros sin imagen ni texto sugerido (RF-07)
   - Refs: RF-01, RF-07
+  - Hecho (2026-11-16, BE-B): `POST /api/v1/ai/listing-suggestions` con sesión, `validator/v10`, campos desconocidos rechazados (`additionalProperties: false`) y 10 peticiones por minuto por persona (Redis con respaldo local). `ErrDailyLimit` → 429 `rate_limited` con `Retry-After` hasta la medianoche de Ciudad de México; los errores de dominio usan el envoltorio del Art. IV. Los registros no llevan la foto, el publicId ni la sugerencia; solo la causa interna cuando el proveedor cae. `GET /meta` expone `features.aiSuggestions` y `features.projectAssistant`. Una línea en `modules.go`. Con `AI_ENABLED=false` no se crea el cliente de Gemini. Handler al 95 %; todas las pruebas unitarias del repositorio y el lint en verde.
 
 - [ ] **T007** Prueba de integración (A)
   - Archivos: `internal/suggest/integration_test.go`

@@ -20,6 +20,7 @@ import (
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/handler"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/middleware"
 	adaptermongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/mongo"
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ai/adapter/gemini"
 	aimongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ai/adapter/mongo"
 	authhttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/adapter/http"
 	authmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/adapter/mongo"
@@ -73,6 +74,8 @@ import (
 	searchhttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/search/adapter/http"
 	searchmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/search/adapter/mongo"
 	searchusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/search/usecase"
+	suggesthttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/suggest/adapter/http"
+	suggestusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/suggest/usecase"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/usecase/ratelimit"
 )
 
@@ -354,6 +357,11 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	// IA: sugerencias al publicar (spec 014, parte A); apagada por defecto.
+	suggestModule, err := newSuggestModule(cfg, log, authModule, limiter, imagesSvc, aiUsageRepo, mod)
+	if err != nil {
+		return err
+	}
 	// Envío de push en segundo plano (spec 011, plan P-01); termina con ctx.
 	pushDone := make(chan struct{})
 	go func() {
@@ -392,6 +400,7 @@ func run() error {
 		Sanctions:     sanctionsModule,
 		Notifications: notificationsModule,
 		Reports:       reportsModule,
+		Suggest:       suggestModule,
 		Users:         userRepo,
 	})
 	for _, m := range mods {
@@ -414,6 +423,10 @@ func run() error {
 				Name:        serviceName,
 				Version:     resolveVersion(version, cfg.AppVersion),
 				Environment: cfg.AppEnv,
+				Features: handler.MetaFeatures{
+					AISuggestions:    cfg.AI.SuggestionsEnabled,
+					ProjectAssistant: cfg.AI.AssistantEnabled,
+				},
 			},
 		}),
 		ReadTimeout:       cfg.HTTPReadTimeout,
@@ -605,4 +618,34 @@ func newNotifier(cfg config.Config, log *slog.Logger, notifications *notificatio
 	}
 	log.Info("avisos", "push_habilitado", cfg.Push.Enabled)
 	return svc, w, nil
+}
+
+// newSuggestModule arma la parte A de la spec 014. Con AI_ENABLED=false no se
+// crea el cliente del proveedor y la ruta responde service_unavailable
+// (RF-06). Ollama es opcional (P2) y todavía no tiene adaptador.
+func newSuggestModule(cfg config.Config, log *slog.Logger, authModule *authhttp.Module, limiter ratelimit.Limiter,
+	imgs imgport.Service, usage *aimongo.UsageRepo, mod moderation.Checker) (*suggesthttp.Module, error) {
+	var gen suggestusecase.Describer
+	if cfg.AI.SuggestionsEnabled {
+		if cfg.AI.Provider != config.AIProviderGemini {
+			return nil, fmt.Errorf("AI_PROVIDER=%s todavía no tiene adaptador; usa gemini", cfg.AI.Provider)
+		}
+		c, err := gemini.New(gemini.Config{BaseURL: cfg.AI.BaseURL, Model: cfg.AI.Model, APIKey: cfg.AI.APIKey.Reveal()})
+		if err != nil {
+			return nil, err
+		}
+		gen = c
+	}
+	loc, err := time.LoadLocation("America/Mexico_City")
+	if err != nil {
+		return nil, fmt.Errorf("zona horaria: %w", err)
+	}
+	svc := suggestusecase.New(suggestusecase.Config{
+		Enabled: cfg.AI.SuggestionsEnabled, DailyLimit: cfg.AI.DailyLimit,
+		BaseFolder: cfg.Cloudinary.BaseFolder, Location: loc,
+	}, suggestusecase.Deps{AI: gen, Images: imgs, Usage: usage, Moderation: mod})
+	return suggesthttp.NewModule(suggesthttp.ModuleDeps{
+		Service: svc, Authenticate: authModule.Authenticate(), Log: log,
+		Limiter: limiter, LimiterFallback: redis.NewMemoryLimiter(), Location: loc,
+	})
 }
