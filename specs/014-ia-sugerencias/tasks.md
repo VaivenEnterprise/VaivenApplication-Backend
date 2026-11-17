@@ -92,11 +92,12 @@
   - Refs: RF-09, RF-13, RF-15, RF-18
   - Hecho (2026-11-16, BE-B): `POST /api/v1/ai/assistant/messages` y `DELETE /api/v1/ai/assistant/conversations/{id}` con sesión y 10 por minuto por persona; `validator/v10` (mensaje de 2 a 500 runas, `conversationId` de 24 hexadecimales, `lat`/`lng` en rango) y campos desconocidos rechazados; detalles de validación por campo; las coincidencias salen con la misma `ItemCard` de la búsqueda (`searchhttp.ToCard`); listas vacías como `[]`; límite diario → 429 con `Retry-After` hasta la medianoche de México. Los registros no llevan mensaje, respuesta ni ubicación. La caché usa Redis solo si está configurado (sin Redis, `nil`: nada en la memoria del proceso, Art. XIV.1). Con `ASSISTANT_ENABLED=false` no se crea el cliente de Gemini. Handler al 97 %; todas las pruebas y el lint en verde (también con `integration`).
 
-- [ ] **T013** Prueba de integración (B)
+- [x] **T013** Prueba de integración (B)
   - Archivos: `internal/assistant/integration_test.go`
   - Agente: `qa-go` · Depende de: T012
   - Aceptación: CA-07 a CA-14 con proveedor falso, objetos reales en MongoDB y Redis real; inyección de instrucciones; sin red; limpia sus datos
   - Refs: RNF-01
+  - Hecho (2026-11-16, BE-B): `internal/assistant/integration_test.go` recorre el endpoint real (JWT real, búsqueda real de la 006 sobre cuentas y objetos sembrados en MongoDB 7, conversaciones y contador reales, caché en Redis 7 con Testcontainers y proveedor falso, sin red). CA-07 (solo objetos activos de otras personas con cuenta activa, dentro del radio y por distancia: quedan fuera el propio, el pausado, el de cuenta suspendida y el de CDMX; tarjetas con ubicación aproximada y distancia), CA-08 (`[]` y nota en el resumen), CA-09, CA-10, CA-11 (la ubicación no llega al proveedor ni a la conversación), CA-12 (503 y nada guardado), CA-13 (historial al proveedor, 404 para otra persona, DELETE 204 y luego 404) y CA-14 (el mismo primer mensaje de otra persona sale de Redis, y sus coincidencias se recalculan: no ve sus objetos). Cada caso usa su propia base y la borra. Además se corrigió `catalog_integration_test.go` (spec 012): su siembra genérica no traía `feature` ni `day` y chocaba con el índice único de `ai_usage` desde T004.
 
 ## Cierre
 

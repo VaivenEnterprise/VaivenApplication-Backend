@@ -59,6 +59,9 @@ func seedDoc(i int) bson.D {
 		{Key: "tokenHash", Value: fmt.Sprintf("h%d", i)},
 		{Key: "token", Value: fmt.Sprintf("tok%d", i)},
 		{Key: "email", Value: fmt.Sprintf("e%d@example.com", i)},
+		// ai_usage (spec 014): su índice único es {userId, feature, day}.
+		{Key: "feature", Value: []string{"suggest", "assistant"}[i%2]},
+		{Key: "day", Value: fmt.Sprintf("2026-11-%02d", 1+i%28)},
 		{Key: "readAt", Value: readAt},
 	}
 }
