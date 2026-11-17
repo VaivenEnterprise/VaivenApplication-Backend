@@ -5,11 +5,11 @@ import (
 	shared "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/domain"
 )
 
-// ConversationTTLSeconds: una conversación se borra 24 h después de su último
+// ConversationTTLSeconds es la vida de una conversación: se borra 24 h después de su último
 // mensaje (spec 014, RF-13).
 const ConversationTTLSeconds = 24 * 60 * 60
 
-// ErrConversationNotFound: la conversación no existe, caducó o es de otra
+// ErrConversationNotFound indica que la conversación no existe, caducó o es de otra
 // persona (CA-13). No se distingue el caso para no revelar nada.
 var ErrConversationNotFound = shared.NewNotFound("No encontramos esa conversación. Empieza una nueva.")
 
