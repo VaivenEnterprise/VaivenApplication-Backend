@@ -1,7 +1,7 @@
 # Spec 014 — IA generativa: sugerencias al publicar y asistente de proyectos (backend)
 
 - **Dueño:** BE-A (con BE-B en revisión) · **Prioridad:** P1 · **Ventana:** 23 nov–1 dic · **Depende de:** 004, 005, 006 (búsqueda), 007 (solicitar), 011 (filtro), 013
-- **Constitución:** v2.0.0 · **Estado:** Aprobada por BE-B (2026-11-16), con la parte B (asistente de proyectos) agregada ese día; revisada contra la constitución completa el 2026-11-16. **BE-A (dueño, Art. XII.1) debe confirmar en el PR quién implementa.**
+- **Constitución:** v2.0.0 · **Estado:** Aprobada por BE-B (2026-11-16), con la parte B (asistente de proyectos) agregada ese día; revisada contra la constitución completa el 2026-11-16. **Implementada, desplegada y verificada en staging (T015, 2026-11-17).**
 
 ## 1. Objetivo y por qué
 La entrega oficial (1–4 dic) exige IA generativa. La spec tiene dos partes que comparten el mismo proveedor y las mismas reglas de seguridad:
