@@ -258,3 +258,26 @@ El script valida la clave y hace una generación mínima con el modelo real **an
 - El aviso de privacidad (landing) y «Seguridad de datos» de Play deben nombrar a los proveedores (Groq para el asistente y OpenRouter para las sugerencias por foto) y lo que hacen con los datos según sus términos vigentes; los modelos gratuitos de OpenRouter pueden registrar lo enviado según el proveedor del modelo (mobile 014-T006). La app pide no escribir datos personales en el chat.
 
 **Producción.** Según el ROADMAP, la IA sale como v1.1: se enciende en producción solo cuando el equipo lo decida y la versión de la app con IA esté publicada.
+
+## 12. Recomendaciones con ML (spec 015)
+
+«Recomendado para ti», **apagado por defecto** (`RECO_ENABLED=false`). `GET /api/v1/meta` dice si está encendido (`features.recommendations`). No usa servicios externos ni claves: el modelo es propio (Go y MongoDB) y se describe en `docs/ml/modelo.md`.
+
+**Encender en staging.** Poner `RECO_ENABLED=true` en el `.env` del entorno y recrear la API (en staging, con el siguiente despliegue). Luego, desde Cloud Shell (Bash):
+
+```bash
+C=<commit desplegado>
+bash cloudshell-run.sh "$C" scripts/vm-admin.sh staging seed-interactions        # datos de demostración (nunca en production)
+bash cloudshell-run.sh "$C" scripts/vm-admin.sh staging recompute-recommendations
+```
+
+`seed-interactions` necesita objetos activos: si staging tiene pocos, correr antes `seed`. `seed-interactions --purge` borra los datos de demostración (personas `demo-NNN`, marcadas con `demo: true`).
+
+**Operación.**
+- El modelo se recalcula solo cuando tiene más de 6 h, en segundo plano y con candado en MongoDB. `recompute-recommendations` lo fuerza.
+- Los eventos duran 90 días (TTL) y cada persona puede borrar su historial.
+- Los registros solo llevan conteos, nunca personas ni objetos.
+
+**Apagado de emergencia.** `RECO_ENABLED=false` y recrear la API: las rutas responden 503 y la app oculta la sección.
+
+**Producción.** Igual que la IA (spec 014): sale como v1.1 cuando el equipo lo decida y la versión de la app con la pantalla esté publicada. En producción nunca se corren `seed-interactions` ni `eval-recommendations --source db` (los dos se niegan).

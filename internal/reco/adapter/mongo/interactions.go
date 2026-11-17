@@ -5,9 +5,9 @@
 // Colecciones propias:
 //
 //	reco_interactions { userId, itemId, type, weight, bucket, demo, createdAt, updatedAt }
-//	reco_model        { _id: "<buildId>:<itemId>", buildId, itemId, neighbors[≤20], createdAt, updatedAt }
-//	reco_popular      { _id: "<buildId>:<clave>", buildId, key, items[≤50], createdAt, updatedAt }
-//	reco_meta         { _id: "model", buildId, builtAt, lockedUntil, lockOwner, ... } y { _id: "reset:<userId>", resetAt, ... }
+//	reco_neighbors        { _id: "<buildId>:<itemId>", buildId, itemId, neighbors[≤20], createdAt, updatedAt }
+//	reco_popular_lists      { _id: "<buildId>:<clave>", buildId, key, items[≤50], createdAt, updatedAt }
+//	reco_states         { _id: "model", buildId, builtAt, lockedUntil, lockOwner, ... } y { _id: "reset:<userId>", resetAt, ... }
 //
 // Los errores nunca incluyen identificadores de objetos ni eventos (RF-09):
 // solo nombran la operación.

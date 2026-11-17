@@ -84,7 +84,7 @@ func printEval(w io.Writer, source string, events int, r recousecase.EvalReport)
 	for _, row := range []struct {
 		name string
 		m    model.Metrics
-	}{{"Híbrido (α = 0.7)", r.Hybrid}, {"Colaborativo", r.CF}, {"Contenido", r.Content}, {"Popularidad (línea base)", r.Popularity}} {
+	}{{fmt.Sprintf("Híbrido (α = %.1f)", domain.Alpha), r.Hybrid}, {"Colaborativo", r.CF}, {"Contenido", r.Content}, {"Popularidad (línea base)", r.Popularity}} {
 		_, _ = fmt.Fprintf(w, "| %s | %.3f | %.3f | %.3f |\n", row.name, row.m.HitAt, row.m.Recall, row.m.MRR)
 	}
 }

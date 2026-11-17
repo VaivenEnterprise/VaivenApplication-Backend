@@ -25,9 +25,9 @@ docs/ml/{modelo.md, evaluacion.md} · docs/produccion.md (§12 RECO_ENABLED) · 
 | Colección | Documento | Índices |
 |---|---|---|
 | `reco_interactions` | `{ userId, itemId, type: "view", weight, bucket, demo, createdAt, updatedAt }` (`bucket` = inicio del bloque de 10 min) | único `{userId, itemId, type, bucket}` (límite de vistas: el duplicado se ignora); `{userId, createdAt: -1}` (historial y borrado); TTL en `createdAt` (90 d) |
-| `reco_model` | `{ _id: "<buildId>:<itemId>", buildId, itemId, neighbors: [{itemId, cf, content}] (≤ 20), createdAt, updatedAt }` | solo `_id` (toda lectura es por `_id`) |
-| `reco_popular` | `{ _id: "<buildId>:<clave>", buildId, key: "all" \| "m:<municipio>" \| "c:<categoría>", items: [itemId] (≤ 50), createdAt, updatedAt }` | solo `_id` |
-| `reco_meta` | `{ _id: "model", buildId, builtAt, lockedUntil, lockOwner, createdAt, updatedAt }` y `{ _id: "reset:<userId>", resetAt, createdAt, updatedAt }` | solo `_id` |
+| `reco_neighbors` | `{ _id: "<buildId>:<itemId>", buildId, itemId, neighbors: [{itemId, cf, content}] (≤ 20), createdAt, updatedAt }` | solo `_id` (toda lectura es por `_id`) |
+| `reco_popular_lists` | `{ _id: "<buildId>:<clave>", buildId, key: "all" \| "m:<municipio>" \| "c:<categoría>", items: [itemId] (≤ 50), createdAt, updatedAt }` | solo `_id` |
+| `reco_states` | `{ _id: "model", buildId, builtAt, lockedUntil, lockOwner, createdAt, updatedAt }` y `{ _id: "reset:<userId>", resetAt, createdAt, updatedAt }` | solo `_id` |
 
 - Las solicitudes se leen de `bookings` en **solo lectura** (`requesterId`, `itemId`, `createdAt`, `status`). La exclusión de reservas activas usa el índice existente `requester_status_createdAt`. El recálculo recorre `bookings` de los últimos 90 días una vez cada 6 h como máximo: no es una consulta frecuente (§6.5) y no se agrega un índice a una colección de BE-A.
 - Los objetos (categoría, modalidad, tarifa, municipio, estado, dueño) se leen de `items` en solo lectura para el modelo de contenido y para validar el evento.
@@ -38,13 +38,13 @@ docs/ml/{modelo.md, evaluacion.md} · docs/produccion.md (§12 RECO_ENABLED) · 
 |---|---|---|
 | P-01 | La matemática vive en `internal/reco/domain/model`: funciones puras y deterministas (sin MongoDB, sin hora actual, desempates por `itemId`) para pruebas exactas; al estar bajo `domain/`, la prueba de arquitectura la cubre | III, VII |
 | P-02 | Similitud coseno sobre vectores dispersos con `map[string]float64`; sin bibliotecas | VIII.1 |
-| P-03 | Arreglos acotados (20 vecinos, 50 populares) dentro del documento; el modelo se escribe con `buildId` nuevo **dentro del `_id`** (así el nuevo convive con el anterior), `reco_meta` lo vuelve vigente en una sola escritura y después se borran los documentos de otro `buildId`: nunca se lee un modelo a medias (ajuste de T003) | §6.2 |
-| P-04 | Recálculo perezoso que **no bloquea**: la petición que encuentra el modelo vencido intenta tomar el candado (`FindOneAndUpdate` en `reco_meta` con `lockedUntil < ahora`) y, si lo logra, lanza el recálculo en una gorrutina con contexto propio de 60 s; el candado vence a los 2 min por si el proceso muere. No hay trabajos programados ni estado compartido en memoria | XIV.1, XIV.2 |
+| P-03 | Arreglos acotados (20 vecinos, 50 populares) dentro del documento; el modelo se escribe con `buildId` nuevo **dentro del `_id`** (así el nuevo convive con el anterior), `reco_states` lo vuelve vigente en una sola escritura y después se borran los documentos de otro `buildId`: nunca se lee un modelo a medias (ajuste de T003) | §6.2 |
+| P-04 | Recálculo perezoso que **no bloquea**: la petición que encuentra el modelo vencido intenta tomar el candado (`FindOneAndUpdate` en `reco_states` con `lockedUntil < ahora`) y, si lo logra, lanza el recálculo en una gorrutina con contexto propio de 60 s; el candado vence a los 2 min por si el proceso muere. No hay trabajos programados ni estado compartido en memoria | XIV.1, XIV.2 |
 | P-05 | Lectura de `bookings` mediante el puerto `RequestSource`, implementado en `reco/adapter/mongo`; solo lectura y solo los campos citados; **excepción documentada que confirma BE-A** (dueño de la 007), igual que la búsqueda (006) ya lee `bookings` | XII.1 |
 | P-06 | Las tarjetas y los filtros de visibilidad salen de la búsqueda (spec 006): se agrega `CardsByIDs` con los mismos filtros que `Search` (objeto activo, dueño activo y no suspendido) y la respuesta usa `searchhttp.ToCard`. No se copia código | XII.6, VI.4 |
 | P-07 | El modelo se evalúa con *leave-last-out* y se compara siempre contra popularidad; por defecto sobre datos sintéticos en memoria con semilla fija, para que la evaluación sea reproducible y corra en las pruebas | VII |
 | P-08 | Los datos sintéticos tienen patrones (grupos por categoría y municipio) para que la evaluación sea significativa, y se declaran como sintéticos en el informe; las personas sintéticas son identificadores `demo-NNN`, no cuentas | VI |
-| P-09 | El historial borrado: se eliminan los eventos y se guarda `reset:<userId>` en `reco_meta`; las solicitudes anteriores a esa fecha no cuentan | VI, XII.1 |
+| P-09 | El historial borrado: se eliminan los eventos y se guarda `reset:<userId>` en `reco_states`; las solicitudes anteriores a esa fecha no cuentan | VI, XII.1 |
 | P-10 | Límite de tasa de `POST events` con el `ratelimit.Limiter` (Redis) y su respaldo local, igual que la 014; sin caché de recomendaciones (no hace falta para el p95 y evita invalidaciones; Art. VIII.2) | XIV.2, VIII.2 |
 | P-11 | Memoria del recálculo acotada: se leen como máximo 200 000 interacciones (las más recientes) y se mide con un *benchmark* (5 000 objetos y 50 000 interacciones: < 5 s y < 100 MB) | XIV.5 |
 | P-12 | `RECO_ENABLED=false` por defecto; los índices se crean siempre | — |

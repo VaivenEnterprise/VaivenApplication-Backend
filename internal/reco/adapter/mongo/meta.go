@@ -16,7 +16,7 @@ import (
 
 // MetaCollection guarda el modelo vigente, el candado del recálculo y las
 // fechas de borrado de historial (plan P-04 y P-09). Toda lectura es por _id.
-const MetaCollection = "reco_meta"
+const MetaCollection = "reco_states"
 
 const (
 	modelMetaID = "model"
@@ -70,7 +70,7 @@ func (r *MetaRepo) TryLock(ctx context.Context, owner string, now time.Time) (bo
 	case drv.IsDuplicateKeyError(err):
 		return false, nil
 	default:
-		return false, fmt.Errorf("reco_meta: tomar candado: %w", err)
+		return false, fmt.Errorf("reco_states: tomar candado: %w", err)
 	}
 }
 
@@ -86,7 +86,7 @@ func (r *MetaRepo) Publish(ctx context.Context, owner, buildID string, builtAt t
 			{Key: "lockedUntil", Value: time.Time{}}, {Key: "lockOwner", Value: ""}, {Key: "updatedAt", Value: builtAt},
 		}}})
 	if err != nil {
-		return false, fmt.Errorf("reco_meta: publicar modelo: %w", err)
+		return false, fmt.Errorf("reco_states: publicar modelo: %w", err)
 	}
 	return res.MatchedCount == 1, nil
 }
@@ -97,7 +97,7 @@ func (r *MetaRepo) Unlock(ctx context.Context, owner string) error {
 		bson.D{{Key: "_id", Value: modelMetaID}, {Key: "lockOwner", Value: owner}},
 		bson.D{{Key: "$set", Value: bson.D{{Key: "lockedUntil", Value: time.Time{}}, {Key: "lockOwner", Value: ""}}}})
 	if err != nil {
-		return fmt.Errorf("reco_meta: soltar candado: %w", err)
+		return fmt.Errorf("reco_states: soltar candado: %w", err)
 	}
 	return nil
 }
@@ -110,7 +110,7 @@ func (r *MetaRepo) Current(ctx context.Context) (buildID string, builtAt time.Ti
 	case errors.Is(err, drv.ErrNoDocuments):
 		return "", time.Time{}, false, nil
 	case err != nil:
-		return "", time.Time{}, false, fmt.Errorf("reco_meta: leer modelo vigente: %w", err)
+		return "", time.Time{}, false, fmt.Errorf("reco_states: leer modelo vigente: %w", err)
 	case d.BuildID == "" || d.BuiltAt == nil:
 		return "", time.Time{}, false, nil
 	}
@@ -127,7 +127,7 @@ func (r *MetaRepo) SetReset(ctx context.Context, userID string, at time.Time) er
 			{Key: "$setOnInsert", Value: bson.D{{Key: "createdAt", Value: at}}},
 		}, options.UpdateOne().SetUpsert(true))
 	if err != nil {
-		return fmt.Errorf("reco_meta: guardar borrado de historial: %w", err)
+		return fmt.Errorf("reco_states: guardar borrado de historial: %w", err)
 	}
 	return nil
 }
@@ -137,11 +137,11 @@ func (r *MetaRepo) SetReset(ctx context.Context, userID string, at time.Time) er
 func (r *MetaRepo) Resets(ctx context.Context) (map[string]time.Time, error) {
 	cur, err := r.col.Find(ctx, bson.D{{Key: "_id", Value: bson.D{{Key: "$regex", Value: "^" + resetPrefix}}}})
 	if err != nil {
-		return nil, fmt.Errorf("reco_meta: leer borrados de historial: %w", err)
+		return nil, fmt.Errorf("reco_states: leer borrados de historial: %w", err)
 	}
 	var docs []resetDoc
 	if err := cur.All(ctx, &docs); err != nil {
-		return nil, fmt.Errorf("reco_meta: leer borrados de historial: %w", err)
+		return nil, fmt.Errorf("reco_states: leer borrados de historial: %w", err)
 	}
 	out := make(map[string]time.Time, len(docs))
 	for _, d := range docs {
@@ -158,7 +158,7 @@ func (r *MetaRepo) ResetAt(ctx context.Context, userID string) (time.Time, bool,
 	case errors.Is(err, drv.ErrNoDocuments):
 		return time.Time{}, false, nil
 	case err != nil:
-		return time.Time{}, false, fmt.Errorf("reco_meta: leer borrado de historial: %w", err)
+		return time.Time{}, false, fmt.Errorf("reco_states: leer borrado de historial: %w", err)
 	}
 	return d.ResetAt.UTC(), true, nil
 }

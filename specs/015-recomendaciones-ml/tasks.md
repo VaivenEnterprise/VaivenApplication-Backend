@@ -1,6 +1,6 @@
 # Tareas 015 — Recomendaciones con ML (backend)
 
-- **Dueño:** BE-B · **Estado:** en curso (9/11) · `[P]` = paralelizable
+- **Dueño:** BE-B · **Estado:** en curso (10/11) · `[P]` = paralelizable
 - Ventana del ROADMAP: 23 nov–1 dic (v1.1, detrás de `RECO_ENABLED`). No empieza hasta que la 014 termine su despliegue verificado (Art. XIII.5) y la spec esté aprobada (Art. I).
 - Cada tarea termina con `make fmt lint test` (y `go test -tags=integration` del paquete si tiene integración) en verde.
 
@@ -67,11 +67,12 @@
   - Refs: CA-01–CA-09, RNF-03
   - **Hecho (2026-11-17, BE-B):** `internal/reco/integration_test.go` con rutas reales, JWT, MongoDB 7 y Redis 7 (límite de tasa real), búsqueda de la 006 para las tarjetas; cada prueba con su base, que se borra. CA-01 (lo primero es una herramienta vista por personas parecidas, motivo con título, 3 por categoría), CA-02 (Pachuca primero; sin modelo responde al momento y el recálculo perezoso publica después), CA-03 (nunca propios, pausados, de cuentas suspendidas o dadas de baja, del historial ni en reserva pendiente), CA-04, CA-05, CA-06 (`/meta` y 503), CA-07 (registros sin objetos ni personas; `git grep` de claves y correos, comprobado con uno sembrado), CA-08 (candado ajeno: nadie publica y ninguna petición espera), CA-09 (vista repetida guardada una vez; la 61.ª da 429 en Redis) y RNF-01 (p95 local ≈ 6 ms). Lint 0; `go test -tags=integration ./...` en verde.
 
-- [ ] **T010** Evaluación, documentación académica, memoria y revisión
+- [x] **T010** Evaluación, documentación académica, memoria y revisión
   - Archivos: `docs/ml/evaluacion.md`, `docs/ml/modelo.md`, `docs/produccion.md` (§12 `RECO_ENABLED` y datos de demostración), `memoria.md` (solo anexar)
   - Agente: `spec-writer` y `revisor-constitucion` · Depende de: T008, T009
   - Aceptación: resultados reales de la evaluación (CA-04) con α y pesos finales justificados, fórmulas, supuestos, límites y declaración de que los datos son sintéticos; si el híbrido no supera a popularidad, se explica y se ajustan α y pesos; veredicto **CONFORME**; BE-A confirma la lectura de `bookings`
   - Refs: RF-07, RF-11, DoD
+  - **Hecho (2026-11-17, BE-B):** `docs/ml/evaluacion.md` (resultados reales; híbrido Hit@10 0,263 frente a 0,087 de popularidad; barrido de α con el pipeline real), `docs/ml/modelo.md` (datos, fórmulas, supuestos, límites y por qué no una red neuronal) y `docs/produccion.md` §12. **α pasa de 0.7 a 0.6** (mejor por poco en Hit@10 y MRR) y los pesos 3/1 se mantienen (los datos sintéticos no pueden medirlos). Colecciones renombradas en plural (§6.1). Revisión de conformidad en `spec.md` §8: **CONFORME CON OBSERVACIONES**. BE-A confirmó la lectura en solo lectura de `bookings`, `items` y `users` (el responsable lo informó el 2026-11-17: «Sí, ya confirmó»).
 
 - [ ] **T011** Despliegue de la spec en Azure (staging)
   - Archivos: `memoria.md` (solo anexar), `docs/produccion.md` (registro)

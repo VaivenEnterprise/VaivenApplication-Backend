@@ -5,16 +5,16 @@ package domain
 
 import "time"
 
-// Parámetros del modelo (spec 015, RF-01 a RF-06; plan P-01). Los pesos y Alpha
-// son provisionales: se ajustan una vez con la evaluación (RF-07) y el valor
-// final se justifica en docs/ml/evaluacion.md.
+// Parámetros del modelo (spec 015, RF-01 a RF-06; plan P-01). Alpha se ajustó
+// una sola vez con la evaluación (RF-07; 0.7 → 0.6) y los pesos se mantienen;
+// la justificación está en docs/ml/evaluacion.md.
 const (
 	// WeightRequest es el peso de una solicitud de reserva.
 	WeightRequest = 3.0
 	// WeightView es el peso de una vista del detalle de un objeto.
 	WeightView = 1.0
 	// Alpha mezcla el modelo colaborativo (Alpha) con el de contenido (1 − Alpha).
-	Alpha = 0.7
+	Alpha = 0.6
 
 	// Neighbors son los vecinos más parecidos que se guardan por objeto.
 	Neighbors = 20
