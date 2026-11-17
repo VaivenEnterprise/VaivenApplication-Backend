@@ -320,3 +320,39 @@ func TestIntegrationSearchIndexes(t *testing.T) {
 		t.Error("sin índice de texto debe fallar")
 	}
 }
+
+// CardsByIDs (spec 015, T005): mismas exclusiones que la búsqueda, en el orden
+// pedido, sin repetidos y sin romperse con ids inválidos.
+func TestIntegrationCardsByIDs(t *testing.T) {
+	s := newSeed(t)
+	future := baseTime.Add(1000 * time.Hour)
+	ana := s.user("ana", "active", nil)
+	yo := s.user("yo", "active", nil)
+	baja := s.user("baja", "deactivated", nil)
+	susp := s.user("susp", "active", &future)
+
+	a := s.item(ana)
+	b := s.item(ana, withCategory("deportes"))
+	paused := s.item(ana, withStatus("paused"))
+	mine := s.item(yo)
+	gone := s.item(baja)
+	suspended := s.item(susp)
+
+	cards, err := s.repo.CardsByIDs(context.Background(), yo, []string{b, paused, mine, "no-es-id", gone, suspended, a, b})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := make([]string, len(cards))
+	for i, c := range cards {
+		got[i] = c.ID
+	}
+	if fmt.Sprint(got) != fmt.Sprint([]string{b, a}) {
+		t.Fatalf("visibles = %v, want %v", got, []string{b, a})
+	}
+	if c := cards[0]; c.Category != "deportes" || c.Owner.DisplayName != "ana" || c.FirstPhoto == nil || c.PhotoCount != 1 {
+		t.Errorf("tarjeta = %+v", c)
+	}
+	if empty, err := s.repo.CardsByIDs(context.Background(), yo, []string{"x"}); err != nil || empty == nil || len(empty) != 0 {
+		t.Errorf("sin ids válidos = %v %v", empty, err)
+	}
+}

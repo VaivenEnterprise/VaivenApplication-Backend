@@ -59,17 +59,56 @@ func (s *Service) Search(ctx context.Context, viewerID string, raw domain.RawQue
 	if err != nil {
 		return Result{}, err
 	}
-	out := Result{Cards: make([]CardView, 0, len(page.Cards)), Next: page.Next}
-	for _, c := range page.Cards {
+	cards, err := s.views(page.Cards)
+	if err != nil {
+		return Result{}, err
+	}
+	return Result{Cards: cards, Next: page.Next}, nil
+}
+
+// MaxByIDs es el máximo de objetos que acepta CardsByIDs.
+const MaxByIDs = 50
+
+// CardsByIDs devuelve las tarjetas de ids que viewerID puede ver, en el orden
+// pedido y con las mismas reglas de visibilidad que Search (spec 015, T005;
+// plan P-06): activos, de otras personas y de cuentas activas y no
+// suspendidas. Los ids inválidos o repetidos se ignoran y se usan como máximo
+// MaxByIDs. Nunca devuelve nil.
+func (s *Service) CardsByIDs(ctx context.Context, viewerID string, ids []string) ([]CardView, error) {
+	valid := make([]string, 0, min(len(ids), MaxByIDs))
+	seen := map[string]bool{}
+	for _, id := range ids {
+		if len(valid) == MaxByIDs {
+			break
+		}
+		if domain.IsObjectIDHex(id) && !seen[id] {
+			seen[id] = true
+			valid = append(valid, id)
+		}
+	}
+	if len(valid) == 0 {
+		return []CardView{}, nil
+	}
+	cards, err := s.d.Repo.CardsByIDs(ctx, viewerID, valid)
+	if err != nil {
+		return nil, err
+	}
+	return s.views(cards)
+}
+
+// views agrega la miniatura de la primera foto a cada tarjeta (RF-06).
+func (s *Service) views(cards []domain.Card) ([]CardView, error) {
+	out := make([]CardView, 0, len(cards))
+	for _, c := range cards {
 		v := CardView{Card: c}
 		if c.FirstPhoto != nil {
 			u, err := s.d.Images.URLs(*c.FirstPhoto)
 			if err != nil {
-				return Result{}, fmt.Errorf("search: miniatura: %w", err)
+				return nil, fmt.Errorf("search: miniatura: %w", err)
 			}
 			v.ThumbURL = &u.ThumbURL
 		}
-		out.Cards = append(out.Cards, v)
+		out = append(out, v)
 	}
 	return out, nil
 }

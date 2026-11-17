@@ -48,6 +48,21 @@ func BuildPipeline(q domain.Query, now time.Time) []bson.D {
 	return p
 }
 
+// BuildByIDsPipeline devuelve las tarjetas de los objetos ids con las mismas
+// reglas de visibilidad que la búsqueda (RF-02): activos, de otras personas y
+// de cuentas activas y no suspendidas. Lo usan las recomendaciones (spec 015,
+// T005; plan P-06) para no copiar estos filtros. No ordena: el orden lo pone
+// quien pide.
+func BuildByIDsPipeline(viewerID string, ids []bson.ObjectID, now time.Time) []bson.D {
+	p := []bson.D{{{Key: "$match", Value: bson.D{
+		{Key: "_id", Value: bson.D{{Key: "$in", Value: ids}}},
+		{Key: "status", Value: "active"},
+		{Key: "ownerId", Value: bson.D{{Key: "$ne", Value: viewerID}}},
+	}}}}
+	p = append(p, ownerStages(now)...)
+	return append(p, projectStage(domain.ModeRecent))
+}
+
 // baseFilter son los filtros comunes (RF-02): activos, de otras personas y
 // los filtros opcionales.
 func baseFilter(q domain.Query) bson.D {

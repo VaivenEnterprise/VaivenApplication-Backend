@@ -6,6 +6,7 @@
 //	go run ./cmd/admin indexes
 //	SEED_CREDENTIALS_FILE=/ruta/fuera/del/repo go run ./cmd/admin seed
 //	go run ./cmd/admin smoke --base-url https://host:8443
+//	go run ./cmd/admin eval-recommendations
 package main
 
 import (
@@ -37,6 +38,15 @@ subcomandos:
   smoke --base-url URL [--connect-to host:puerto]
                    prueba de humo que escribe: cuenta desechable, foto,
                    objeto y baja, limpiando todo; se niega en producción
+  eval-recommendations [--source synthetic|db] [--k N]
+                   evalúa el recomendador (Hit@K, Recall@K y MRR) contra la
+                   popularidad; por defecto con datos sintéticos de semilla
+                   fija, sin base; --source db nunca en producción
+  recompute-recommendations
+                   recalcula el modelo de recomendaciones ahora
+  seed-interactions [--purge] [--users N]
+                   crea (o borra con --purge) interacciones sintéticas de
+                   demostración; nunca con APP_ENV=production
 `
 
 func main() {
@@ -48,9 +58,10 @@ func main() {
 // Los subcomandos cierran sus conexiones con defer dentro de run, así que
 // terminan antes de que main llame a os.Exit.
 func run(args []string, stdout, stderr io.Writer, load func() (config.Config, error), checksFor func(config.Config) []check, stdin io.Reader, admins adminFactory, indexes indexesFactory) int {
-	// Solo seed (--scale) y smoke (--base-url) aceptan opciones; los demás,
-	// ningún argumento extra.
-	if len(args) == 0 || (len(args) > 1 && args[0] != "seed" && args[0] != "smoke") {
+	// Solo seed, smoke, eval-recommendations y seed-interactions aceptan
+	// opciones; los demás, ningún argumento extra.
+	withOptions := map[string]bool{"seed": true, "smoke": true, "eval-recommendations": true, "seed-interactions": true}
+	if len(args) == 0 || (len(args) > 1 && !withOptions[args[0]]) {
 		_, _ = fmt.Fprint(stderr, usage)
 		return 2
 	}
@@ -69,6 +80,12 @@ func run(args []string, stdout, stderr io.Writer, load func() (config.Config, er
 			return 1
 		}
 		return runSmoke(args[1:], stdout, stderr, cfg, newSmokeDeps)
+	case "eval-recommendations":
+		return runRecoEval(args[1:], stdout, stderr, load, mongoRecoDeps)
+	case "recompute-recommendations":
+		return runRecoRecompute(stdout, stderr, load, mongoRecoDeps)
+	case "seed-interactions":
+		return runRecoSeed(args[1:], stdout, stderr, load, mongoRecoDeps)
 	case "upload-test":
 		cfg, err := load()
 		if err != nil {

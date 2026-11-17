@@ -67,6 +67,8 @@ tags:
     description: Reportar objetos, mensajes, perfiles y decisiones de moderación (spec 011).
   - name: ia
     description: IA generativa (spec 014) — sugerencias al publicar y asistente de proyectos; detrás de interruptores.
+  - name: recomendaciones
+    description: Recomendaciones con machine learning (spec 015) — «Recomendado para ti», eventos de vista e historial; detrás de `RECO_ENABLED`.
 paths:
   /healthz:
     get:
@@ -176,6 +178,12 @@ paths:
     $ref: './paths/ai.yaml#/assistantMessages'
   /api/v1/ai/assistant/conversations/{id}:
     $ref: './paths/ai.yaml#/assistantConversation'
+  /api/v1/recommendations:
+    $ref: './paths/recommendations.yaml#/recommendations'
+  /api/v1/recommendations/events:
+    $ref: './paths/recommendations.yaml#/events'
+  /api/v1/recommendations/history:
+    $ref: './paths/recommendations.yaml#/history'
   /api/v1/uploads/signature:
     $ref: './paths/uploads.yaml#/signature'
   /api/v1/items:
@@ -384,7 +392,7 @@ components:
           description: Hora del servidor en UTC (ISO-8601).
         features:
           type: object
-          description: Funciones opcionales encendidas en este entorno (spec 014). Si falta, la app las trata como apagadas.
+          description: Funciones opcionales encendidas en este entorno (specs 014 y 015). Si falta una, la app la trata como apagada.
           properties:
             aiSuggestions:
               type: boolean
@@ -392,6 +400,9 @@ components:
             projectAssistant:
               type: boolean
               description: Asistente de proyectos (`ASSISTANT_ENABLED`).
+            recommendations:
+              type: boolean
+              description: «Recomendado para ti» (`RECO_ENABLED`, spec 015).
     Role:
       type: string
       enum: [user, admin]
@@ -1672,6 +1683,58 @@ components:
           type: string
         reply:
           $ref: '#/components/schemas/AssistantReply'
+    RecommendationEventRequest:
+      type: object
+      required: [itemId, type]
+      additionalProperties: false
+      properties:
+        itemId:
+          type: string
+          pattern: '^[0-9a-f]{24}$'
+        type:
+          type: string
+          enum: [view]
+          description: Por ahora solo vistas; las solicitudes se leen de las reservas (spec 015, RF-01).
+    RecommendationReasonCode:
+      type: string
+      enum: [similar_to, popular_in_category, popular_nearby, popular]
+      description: |
+        Motivo de la recomendación; la app arma el texto en es-MX (Art. V.4):
+        `similar_to` (parecido a un objeto que la persona vio o solicitó),
+        `popular_in_category` (popular en una categoría que ha visto),
+        `popular_nearby` (popular en el municipio indicado) y `popular`.
+    RecommendationReason:
+      type: object
+      required: [code]
+      properties:
+        code:
+          $ref: '#/components/schemas/RecommendationReasonCode'
+        itemId:
+          type: string
+          description: Solo con `similar_to`; el objeto visto o solicitado que más contribuyó.
+        itemTitle:
+          type: string
+          description: Solo con `similar_to`; título de ese objeto.
+    Recommendation:
+      type: object
+      required: [item, reason]
+      properties:
+        item:
+          $ref: '#/components/schemas/ItemCard'
+        reason:
+          $ref: '#/components/schemas/RecommendationReason'
+    RecommendationList:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/Recommendation'
+        nextCursor:
+          type: 'null'
+          description: Siempre null; no hay más páginas (Art. IV.4).
     ErrorCode:
       type: string
       description: Códigos permitidos por el Art. IV.3 de la constitución.

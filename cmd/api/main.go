@@ -71,6 +71,10 @@ import (
 	ratingshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ratings/adapter/http"
 	ratingsmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ratings/adapter/mongo"
 	ratingsusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ratings/usecase"
+	recohttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/reco/adapter/http"
+	recomongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/reco/adapter/mongo"
+	recosearch "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/reco/adapter/search"
+	recousecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/reco/usecase"
 	reportshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/reports/adapter/http"
 	reportsmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/reports/adapter/mongo"
 	reportsusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/reports/usecase"
@@ -177,8 +181,11 @@ func run() error {
 	// IA esté apagada, para que `admin indexes` coincida con el catálogo.
 	aiUsageRepo := aimongo.NewUsageRepo(db)
 	aiConversationsRepo := assistantmongo.NewConversationRepo(db)
+	// Eventos de las recomendaciones (spec 015, T003): sus índices se crean aunque
+	// RECO_ENABLED esté apagado, por la misma razón.
+	recoInteractionsRepo := recomongo.NewInteractionRepo(db)
 	if err := adaptermongo.EnsureAll(ctx, userRepo, refreshRepo, itemRepo, searchmongo.NewIndexes(db), bookingRepo, convRepo, msgRepo, paymentsRepo,
-		ratingsRepo, incidentsRepo, sanctionsRepo, notificationsRepo, pushTokensRepo, reportsRepo, aiUsageRepo, aiConversationsRepo); err != nil {
+		ratingsRepo, incidentsRepo, sanctionsRepo, notificationsRepo, pushTokensRepo, reportsRepo, aiUsageRepo, aiConversationsRepo, recoInteractionsRepo); err != nil {
 		return fmt.Errorf("no se pudieron crear los índices: %w", err)
 	}
 
@@ -380,6 +387,11 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	// ML: recomendaciones (spec 015); apagadas por defecto.
+	recoModule, err := newRecoModule(cfg, log, authModule, limiter, db, imagesSvc, recoInteractionsRepo)
+	if err != nil {
+		return err
+	}
 	// Envío de push en segundo plano (spec 011, plan P-01); termina con ctx.
 	pushDone := make(chan struct{})
 	go func() {
@@ -420,6 +432,7 @@ func run() error {
 		Reports:       reportsModule,
 		Suggest:       suggestModule,
 		Assistant:     assistantModule,
+		Reco:          recoModule,
 		Users:         userRepo,
 	})
 	for _, m := range mods {
@@ -445,6 +458,7 @@ func run() error {
 				Features: handler.MetaFeatures{
 					AISuggestions:    cfg.AI.SuggestionsEnabled,
 					ProjectAssistant: cfg.AI.AssistantEnabled,
+					Recommendations:  cfg.Reco.Enabled,
 				},
 			},
 		}),
@@ -697,6 +711,34 @@ func newAssistantModule(cfg config.Config, log *slog.Logger, authModule *authhtt
 	return assistanthttp.NewModule(assistanthttp.ModuleDeps{
 		Service: svc, Authenticate: authModule.Authenticate(), Log: log,
 		Limiter: limiter, LimiterFallback: redis.NewMemoryLimiter(), Location: loc,
+	})
+}
+
+// newRecoModule arma las recomendaciones de la spec 015. Con
+// RECO_ENABLED=false las rutas responden service_unavailable (RF-10). Las
+// tarjetas salen de la búsqueda de la spec 006, con sus reglas de visibilidad.
+func newRecoModule(cfg config.Config, log *slog.Logger, authModule *authhttp.Module, limiter ratelimit.Limiter,
+	db *mongo.Database, imgs imgport.Service, interactions *recomongo.InteractionRepo) (*recohttp.Module, error) {
+	searchSvc, err := searchusecase.NewService(searchusecase.Deps{Repo: searchmongo.NewRepo(db, nil), Images: imgs})
+	if err != nil {
+		return nil, err
+	}
+	cards, err := recosearch.New(searchSvc)
+	if err != nil {
+		return nil, err
+	}
+	svc, err := recousecase.NewService(recousecase.Deps{
+		Interactions: interactions, Requests: recomongo.NewRequestSource(db), Items: recomongo.NewItemSource(db),
+		Model: recomongo.NewModelRepo(db), Meta: recomongo.NewMetaRepo(db), Cards: cards,
+		Log: log, Enabled: cfg.Reco.Enabled,
+	})
+	if err != nil {
+		return nil, err
+	}
+	log.Info("recomendaciones", "habilitadas", cfg.Reco.Enabled)
+	return recohttp.NewModule(recohttp.ModuleDeps{
+		Service: svc, Authenticate: authModule.Authenticate(), Log: log,
+		Limiter: limiter, LimiterFallback: redis.NewMemoryLimiter(),
 	})
 }
 

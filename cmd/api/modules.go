@@ -17,6 +17,7 @@ import (
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/notify"
 	paymentshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/payments/adapter/http"
 	ratingshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ratings/adapter/http"
+	recohttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/reco/adapter/http"
 	reportshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/reports/adapter/http"
 	sanctionshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/sanctions/adapter/http"
 	searchhttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/search/adapter/http"
@@ -61,6 +62,8 @@ type moduleDeps struct {
 	Suggest *suggesthttp.Module
 	// Assistant es la parte B de la spec 014 (asistente de proyectos).
 	Assistant *assistanthttp.Module
+	// Reco es el módulo de recomendaciones con ML de la spec 015.
+	Reco *recohttp.Module
 	// Users da perfiles públicos por lote y acciones de administración.
 	Users interface {
 		users.Directory
@@ -89,5 +92,6 @@ func modules(deps moduleDeps) []apihttp.Module {
 		deps.Reports,       // 011 reportes y moderación
 		deps.Suggest,       // 014 IA: sugerencias al publicar
 		deps.Assistant,     // 014 IA: asistente de proyectos
+		deps.Reco,          // 015 ML: recomendaciones
 	}
 }
