@@ -1,6 +1,6 @@
 # Tareas 015 — Recomendaciones con ML (backend)
 
-- **Dueño:** BE-B · **Estado:** en curso (6/11) · `[P]` = paralelizable
+- **Dueño:** BE-B · **Estado:** en curso (7/11) · `[P]` = paralelizable
 - Ventana del ROADMAP: 23 nov–1 dic (v1.1, detrás de `RECO_ENABLED`). No empieza hasta que la 014 termine su despliegue verificado (Art. XIII.5) y la spec esté aprobada (Art. I).
 - Cada tarea termina con `make fmt lint test` (y `go test -tags=integration` del paquete si tiene integración) en verde.
 
@@ -46,11 +46,12 @@
   - Refs: RF-01, RF-04–RF-07, RF-09 · P-04, P-09
   - **Hecho (2026-11-17, BE-B):** `internal/reco/usecase` (99,6 %): puertos declarados aquí (Art. III.3); `RecordView` y `DeleteHistory` en `service.go` (en lugar de `events.go` e `history.go`, por ser cortos); `Recommend` (historial de vistas y de solicitudes posteriores al borrado, híbrido con ≥ 2 objetos, arranque en frío por municipio, categorías vistas y generales, exclusión de historial y reservas activas, tarjetas desde la búsqueda, ≤ 3 por categoría, motivo con título; sin modelo todavía calcula populares al momento); `Recompute` (candado, ventana de 90 días, borrados de historial, purga de cuentas dadas de baja, `Build` puro, publicación solo si el candado sigue siendo suyo); recálculo perezoso con `Deps.Go`, que nunca bloquea la petición; `Evaluate` de los cuatro modelos. CA-01, CA-02, CA-03, CA-05 y CA-08 con dobles en memoria. Ajuste en T003: `Titles` pasó a `Briefs` (título y categoría).
 
-- [ ] **T007** Handlers, rutas, `/meta` y registro
+- [x] **T007** Handlers, rutas, `/meta` y registro
   - Archivos: `internal/reco/adapter/http/{handler.go, dto.go, routes.go}` y pruebas, `internal/adapter/http/handler/meta.go` (`features.recommendations`), `cmd/api/modules.go` (una línea), cableado en `cmd/api/main.go`
   - Agente: `dev-go` · Depende de: T001, T006
   - Aceptación: cumple el contrato; `validator/v10` en la frontera; límite de 60 eventos por minuto con 429 y `Retry-After` (CA-09); interruptor (CA-06); borrar historial (CA-05); registros sin eventos, objetos vistos ni IDs de objetos
   - Refs: RF-01, RF-05, RF-09, RF-10 · P-10
+  - **Hecho (2026-11-17, BE-B):** `internal/reco/adapter/http/handler.go` (96,6 %; DTO y rutas en el mismo archivo por ser cortos): `POST /recommendations/events` con `validator/v10` y `DisallowUnknownFields`, 60 por minuto por persona con 429 y `Retry-After` (CA-09); `GET /recommendations` con la tarjeta de la búsqueda y `nextCursor: null`; `DELETE /recommendations/history`; apagado, las tres responden 503 antes de validar (CA-06); los errores internos se registran sin el objeto (CA-07). `/meta` expone `features.recommendations`; una línea en `modules.go` y `newRecoModule` en `main.go`. Lint 0 y `go test -tags=integration ./...` en verde.
 
 - [ ] **T008** Comandos de administración
   - Archivos: `cmd/admin/{reco_recompute.go, reco_seed.go, reco_eval.go}`, `cmd/admin/main.go` (tres casos) y pruebas
