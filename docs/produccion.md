@@ -96,7 +96,7 @@ La salida debe mostrar `mongo: healthy`, `primario: true`, el usuario creado, el
    | `vaiven-production-data-redis-1` | 4 MB de 96 MB |
    | `base-mongo-1` / `base-redis-1` / `vaiven-staging-api-1` | 183 / 5 / 10 MB |
 
-   Falta repetir la medición con la API de producción (paso 6) y con datos (CA-08).
+   **Con los dos entornos completos (2026-11-16, CA-08):** 534 MB disponibles de 887; swap 343 MB de 2 GB. `vaiven-production-api-1` 5 MB, `vaiven-staging-api-1` 46 MB, `base-mongo-1` 30 MB (recién recreado), `base-redis-1` 7 MB, `vaiven-production-data-mongo-1` 56 MB y `vaiven-production-data-redis-1` 7 MB. Disco al 12 %. Hay margen, así que los límites se mantienen.
 
    Anotar los valores aquí y en `memoria.md`. Si la memoria libre más el swap no da margen, ajustar los límites de producción o reducir o detener staging. **No** cambiar de talla sin consultar, porque tiene costo (Art. XIII.1).
 
@@ -122,7 +122,7 @@ Better Stack, plan gratuito. Lo da de alta una persona:
 | Fecha | Monitor | Intervalo | Aviso | Alta por |
 |---|---|---|---|---|
 | 2026-11-11 | Staging: `https://vaiven-staging.westus2.cloudapp.azure.com:8443/healthz` | 3 min | correo de la cuenta del equipo | BE-B |
-| — | Producción: `https://vaiven-staging.westus2.cloudapp.azure.com/healthz` | 3 min | correo | pendiente: después del despliegue (§5) |
+| 2026-11-16 | Producción: `https://vaiven-staging.westus2.cloudapp.azure.com/healthz` | 3 min | correo de la cuenta del equipo | BE-B |
 
 Plan gratuito, sin tarjeta ni teléfono (Art. XIII.1). El enlace de invitación de la cuenta no se comparte en el repositorio ni en chats: a los demás integrantes se les invita por correo desde *Team members*.
 
@@ -203,15 +203,15 @@ Ninguno es igual a los de staging (CA-02). **Sin `seed` en producción** (RF-05)
 
 | Punto | Evidencia | Estado |
 |---|---|---|
-| Secretos propios (CA-02) | §8 y T001 | |
-| Índices (T002) | `vm-admin.sh production indexes` = 0 | |
-| Sin seed (RF-05) | `seed` se niega en producción | |
-| Monitor (RF-06) | §4 | |
-| Respaldo y restauración (CA-04) | `docs/respaldos.md` §5 | |
-| Humo (CA-03) | §5 y T007 | |
-| Registros (CA-06) | §9 | |
-| HTTPS 443 y 8443 (CA-07) | §5 | |
-| Capacidad (CA-08) | §2.8 | |
-| Disco | §3 | |
-| p95 < 800 ms (RNF-01) | `tests/load` contra producción | |
-| Costo cero (RNF-02) | *Cost Management* | |
+| Secretos propios (CA-02) | §8 y T001 | ✅ 2026-11-16 |
+| Índices (T002) | `vm-admin.sh production indexes` = 0 | ✅ 34 correctos |
+| Sin seed (RF-05) | `seed` se niega en producción | ✅ |
+| Monitor (RF-06) | §4 | ✅ staging y producción Up |
+| Respaldo y restauración (CA-04) | `docs/respaldos.md` §5 | ✅ 0 diferencias |
+| Humo (CA-03) | §5 y T007 | ✅ |
+| Registros (CA-06) | §9 | ✅ 0 datos personales |
+| HTTPS 443 y 8443 (CA-07) | §5 | ✅ vence 1 feb 2027 |
+| Capacidad (CA-08) | §2.8 | ✅ 534 MB libres |
+| Disco | §3 | ✅ 12 % |
+| p95 < 800 ms (RNF-01) | dentro de la VM, solo lectura (`tests/load` se niega fuera de local porque crea datos) | ✅ p95 1,0 ms |
+| Costo cero (RNF-02) | *Cost Management* | pendiente (persona) |
