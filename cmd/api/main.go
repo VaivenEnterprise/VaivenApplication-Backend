@@ -22,6 +22,7 @@ import (
 	adaptermongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/mongo"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ai/adapter/gemini"
 	aimongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ai/adapter/mongo"
+	assistantmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/assistant/adapter/mongo"
 	authhttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/adapter/http"
 	authmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/adapter/mongo"
 	authdomain "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/domain"
@@ -169,8 +170,9 @@ func run() error {
 	// Contador de uso de la IA (spec 014, T004): sus índices se crean aunque la
 	// IA esté apagada, para que `admin indexes` coincida con el catálogo.
 	aiUsageRepo := aimongo.NewUsageRepo(db)
+	aiConversationsRepo := assistantmongo.NewConversationRepo(db)
 	if err := adaptermongo.EnsureAll(ctx, userRepo, refreshRepo, itemRepo, searchmongo.NewIndexes(db), bookingRepo, convRepo, msgRepo, paymentsRepo,
-		ratingsRepo, incidentsRepo, sanctionsRepo, notificationsRepo, pushTokensRepo, reportsRepo, aiUsageRepo); err != nil {
+		ratingsRepo, incidentsRepo, sanctionsRepo, notificationsRepo, pushTokensRepo, reportsRepo, aiUsageRepo, aiConversationsRepo); err != nil {
 		return fmt.Errorf("no se pudieron crear los índices: %w", err)
 	}
 

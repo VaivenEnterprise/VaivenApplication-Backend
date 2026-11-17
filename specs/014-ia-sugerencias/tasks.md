@@ -64,11 +64,12 @@
   - Refs: RF-10, RF-14, RF-17 · P-08
   - Hecho (2026-11-16, BE-B): `SystemPrompt` fijo, en español de México, con alcance, negativas (RF-14), «nunca inventes objetos ni personas» y las categorías tomadas de `policy.POL14Categories`. El mensaje de la persona viaja en `<mensaje_de_la_persona>…</mensaje_de_la_persona>`: `Sanitize` neutraliza cualquier variante del delimitador (con espacios, mayúsculas o barra), quita caracteres de control y saltos, y recorta a 500. `BuildRequest` conserva como máximo 6 turnos contando el nuevo y no modifica el historial recibido; `ModelTurn` resume la respuesta previa sin coincidencias; `Normalize` y `CacheKey` (SHA-256, sin el texto) sirven para la caché. Pruebas de inyección (CA-09): ninguna entrada cambia las instrucciones ni rompe el bloque. Cobertura 96,5 %; sin dependencias nuevas (los acentos se quitan con la biblioteca estándar, Art. VIII.1); sin estado global mutable (§5).
 
-- [ ] **T009** [P] Conversaciones en MongoDB
+- [x] **T009** [P] Conversaciones en MongoDB
   - Archivos: `internal/assistant/adapter/mongo/{conversations.go, conversations_test.go}`, índices en `Indexes()`
   - Agente: `modelador-mongo` · Depende de: T002
   - Aceptación: `ai_conversations` con dueño, `createdAt` y `updatedAt` (§6.4), máximo 6 turnos de hasta 2 000 caracteres (`$slice`, §6.2), TTL de 24 h sobre `updatedAt` y borrado por dueño; otra persona → no encontrada; pruebas con MongoDB real
   - Refs: RF-13 · P-09
+  - Hecho (2026-11-16, BE-B): `internal/assistant/adapter/mongo/conversations.go` (`ai_conversations`: `{_id, userId, turns[{role,text}], createdAt, updatedAt}`) con Create, Get, Append (`$push` + `$each` + `$slice: -6`) y Delete, todos filtrando por `_id` y `userId`: otra persona, un id inválido o una conversación caducada → `ErrConversationNotFound` (404, CA-13). Textos recortados a 2 000 runas; nunca guarda la ubicación. TTL `updated_ttl` de 24 h en el catálogo (37 índices), en la API y en el fixture (solo una entrada nueva). Integración con MongoDB 7 real en verde.
 
 - [ ] **T010** [P] Buscador de coincidencias sobre la spec 006
   - Archivos: `internal/assistant/adapter/search/{finder.go, finder_test.go}`

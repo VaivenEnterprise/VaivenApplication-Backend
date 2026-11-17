@@ -1,5 +1,20 @@
 [
   {
+    "collection": "ai_conversations",
+    "name": "updated_ttl",
+    "spec": {
+      "key": {
+        "updatedAt": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "updated_ttl",
+      "expireAfterSeconds": {
+        "$numberInt": "86400"
+      }
+    }
+  },
+  {
     "collection": "ai_usage",
     "name": "created_ttl",
     "spec": {
