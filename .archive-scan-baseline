@@ -1,0 +1,11 @@
+# Blobs comprimidos ya conocidos en el historial (scripts/scan-archives.py --history).
+# Un SHA de blob por línea. Solo para exposiciones YA reportadas cuya única
+# corrección pendiente es limpiar el historial (procedimiento P-3 de
+# docs/seguridad/remediacion-2026-11.md). Nunca agregues un blob nuevo para
+# que CI pase: un secreto nuevo se rota y se retira, no se lista aquí.
+# Tras ejecutar P-3, borra la línea correspondiente.
+
+# SEC-001/SEC-002: Claude outputs/_tmp/repo11.tgz (commit 7ad4f00). Contiene un
+# .env con credenciales reales de Cloudinary y un JWT_ACCESS_SECRET.
+# Retirado del árbol en fix/SPEC-11-seguridad; rotación a cargo del operador.
+36f7ffe68452c5d6b4bbc0d52a523abbe222cf19

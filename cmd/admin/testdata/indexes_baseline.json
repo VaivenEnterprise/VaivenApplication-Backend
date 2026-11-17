@@ -1,0 +1,554 @@
+[
+  {
+    "collection": "bookings",
+    "name": "item_status_dates",
+    "spec": {
+      "key": {
+        "itemId": {
+          "$numberInt": "1"
+        },
+        "status": {
+          "$numberInt": "1"
+        },
+        "startDate": {
+          "$numberInt": "1"
+        },
+        "endDate": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "item_status_dates"
+    }
+  },
+  {
+    "collection": "bookings",
+    "name": "owner_status_createdAt",
+    "spec": {
+      "key": {
+        "ownerId": {
+          "$numberInt": "1"
+        },
+        "status": {
+          "$numberInt": "1"
+        },
+        "createdAt": {
+          "$numberInt": "-1"
+        }
+      },
+      "name": "owner_status_createdAt"
+    }
+  },
+  {
+    "collection": "bookings",
+    "name": "requester_status_createdAt",
+    "spec": {
+      "key": {
+        "requesterId": {
+          "$numberInt": "1"
+        },
+        "status": {
+          "$numberInt": "1"
+        },
+        "createdAt": {
+          "$numberInt": "-1"
+        }
+      },
+      "name": "requester_status_createdAt"
+    }
+  },
+  {
+    "collection": "bookings",
+    "name": "status_expiresAt",
+    "spec": {
+      "key": {
+        "status": {
+          "$numberInt": "1"
+        },
+        "expiresAt": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "status_expiresAt"
+    }
+  },
+  {
+    "collection": "bookings",
+    "name": "status_lateAt",
+    "spec": {
+      "key": {
+        "status": {
+          "$numberInt": "1"
+        },
+        "lateAt": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "status_lateAt"
+    }
+  },
+  {
+    "collection": "conversations",
+    "name": "bookingId_unique",
+    "spec": {
+      "key": {
+        "bookingId": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "bookingId_unique",
+      "unique": true
+    }
+  },
+  {
+    "collection": "conversations",
+    "name": "participant_lastMessageAt",
+    "spec": {
+      "key": {
+        "participantIds": {
+          "$numberInt": "1"
+        },
+        "lastMessageAt": {
+          "$numberInt": "-1"
+        },
+        "_id": {
+          "$numberInt": "-1"
+        }
+      },
+      "name": "participant_lastMessageAt"
+    }
+  },
+  {
+    "collection": "incidents",
+    "name": "booking_status",
+    "spec": {
+      "key": {
+        "bookingId": {
+          "$numberInt": "1"
+        },
+        "status": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "booking_status"
+    }
+  },
+  {
+    "collection": "incidents",
+    "name": "reported_createdAt",
+    "spec": {
+      "key": {
+        "reportedId": {
+          "$numberInt": "1"
+        },
+        "createdAt": {
+          "$numberInt": "-1"
+        }
+      },
+      "name": "reported_createdAt"
+    }
+  },
+  {
+    "collection": "incidents",
+    "name": "reporter_createdAt",
+    "spec": {
+      "key": {
+        "reporterId": {
+          "$numberInt": "1"
+        },
+        "createdAt": {
+          "$numberInt": "-1"
+        }
+      },
+      "name": "reporter_createdAt"
+    }
+  },
+  {
+    "collection": "incidents",
+    "name": "status_createdAt",
+    "spec": {
+      "key": {
+        "status": {
+          "$numberInt": "1"
+        },
+        "createdAt": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "status_createdAt"
+    }
+  },
+  {
+    "collection": "items",
+    "name": "location_2dsphere",
+    "spec": {
+      "key": {
+        "location": "2dsphere"
+      },
+      "name": "location_2dsphere",
+      "2dsphereIndexVersion": {
+        "$numberInt": "3"
+      }
+    }
+  },
+  {
+    "collection": "items",
+    "name": "owner_status_createdAt",
+    "spec": {
+      "key": {
+        "ownerId": {
+          "$numberInt": "1"
+        },
+        "status": {
+          "$numberInt": "1"
+        },
+        "createdAt": {
+          "$numberInt": "-1"
+        }
+      },
+      "name": "owner_status_createdAt"
+    }
+  },
+  {
+    "collection": "items",
+    "name": "search_filters",
+    "spec": {
+      "key": {
+        "status": {
+          "$numberInt": "1"
+        },
+        "category": {
+          "$numberInt": "1"
+        },
+        "modality": {
+          "$numberInt": "1"
+        },
+        "zone.municipality": {
+          "$numberInt": "1"
+        },
+        "createdAt": {
+          "$numberInt": "-1"
+        }
+      },
+      "name": "search_filters"
+    }
+  },
+  {
+    "collection": "items",
+    "name": "search_recent",
+    "spec": {
+      "key": {
+        "status": {
+          "$numberInt": "1"
+        },
+        "createdAt": {
+          "$numberInt": "-1"
+        },
+        "_id": {
+          "$numberInt": "-1"
+        }
+      },
+      "name": "search_recent"
+    }
+  },
+  {
+    "collection": "items",
+    "name": "search_text",
+    "spec": {
+      "key": {
+        "_fts": "text",
+        "_ftsx": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "search_text",
+      "weights": {
+        "description": {
+          "$numberInt": "1"
+        },
+        "title": {
+          "$numberInt": "5"
+        }
+      },
+      "default_language": "spanish",
+      "language_override": "language",
+      "textIndexVersion": {
+        "$numberInt": "3"
+      }
+    }
+  },
+  {
+    "collection": "items",
+    "name": "status_category_createdAt",
+    "spec": {
+      "key": {
+        "status": {
+          "$numberInt": "1"
+        },
+        "category": {
+          "$numberInt": "1"
+        },
+        "createdAt": {
+          "$numberInt": "-1"
+        }
+      },
+      "name": "status_category_createdAt"
+    }
+  },
+  {
+    "collection": "messages",
+    "name": "conversation_sender_clientId_unique",
+    "spec": {
+      "key": {
+        "conversationId": {
+          "$numberInt": "1"
+        },
+        "senderId": {
+          "$numberInt": "1"
+        },
+        "clientId": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "conversation_sender_clientId_unique",
+      "unique": true,
+      "partialFilterExpression": {
+        "clientId": {
+          "$type": "string"
+        }
+      }
+    }
+  },
+  {
+    "collection": "messages",
+    "name": "conversation_seq",
+    "spec": {
+      "key": {
+        "conversationId": {
+          "$numberInt": "1"
+        },
+        "seq": {
+          "$numberInt": "-1"
+        },
+        "_id": {
+          "$numberInt": "-1"
+        }
+      },
+      "name": "conversation_seq"
+    }
+  },
+  {
+    "collection": "notifications",
+    "name": "created_ttl",
+    "spec": {
+      "key": {
+        "createdAt": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "created_ttl",
+      "expireAfterSeconds": {
+        "$numberInt": "7776000"
+      }
+    }
+  },
+  {
+    "collection": "notifications",
+    "name": "user_id",
+    "spec": {
+      "key": {
+        "userId": {
+          "$numberInt": "1"
+        },
+        "_id": {
+          "$numberInt": "-1"
+        }
+      },
+      "name": "user_id"
+    }
+  },
+  {
+    "collection": "notifications",
+    "name": "user_read",
+    "spec": {
+      "key": {
+        "userId": {
+          "$numberInt": "1"
+        },
+        "readAt": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "user_read"
+    }
+  },
+  {
+    "collection": "push_tokens",
+    "name": "token_unique",
+    "spec": {
+      "key": {
+        "token": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "token_unique",
+      "unique": true
+    }
+  },
+  {
+    "collection": "push_tokens",
+    "name": "user",
+    "spec": {
+      "key": {
+        "userId": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "user"
+    }
+  },
+  {
+    "collection": "ratings",
+    "name": "booking_rater_unique",
+    "spec": {
+      "key": {
+        "bookingId": {
+          "$numberInt": "1"
+        },
+        "raterId": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "booking_rater_unique",
+      "unique": true
+    }
+  },
+  {
+    "collection": "ratings",
+    "name": "ratee_id",
+    "spec": {
+      "key": {
+        "rateeId": {
+          "$numberInt": "1"
+        },
+        "_id": {
+          "$numberInt": "-1"
+        }
+      },
+      "name": "ratee_id"
+    }
+  },
+  {
+    "collection": "refresh_tokens",
+    "name": "expiresAt_ttl",
+    "spec": {
+      "key": {
+        "expiresAt": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "expiresAt_ttl",
+      "expireAfterSeconds": {
+        "$numberInt": "0"
+      }
+    }
+  },
+  {
+    "collection": "refresh_tokens",
+    "name": "familyId",
+    "spec": {
+      "key": {
+        "familyId": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "familyId"
+    }
+  },
+  {
+    "collection": "refresh_tokens",
+    "name": "tokenHash_unique",
+    "spec": {
+      "key": {
+        "tokenHash": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "tokenHash_unique",
+      "unique": true
+    }
+  },
+  {
+    "collection": "refresh_tokens",
+    "name": "userId",
+    "spec": {
+      "key": {
+        "userId": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "userId"
+    }
+  },
+  {
+    "collection": "reports",
+    "name": "reporter_target_unique",
+    "spec": {
+      "key": {
+        "reporterId": {
+          "$numberInt": "1"
+        },
+        "targetType": {
+          "$numberInt": "1"
+        },
+        "targetId": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "reporter_target_unique",
+      "unique": true
+    }
+  },
+  {
+    "collection": "reports",
+    "name": "status_created",
+    "spec": {
+      "key": {
+        "status": {
+          "$numberInt": "1"
+        },
+        "createdAt": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "status_created"
+    }
+  },
+  {
+    "collection": "sanctions",
+    "name": "user_createdAt",
+    "spec": {
+      "key": {
+        "userId": {
+          "$numberInt": "1"
+        },
+        "createdAt": {
+          "$numberInt": "-1"
+        }
+      },
+      "name": "user_createdAt"
+    }
+  },
+  {
+    "collection": "users",
+    "name": "email_unique",
+    "spec": {
+      "key": {
+        "email": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "email_unique",
+      "unique": true
+    }
+  }
+]

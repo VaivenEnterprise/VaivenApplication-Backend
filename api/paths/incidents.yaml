@@ -1,0 +1,131 @@
+# Incidencias (partes) de una reserva (spec 010, T001; Art. IV y XII.2). Se
+# referencia desde api/openapi.yaml. Una incidencia vincula un incumplimiento a
+# una reserva, con evidencia opcional, y solo tiene dos estados: `open` y
+# `closed`. Abrirla NO cambia el estado de la reserva (RF-06). La evidencia es
+# privada (Art. VI.7): se entrega con URL firmadas de 10 minutos a las partes y
+# al administrador. No hay apelaciones ni etapas adicionales.
+bookingIncidents:
+  post:
+    tags: [incidencias]
+    operationId: openIncident
+    summary: Reportar un incumplimiento de una reserva
+    description: |
+      Abre una incidencia contra la otra parte (RF-05). Reglas:
+
+      - Solo las partes; quien no lo es recibe 404.
+      - La reserva debe estar `accepted`, `in_progress` o `completed` (POL-08: si
+        está completada, dentro de las 72 h siguientes). Si no, 409.
+      - `no_show` solo si ya llegó la fecha de inicio de la reserva (si no, 409).
+      - Máximo 3 incidencias abiertas por reserva; la cuarta responde 409 (CA-08).
+      - `description` de 10 a 1000 caracteres; `evidence` de 0 a 5 imágenes con
+        propósito `evidence` subidas por quien reporta.
+      - La reserva no cambia de estado (CA-04). Avisa a la parte reportada
+        (evento `incident.opened`).
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+      - $ref: '../openapi.yaml#/components/parameters/BookingIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/IncidentInput'
+          example:
+            reason: damaged
+            description: El objeto regresó con la tapa rota y no estaba así en la entrega.
+            evidence:
+              - publicId: vaiven/staging/evidence/6730f1c2a9b3e4d5f6a7b8c9/abc123
+    responses:
+      '201':
+        description: La incidencia abierta.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/Incident'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '409':
+        $ref: '../openapi.yaml#/components/responses/Conflict'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'
+
+incidentById:
+  get:
+    tags: [incidencias]
+    operationId: getIncident
+    summary: Ver una incidencia
+    description: |
+      Disponible para las dos partes y para el administrador (RF-07); cualquier
+      otra persona recibe 404. Las partes ven solo las notas con
+      `visibleToParties` verdadero (sin el campo) y la respuesta final; el
+      administrador ve todas las notas con su `visibleToParties`. La evidencia
+      trae URL firmadas de 10 minutos.
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+      - $ref: '../openapi.yaml#/components/parameters/IncidentIdPath'
+    responses:
+      '200':
+        description: La incidencia.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/Incident'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+myIncidents:
+  get:
+    tags: [incidencias]
+    operationId: listMyIncidents
+    summary: Mis incidencias
+    description: |
+      Las incidencias en las que soy la parte que reporta o la reportada, las más
+      recientes primero (RF-07). `status` filtra por `open` o `closed`; sin él se
+      listan todas. `nextCursor` null = no hay más.
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+      - name: status
+        in: query
+        required: false
+        schema:
+          $ref: '../openapi.yaml#/components/schemas/IncidentStatus'
+      - $ref: '../openapi.yaml#/components/parameters/CursorQuery'
+      - $ref: '../openapi.yaml#/components/parameters/LimitQuery'
+    responses:
+      '200':
+        description: Página de incidencias.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/IncidentPage'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'

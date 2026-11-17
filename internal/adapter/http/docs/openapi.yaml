@@ -1,0 +1,5127 @@
+openapi: 3.1.0
+info:
+  title: VAIVÉN API
+  version: 0.11.0
+  summary: API REST del backend de VAIVÉN (préstamo y renta de objetos en México).
+  description: |
+    Contrato de la spec 002 (arquitectura base): endpoints de infraestructura y
+    el envoltorio único de errores (Art. IV de la constitución). La spec 003
+    agrega la cuenta y la autenticación (`api/paths/auth.yaml` y `users.yaml`) y
+    la spec 004 las imágenes (`api/paths/uploads.yaml`) y la spec 005 los objetos
+    (`api/paths/items.yaml`); la spec 006 la búsqueda (`api/paths/search.yaml`) y la
+    spec 007 las solicitudes y reservas (`api/paths/bookings.yaml`) y la spec
+    008 el chat privado (`api/paths/chat.yaml`) y la spec 009 la entrega, la
+    devolución y los pagos (`api/paths/handover.yaml` y `payments.yaml`) y la spec
+    010 las calificaciones, las incidencias y la administración
+    (`api/paths/ratings.yaml`, `incidents.yaml` y `admin.yaml`) y la spec 011 los
+    avisos y los reportes (`api/paths/notifications.yaml` y `reports.yaml`).
+
+    - Rutas de negocio bajo `/api/v1`; `/healthz` y `/readyz` fuera del prefijo.
+    - JSON en `camelCase`; fechas en ISO-8601 UTC.
+    - Toda respuesta trae `X-Request-Id`: si la petición envía uno válido
+      (≤ 64 caracteres alfanuméricos y guiones) se reutiliza; si no, se genera.
+    - Las specs siguientes agregan sus rutas en `api/paths/<modulo>.yaml`.
+    - Autenticación (spec 003): `Authorization: Bearer <accessToken>` (JWT de
+      15 min). Las rutas sin autenticación declaran `security: []`.
+servers:
+  - url: https://vaiven-staging.westus2.cloudapp.azure.com:8443
+    description: Staging (Azure)
+  - url: http://localhost:8080
+    description: Desarrollo local
+security:
+  - bearerAuth: []
+tags:
+  - name: infraestructura
+    description: Salud del proceso y de sus dependencias.
+  - name: meta
+    description: Información del servicio para el cliente móvil.
+  - name: auth
+    description: Registro, inicio de sesión y tokens (spec 003).
+  - name: cuenta
+    description: La cuenta de la persona autenticada (spec 003).
+  - name: usuarios
+    description: Perfiles públicos (spec 003).
+  - name: imagenes
+    description: Subida de imágenes a Cloudinary con firma del servidor (spec 004).
+  - name: objetos
+    description: Publicar, editar y pausar objetos; precio sugerido y categorías (spec 005).
+  - name: busqueda
+    description: Buscar objetos por texto, categoría, zona, cercanía y fechas (spec 006).
+  - name: reservas
+    description: Cotizar, solicitar, aceptar, rechazar y cancelar reservas (spec 007).
+  - name: chat
+    description: Conversación privada de texto de cada reserva (spec 008).
+  - name: entrega
+    description: Evidencia, QR de un solo uso y confirmación de la entrega y la devolución (spec 009).
+  - name: pagos
+    description: Reporte y confirmación del pago acordado, sin cobro (spec 009).
+  - name: calificaciones
+    description: Calificar a la otra parte de una reserva completada y ver las recibidas (spec 010).
+  - name: incidencias
+    description: Reportar un incumplimiento con evidencia y consultarlo (spec 010).
+  - name: administracion
+    description: Revisión de incidencias, sanciones y reportes; exige rol `admin` (specs 010 y 011).
+  - name: avisos
+    description: Avisos dentro de la app y tokens de push (spec 011).
+  - name: reportes
+    description: Reportar objetos, mensajes, perfiles y decisiones de moderación (spec 011).
+paths:
+  /healthz:
+    get:
+      tags:
+        - infraestructura
+      operationId: getHealthz
+      security: []
+      summary: El proceso está vivo
+      description: Responde 200 mientras el proceso vive; no consulta dependencias.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: El proceso está vivo.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+              example:
+                status: ok
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /readyz:
+    get:
+      tags:
+        - infraestructura
+      operationId: getReadyz
+      security: []
+      summary: El servicio puede atender peticiones
+      description: |
+        Hace ping a MongoDB (máximo 2 s). Responde 503 `service_unavailable` solo si
+        MongoDB no responde. Redis nunca es fuente de verdad: si falla, responde 200
+        con `redis: degradado` (Art. XIV.2).
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: MongoDB responde.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ready'
+              example:
+                status: ready
+                redis: ok
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/meta:
+    get:
+      tags:
+        - meta
+      operationId: getMeta
+      security: []
+      summary: Información del servicio
+      description: Permite al móvil comprobar conectividad y versión.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Datos del servicio.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Meta'
+              example:
+                name: vaiven-backend
+                version: 0.2.0
+                environment: staging
+                serverTime: '2026-11-07T15:00:00Z'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/auth/register:
+    post:
+      tags:
+        - auth
+      operationId: register
+      summary: Crear una cuenta
+      description: |
+        Crea la cuenta y abre la sesión (RF-01). El correo se normaliza (minúsculas,
+        sin espacios) y debe ser único (RF-02). La persona debe aceptar los términos
+        y declarar que es mayor de edad (POL-12). Límite: 10 peticiones por minuto
+        por IP (RF-07).
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            example:
+              email: ana@example.com
+              password: una-contrasena-larga
+              displayName: Ana
+              acceptTerms: true
+              isAdult: true
+      responses:
+        '201':
+          description: Cuenta creada; la sesión queda abierta.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResult'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '409':
+          description: El correo ya tiene una cuenta (sin importar mayúsculas).
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  code: conflict
+                  message: Ya existe una cuenta con ese correo.
+                  requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/auth/login:
+    post:
+      tags:
+        - auth
+      operationId: login
+      summary: Iniciar sesión
+      description: |
+        Devuelve el usuario y tokens nuevos (RF-04). Ante credenciales inválidas o
+        una cuenta dada de baja responde 401 con un mensaje genérico que no revela
+        si el correo existe. Límites: 10 peticiones por minuto por IP (RF-07) y
+        20 intentos por cuenta cada 15 minutos (429 con `Retry-After: 900`).
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: ana@example.com
+              password: una-contrasena-larga
+      responses:
+        '200':
+          description: Sesión iniciada.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResult'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          description: Correo o contraseña incorrectos.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  code: unauthorized
+                  message: El correo o la contraseña no son correctos.
+                  requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/auth/refresh:
+    post:
+      tags:
+        - auth
+      operationId: refreshTokens
+      summary: Renovar la sesión
+      description: |
+        Rotación (RF-05): entrega un par nuevo e invalida el `refreshToken` usado.
+        Reutilizar un `refreshToken` ya usado revoca toda su familia (todas las
+        sesiones abiertas a partir del mismo inicio de sesión) y responde 401.
+        Límite: 10 peticiones por minuto por IP (RF-07).
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: Tokens nuevos.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - tokens
+                properties:
+                  tokens:
+                    $ref: '#/components/schemas/Tokens'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/auth/logout:
+    post:
+      tags:
+        - auth
+      operationId: logout
+      summary: Cerrar sesión
+      description: |
+        Revoca la familia del `refreshToken` (RF-06). Es idempotente: un token
+        desconocido, vencido o ya revocado también responde 204. El token de
+        acceso sigue siendo válido hasta que vence (15 min); el móvil lo descarta.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '204':
+          description: Sesión cerrada.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/me:
+    get:
+      tags:
+        - cuenta
+      operationId: getMe
+      summary: Mi cuenta
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Datos de la cuenta propia.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    patch:
+      tags:
+        - cuenta
+      operationId: updateMe
+      summary: Editar mi perfil
+      description: |
+        Cambia solo los campos enviados (RF-08). `phone: null` borra el teléfono.
+        El teléfono nunca aparece en el perfil público.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMeRequest'
+            example:
+              displayName: Ana López
+              phone: '+525512345678'
+      responses:
+        '200':
+          description: Perfil actualizado.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      tags:
+        - cuenta
+      operationId: deleteMe
+      summary: Dar de baja mi cuenta
+      description: |
+        Baja con confirmación de contraseña (RF-08, POL-17): anonimiza correo,
+        nombre y teléfono, revoca todas las sesiones y la cuenta deja de aceptar
+        inicio de sesión. El correo original queda libre para una cuenta nueva.
+        Si hay reservas activas responde 409 (cuando exista la spec 007).
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteMeRequest'
+      responses:
+        '204':
+          description: Cuenta dada de baja.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: |
+            La contraseña no es correcta. Se usa 403 y no 401 para que el móvil no
+            lo confunda con una sesión vencida.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  code: forbidden
+                  message: La contraseña no es correcta.
+                  requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+        '409':
+          description: Hay reservas activas; termínalas antes de dar de baja la cuenta.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  code: conflict
+                  message: Tienes reservas activas. Termínalas antes de dar de baja tu cuenta.
+                  requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/users/{id}:
+    get:
+      tags:
+        - usuarios
+      operationId: getUser
+      summary: Perfil público de una persona
+      description: |
+        Expone solo el mínimo (RF-09, Art. VI.4): nunca correo ni teléfono. Una
+        cuenta dada de baja se muestra como «Cuenta eliminada».
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: id
+          in: path
+          required: true
+          description: Identificador del usuario (24 caracteres hexadecimales).
+          schema:
+            type: string
+            pattern: ^[0-9a-f]{24}$
+      responses:
+        '200':
+          description: Perfil público.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicUser'
+              example:
+                id: 6730f1c2a9b3e4d5f6a7b8c9
+                displayName: Ana
+                ratingAverage: null
+                ratingCount: 0
+                memberSince: '2026-11-06T18:00:00Z'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: No existe un usuario con ese identificador.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  code: not_found
+                  message: No encontramos a esa persona.
+                  requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/uploads/signature:
+    post:
+      tags:
+        - imagenes
+      operationId: createUploadSignature
+      summary: Firma para subir una imagen
+      description: |
+        Devuelve lo necesario para subir **una** imagen directamente a Cloudinary
+        (RF-01). El cliente envía a `uploadUrl` un `multipart/form-data` con `file`,
+        `api_key`, `timestamp`, `signature`, `public_id`, `type`, `allowed_formats` y
+        `overwrite` (los valores de esta respuesta, sin cambiarlos). La firma vale para ese
+        `publicId`; el API secret nunca sale del servidor (RNF-01).
+
+        - `item_photo` → `type: upload` (pública); `evidence` → `type: authenticated`
+          (privada, solo con URL firmada de 10 min).
+        - Después, las demás rutas reciben la imagen como `ImageInput`
+          (`{ "publicId": "…" }`) y el servidor la verifica con Cloudinary: que sea
+          de quien la envía, formato jpg, jpeg, png o webp y ≤ 5 MB (POL-13).
+        - Límite: 30 firmas por persona y por hora (RF-04).
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadSignatureRequest'
+            example:
+              purpose: item_photo
+      responses:
+        '200':
+          description: Firma de un solo uso para subir la imagen.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadSignature'
+              example:
+                uploadUrl: https://api.cloudinary.com/v1_1/vaiven/image/upload
+                apiKey: '123456789012345'
+                timestamp: 1762480800
+                signature: 3f1c2d9a8b7e6f5a4d3c2b1a0f9e8d7c6b5a4f3e
+                publicId: vaiven/staging/item_photo/6730f1c2a9b3e4d5f6a7b8c9/9b2f6c1e4a7d4c0e8f3b5a2d1c6e7f80
+                type: upload
+                allowedFormats: jpg,jpeg,png,webp
+                overwrite: 'false'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/items:
+    get:
+      tags:
+        - busqueda
+      operationId: searchItems
+      summary: Buscar objetos
+      description: |
+        Devuelve tarjetas de objetos `active` de otras personas con cuenta activa
+        (RF-02); nunca los propios. Tres modos de orden:
+
+        - **Reciente** (sin `q` ni `lat`/`lng`): por fecha de publicación descendente.
+        - **Texto** (`q` sin ubicación): por relevancia en título y descripción, en
+          español, sin importar acentos ni mayúsculas (RF-04).
+        - **Cercanía** (`lat` y `lng`): por `distanceKm` ascendente dentro de
+          `radiusKm` (25 km por defecto). Si además hay `q`, cada palabra (hasta 8)
+          debe aparecer en el título o la descripción, sin importar acentos ni
+          mayúsculas, y el orden sigue siendo por distancia. En el modo texto basta
+          con que aparezca alguna palabra (orden por relevancia).
+
+        `municipality` es igualdad exacta sin importar acentos ni mayúsculas.
+
+        Con `from` y `to` excluye objetos con una reserva aceptada o en curso que se
+        cruce con el periodo; una solicitud pendiente no bloquea (RF-03). Las fechas
+        son de calendario en America/Mexico_City: `from` no puede ser anterior a
+        hoy, `to ≥ from` y el periodo dura como máximo 7 días (POL-02).
+
+        Para la página siguiente se envía `cursor` con el `nextCursor` recibido y los
+        **mismos** filtros (null = no hay más).
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: q
+          in: query
+          required: false
+          description: Texto a buscar (2 a 80 caracteres).
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 80
+          example: taladro
+        - name: category
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/CategoryKey'
+        - name: modality
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/ItemModality'
+        - name: municipality
+          in: query
+          required: false
+          description: Municipio o alcaldía exactos (sin importar mayúsculas).
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 60
+        - name: from
+          in: query
+          required: false
+          description: Primer día del periodo (`YYYY-MM-DD`); va junto con `to`.
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: false
+          description: Último día del periodo (`YYYY-MM-DD`, inclusivo); va junto con `from`.
+          schema:
+            type: string
+            format: date
+        - name: lat
+          in: query
+          required: false
+          description: Latitud de quien busca; va junto con `lng`.
+          schema:
+            type: number
+            minimum: -90
+            maximum: 90
+        - name: lng
+          in: query
+          required: false
+          schema:
+            type: number
+            minimum: -180
+            maximum: 180
+        - name: radiusKm
+          in: query
+          required: false
+          description: Radio en km (1 a 50; 25 por defecto). Solo con `lat` y `lng`.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+        - name: cursor
+          in: query
+          required: false
+          description: Valor opaco de `nextCursor`.
+          schema:
+            type: string
+            maxLength: 256
+      responses:
+        '200':
+          description: Página de tarjetas.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemCardPage'
+              example:
+                items:
+                  - id: 6731a2b3c4d5e6f7a8b9c0d1
+                    title: Taladro percutor 600 W
+                    category: herramientas_electricas
+                    modality: rent
+                    pricePerDayCents: 3000
+                    zone:
+                      municipality: Coyoacán
+                      neighborhood: Del Carmen
+                    approxLocation:
+                      lat: 19.35
+                      lng: -99.16
+                    distanceKm: 1.4
+                    thumbUrl: https://res.cloudinary.com/vaiven/image/upload/c_fill,w_320,h_320/vaiven/staging/item_photo/6730f1c2a9b3e4d5f6a7b8c9/9b2f6c1e4a7d4c0e8f3b5a2d1c6e7f80.jpg
+                    photoCount: 3
+                    owner:
+                      id: 6730f1c2a9b3e4d5f6a7b8c9
+                      displayName: Ana
+                      ratingAverage: 4.8
+                      ratingCount: 12
+                    createdAt: '2026-11-08T16:00:00Z'
+                nextCursor: eyJtIjoibmVhciIsImsiOjE0MDAuNSwiaWQiOiI2NzMxYTJiM2M0ZDVlNmY3YThiOWMwZDEifQ
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    post:
+      tags:
+        - objetos
+      operationId: createItem
+      summary: Publicar un objeto
+      description: |
+        Crea un objeto `active` del que la persona autenticada es dueña (RF-01).
+
+        - Préstamo (`loan`): `pricePerDayCents` debe ser 0 y `priceSource` `manual` (RF-02).
+        - Renta (`rent`): `pricePerDayCents` entre 1000 ($10) y `declaredValueCents`.
+        - `priceSource: suggested` exige que el precio sea igual a la sugerencia de
+          `GET /items/price-suggestion`; el servidor la recalcula (RF-03).
+        - `approxLocation` se redondea a 2 decimales antes de guardarse (RF-04).
+        - `photos`: 1 a 5 imágenes subidas con propósito `item_photo` por la misma
+          persona (POL-13); el servidor las verifica con Cloudinary.
+        - Título, descripción y reglas pasan por moderación (RF-05).
+        - Una cuenta suspendida recibe 403 (RF-12).
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ItemInput'
+            examples:
+              renta:
+                summary: Renta con el precio sugerido
+                value:
+                  title: Taladro percutor 600 W
+                  description: Incluye estuche y 5 brocas para concreto.
+                  category: herramientas_electricas
+                  condition: good
+                  modality: rent
+                  declaredValueCents: 100000
+                  pricePerDayCents: 3000
+                  priceSource: suggested
+                  usageRules: Devolver limpio. No usar en metal.
+                  zone:
+                    municipality: Coyoacán
+                    neighborhood: Del Carmen
+                  approxLocation:
+                    lat: 19.349512
+                    lng: -99.162301
+                  photos:
+                    - publicId: vaiven/staging/item_photo/6730f1c2a9b3e4d5f6a7b8c9/9b2f6c1e4a7d4c0e8f3b5a2d1c6e7f80
+              prestamo:
+                summary: Préstamo gratuito
+                value:
+                  title: Escalera de tijera
+                  description: Aluminio, 6 peldaños.
+                  category: construccion_jardineria
+                  condition: like_new
+                  modality: loan
+                  declaredValueCents: 150000
+                  pricePerDayCents: 0
+                  priceSource: manual
+                  zone:
+                    municipality: Tlalpan
+                  photos:
+                    - publicId: vaiven/staging/item_photo/6730f1c2a9b3e4d5f6a7b8c9/2c6e7f809b2f6c1e4a7d4c0e8f3b5a2d
+      responses:
+        '201':
+          description: Objeto publicado.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/items/price-suggestion:
+    get:
+      tags:
+        - objetos
+      operationId: getPriceSuggestion
+      summary: Precio sugerido por día
+      description: |
+        Calcula la sugerencia de POL-04: 3 % del valor declarado por día, mínimo
+        $10 y redondeado hacia arriba a múltiplos de $5. No publica nada (RF-03).
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: declaredValueCents
+          in: query
+          required: true
+          description: Valor declarado en centavos, de 5000 ($50) a 10000000 ($100,000).
+          schema:
+            type: integer
+            minimum: 5000
+            maximum: 10000000
+          example: 100000
+      responses:
+        '200':
+          description: Sugerencia en centavos.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceSuggestion'
+              example:
+                suggestedPricePerDayCents: 3000
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/items/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Identificador del objeto.
+        schema:
+          type: string
+          pattern: ^[0-9a-f]{24}$
+      - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+        - objetos
+      operationId: getItem
+      summary: Detalle de un objeto
+      description: |
+        Devuelve el objeto con el perfil público de quien lo ofrece (RF-06).
+        `active` lo ve cualquier persona autenticada; `paused` y `blocked`, solo su
+        dueño y admin (404 para los demás); `removed`, nadie (404).
+        `declaredValueCents` es null si quien consulta no es el dueño ni admin.
+      responses:
+        '200':
+          description: Detalle del objeto.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    patch:
+      tags:
+        - objetos
+      operationId: updateItem
+      summary: Editar un objeto (solo el dueño)
+      description: |
+        Cambia los campos enviados (RF-07). `version` es obligatorio: si no
+        coincide con la guardada responde 409 y hay que volver a leer el objeto
+        (control optimista). El objeto resultante debe cumplir las mismas reglas que
+        al publicarlo (modalidad, precio, sugerencia). `photos` reemplaza la lista
+        completa. `usageRules` y `approxLocation` en null los borran. Cambiar el
+        precio no altera reservas existentes (spec 007). Un objeto `blocked` no se
+        puede editar (409).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ItemUpdate'
+            example:
+              version: 1
+              pricePerDayCents: 3500
+              priceSource: manual
+      responses:
+        '200':
+          description: Objeto actualizado.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    delete:
+      tags:
+        - objetos
+      operationId: deleteItem
+      summary: Eliminar un objeto (solo el dueño)
+      description: |
+        Marca el objeto como `removed`; deja de verse para todos (RF-09). Si tiene
+        reservas aceptadas o en curso responde 409 (CA-07). No hay borrado físico.
+      responses:
+        '204':
+          description: Objeto eliminado.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/items/{id}/pause:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[0-9a-f]{24}$
+      - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+        - objetos
+      operationId: pauseItem
+      summary: Pausar un objeto (solo el dueño)
+      description: |
+        Pasa de `active` a `paused`: no admite solicitudes nuevas y conserva los
+        compromisos existentes (RF-08). Pausar uno ya pausado no cambia nada (200).
+        Un objeto `blocked` responde 409.
+      responses:
+        '200':
+          description: Objeto pausado.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/items/{id}/resume:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[0-9a-f]{24}$
+      - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+        - objetos
+      operationId: resumeItem
+      summary: Reanudar un objeto (solo el dueño)
+      description: |
+        Pasa de `paused` a `active` (RF-08). Reanudar uno activo no cambia nada
+        (200). Un objeto `blocked` responde 409: solo moderación lo desbloquea.
+      responses:
+        '200':
+          description: Objeto activo.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Item'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/me/items:
+    get:
+      tags:
+        - objetos
+      operationId: listMyItems
+      summary: Mis objetos
+      description: |
+        Lista los objetos de la persona autenticada, más recientes primero (RF-10).
+        Nunca incluye los `removed`. Sin `status` devuelve todos los demás estados.
+        Para la página siguiente se envía `cursor` con el `nextCursor` recibido
+        (null = no hay más).
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - active
+              - paused
+              - blocked
+        - name: cursor
+          in: query
+          required: false
+          description: Valor opaco de `nextCursor`.
+          schema:
+            type: string
+            maxLength: 128
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        '200':
+          description: Página de objetos.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemPage'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/categories:
+    get:
+      tags:
+        - objetos
+      operationId: listCategories
+      summary: Categorías
+      description: Las categorías de POL-14, en el orden en que se muestran (RF-11).
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Lista de categorías.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Category'
+              example:
+                - key: herramientas_manuales
+                  label: Herramientas manuales
+                - key: herramientas_electricas
+                  label: Herramientas eléctricas
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/items/{id}/quote:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Identificador del objeto.
+        schema:
+          type: string
+          pattern: ^[0-9a-f]{24}$
+      - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+        - reservas
+      operationId: quoteBooking
+      summary: Cotizar un periodo
+      description: |
+        Devuelve días, tarifa, total, desglose de pagos (POL-05) y los textos de
+        política (POL-03, POL-09) **antes** de solicitar. No crea nada (RF-01).
+
+        - `days = (endDate − startDate) + 1`, de 1 a 7 (POL-02); `startDate` no puede
+          ser anterior a hoy en Ciudad de México.
+        - Préstamo: total 0 y `paymentMode=none`. Renta: `full_on_delivery` o
+          `split_50_50` (entrega `ceil(total/2)`, devolución `floor(total/2)`).
+        - El objeto debe estar `active` y no ser de quien cotiza.
+      parameters:
+        - name: startDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          example: '2026-11-10'
+        - name: endDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          example: '2026-11-12'
+        - name: paymentMode
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/PaymentMode'
+      responses:
+        '200':
+          description: Cotización.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quote'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/bookings:
+    post:
+      tags:
+        - reservas
+      operationId: createBooking
+      summary: Solicitar un objeto
+      description: |
+        Crea una solicitud `pending` (RF-02). Se envía el `acceptedTotalCents` que
+        mostró la cotización: si el total actual es otro responde 409 con el detalle
+        `acceptedTotalCents: quote_changed` (CA-03) y hay que volver a cotizar.
+
+        - No se solicita un objeto propio (403); el objeto debe estar `active`; sin
+          cruce con reservas aceptadas o en curso; no se repite una solicitud
+          pendiente propia que se cruce (409).
+        - Guarda una instantánea (título, reglas, primera foto, tarifa y total): un
+          cambio posterior del objeto no la altera (RF-04).
+        - Vence a las 48 h o al empezar el día de `startDate`, lo primero (POL-03).
+        - Abre la conversación de la reserva y notifica al propietario (RF-12).
+        - Una cuenta suspendida recibe 403.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookingRequest'
+            example:
+              itemId: 6731a2b3c4d5e6f7a8b9c0d1
+              startDate: '2026-11-10'
+              endDate: '2026-11-12'
+              paymentMode: split_50_50
+              acceptedTotalCents: 9000
+      responses:
+        '201':
+          description: Solicitud creada.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Booking'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/bookings/{id}:
+    parameters:
+      - $ref: '#/components/parameters/BookingId'
+      - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+        - reservas
+      operationId: getBooking
+      summary: Detalle de una solicitud o reserva
+      description: |
+        Solo las dos partes y admin (404 para los demás). El punto de encuentro solo
+        lo ven las dos partes. Una pendiente ya vencida se muestra `expired` (RF-06).
+      responses:
+        '200':
+          $ref: '#/components/responses/BookingOk'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/me/bookings:
+    get:
+      tags:
+        - reservas
+      operationId: listMyBookings
+      summary: Mis solicitudes y reservas
+      description: |
+        Por rol (`owner`: las que recibo como propietario; `requester`: las que
+        envié) y estado opcional, más recientes primero (RF-10). `nextCursor` null =
+        no hay más.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: role
+          in: query
+          required: true
+          schema:
+            type: string
+            enum:
+              - owner
+              - requester
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/BookingStatus'
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 128
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        '200':
+          description: Página de solicitudes y reservas.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookingPage'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/bookings/{id}/accept:
+    parameters:
+      - $ref: '#/components/parameters/BookingId'
+      - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+        - reservas
+      operationId: acceptBooking
+      summary: Aceptar (propietario)
+      description: |
+        Reserva el periodo de forma atómica (RF-07): si otra reserva aceptada o en
+        curso se cruza responde 409 y no cambia nada (CA-05). Las demás solicitudes
+        pendientes que se cruzan pasan a `rejected` con motivo `no_disponible`.
+        Solo una solicitud `pending` y no vencida.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcceptBookingRequest'
+            example:
+              meetingPoint:
+                description: Entrada principal del metro Coyoacán.
+      responses:
+        '200':
+          $ref: '#/components/responses/BookingOk'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/bookings/{id}/reject:
+    parameters:
+      - $ref: '#/components/parameters/BookingId'
+      - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+        - reservas
+      operationId: rejectBooking
+      summary: Rechazar (propietario)
+      description: Rechaza una solicitud `pending`; `reason` es opcional (≤ 200 caracteres).
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RejectBookingRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/BookingOk'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/bookings/{id}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/BookingId'
+      - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+        - reservas
+      operationId: cancelBooking
+      summary: Cancelar
+      description: |
+        `pending`: solo quien solicitó. `accepted`: cualquiera de las partes, con
+        `reason` obligatorio (3 a 200 caracteres). Libera el periodo (CA-08) y
+        conserva el motivo y el historial (RF-08). Sin cargo automático (POL-09).
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelBookingRequest'
+            example:
+              reason: Ya no lo necesito, gracias.
+      responses:
+        '200':
+          $ref: '#/components/responses/BookingOk'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/bookings/{id}/meeting-point:
+    parameters:
+      - $ref: '#/components/parameters/BookingId'
+      - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+        - reservas
+      operationId: setBookingMeetingPoint
+      summary: Punto de encuentro (propietario)
+      description: Fija o cambia el punto de encuentro de una reserva `accepted` o `in_progress` (RF-09). Solo lo ven las dos partes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MeetingPoint'
+      responses:
+        '200':
+          $ref: '#/components/responses/BookingOk'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/conversations:
+    get:
+      tags:
+        - chat
+      operationId: listConversations
+      summary: Mis conversaciones
+      description: |
+        Una conversación por reserva, con su contraparte, el objeto, el último mensaje
+        (≤ 80 caracteres), mis no leídos y si se puede escribir (RF-02). La más
+        reciente primero. `nextCursor` null = no hay más.
+
+        El orden cambia cuando llega un mensaje: una conversación que aún no se
+        pidió puede subir por encima del cursor. Para no perderla, en la consulta
+        periódica se vuelve a pedir la **primera página** (sin `cursor`).
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 128
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        '200':
+          description: Página de conversaciones.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationPage'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/conversations/unread-count:
+    get:
+      tags:
+        - chat
+      operationId: getUnreadCount
+      summary: Mis mensajes sin leer
+      description: Suma de mis no leídos en todas mis conversaciones (RF-09).
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Total sin leer.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - count
+                properties:
+                  count:
+                    type: integer
+                    minimum: 0
+              example:
+                count: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/conversations/{id}/messages:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+      - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+        - chat
+      operationId: listMessages
+      summary: Mensajes de una conversación
+      description: |
+        Solo para los dos participantes; cualquier otra persona recibe 404 (RF-05).
+
+        - **Historial** (sin `after`): del más nuevo al más viejo, `limit` (30 por
+          defecto, máximo 50); para seguir hacia atrás se envía `before` con el
+          `nextCursor` recibido.
+        - **Consulta periódica** (`after=<id del último mensaje que tengo>`): los
+          mensajes más nuevos que ese, en orden **ascendente**, máximo 100;
+          `nextCursor` siempre null. El orden es el de confirmación del envío, así
+          que no hay huecos aunque las dos personas escriban a la vez.
+
+        `before` y `after` no se combinan, y deben ser ids de mensajes de esta
+        conversación (400 si no).
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 30
+        - name: before
+          in: query
+          required: false
+          description: Id de mensaje; devuelve los anteriores.
+          schema:
+            type: string
+            pattern: ^[0-9a-f]{24}$
+        - name: after
+          in: query
+          required: false
+          description: Id de mensaje; devuelve los posteriores en orden ascendente.
+          schema:
+            type: string
+            pattern: ^[0-9a-f]{24}$
+      responses:
+        '200':
+          description: Mensajes.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessagePage'
+              examples:
+                historial:
+                  summary: Historial (descendente)
+                  value:
+                    items:
+                      - id: 6731b0000000000000000003
+                        conversationId: 6731a0000000000000000001
+                        senderId: 6730f1c2a9b3e4d5f6a7b8c9
+                        body: ¿Te queda bien a las 5 en el metro?
+                        createdAt: '2026-11-09T17:02:00Z'
+                        clientId: null
+                    nextCursor: 6731b0000000000000000003
+                consultaPeriodica:
+                  summary: Consulta periódica con after (ascendente)
+                  value:
+                    items:
+                      - id: 6731b0000000000000000004
+                        conversationId: 6731a0000000000000000001
+                        senderId: 6730f1c2a9b3e4d5f6a7b8d0
+                        body: Perfecto, ahí nos vemos.
+                        createdAt: '2026-11-09T17:03:00Z'
+                        clientId: 2f1c-8e
+                    nextCursor: null
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      tags:
+        - chat
+      operationId: sendMessage
+      summary: Enviar un mensaje
+      description: |
+        Texto plano de 1 a 1000 caracteres, sin ser solo espacios (POL-11). Pasa por
+        moderación (400 con el motivo). Con `clientId` es idempotente: repetir el
+        mismo `clientId` devuelve el mensaje existente con 200 (CA-03).
+
+        - Solo se escribe mientras la reserva esté `pending`, `accepted` o
+          `in_progress` y la contraparte siga activa; si no, 409 «La conversación
+          está cerrada.» (el historial se sigue leyendo).
+        - Límite: 30 mensajes por minuto por persona (429).
+        - Al primer mensaje sin leer se avisa a la otra parte (`message_received`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+            example:
+              body: ¿Te queda bien a las 5 en el metro?
+              clientId: 2f1c-8e
+      responses:
+        '200':
+          description: Ya existía un mensaje con ese clientId; se devuelve sin duplicarlo.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '201':
+          description: Mensaje enviado.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/conversations/{id}/read:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+      - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+        - chat
+      operationId: markConversationRead
+      summary: Marcar como leída
+      description: |
+        Pone en cero **mis** no leídos de la conversación (RF-08). No existe ni se
+        expone información de lectura de la otra parte.
+      responses:
+        '204':
+          description: Listo.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/bookings/{id}/delivery/evidence:
+    parameters:
+      - $ref: '#/components/parameters/parameters-BookingId'
+      - $ref: '#/components/parameters/RequestId'
+    put:
+      tags:
+        - entrega
+      operationId: putDeliveryEvidence
+      summary: Registrar la evidencia de la entrega (el propietario)
+      description: |
+        Registra o reemplaza el estado del objeto y sus fotografías. Solo el propietario;
+        la reserva debe estar en `accepted` y la etapa sin confirmar (RF-13).
+
+        - `conditionNotes`: de 3 a 500 caracteres. `photos`: de 1 a 5, con el `publicId`
+          de imágenes subidas con propósito `evidence` (spec 004).
+        - Reemplazar la evidencia sube `evidenceVersion` e **invalida** el QR vigente.
+        - Las fotografías son privadas: la respuesta trae URL firmadas de 10 minutos.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvidenceRequest'
+            example:
+              conditionNotes: Taladro limpio, con el estuche y dos brocas. Sin rayones.
+              photos:
+                - publicId: vaiven/evidence/6731a0000000000000000009/1
+      responses:
+        '200':
+          $ref: '#/components/responses/StageOk'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/bookings/{id}/delivery/qr:
+    parameters:
+      - $ref: '#/components/parameters/parameters-BookingId'
+      - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+        - entrega
+      operationId: issueDeliveryQr
+      summary: Generar el QR de la entrega (el propietario)
+      description: |
+        Genera un QR de **un solo uso**, vigente 15 minutos (POL-06), ligado a la
+        reserva, la etapa y la versión de evidencia. Generar otro invalida el anterior.
+        Solo el propietario, con evidencia registrada y la etapa sin confirmar.
+
+        El `token` solo aparece en esta respuesta (el servidor guarda únicamente su
+        hash). La respuesta lleva `Cache-Control: no-store`.
+      responses:
+        '201':
+          description: QR generado.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            Cache-Control:
+              description: Siempre `no-store`.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QrToken'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/bookings/{id}/delivery/confirm:
+    parameters:
+      - $ref: '#/components/parameters/parameters-BookingId'
+      - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+        - entrega
+      operationId: confirmDelivery
+      summary: Confirmar la entrega con el QR (el solicitante)
+      description: |
+        Solo el solicitante. Valida que el QR sea vigente, no se haya usado, sea de esta
+        reserva y etapa y de la versión de evidencia actual; la reserva pasa a
+        `in_progress`. La confirmación es **atómica**: con el mismo QR a la vez,
+        exactamente una petición tiene éxito (RNF-02).
+
+        Un QR vencido, usado o reemplazado responde 409 `conflict`; se puede generar
+        otro. El QR **no** confirma ni condiciona el pago (RF-07). La entrega solo se confirma desde un día antes de `startDate` hasta `endDate` (hora de México).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmHandoverRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/responses-BookingOk'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/bookings/{id}/delivery:
+    parameters:
+      - $ref: '#/components/parameters/parameters-BookingId'
+      - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+        - entrega
+      operationId: getDelivery
+      summary: Ver la etapa de la entrega
+      description: |
+        Devuelve la etapa a las dos partes, con las fotografías mediante URL firmadas
+        de 10 minutos (RF-05). Una persona ajena (también un administrador) recibe 404.
+        Una etapa sin registrar devuelve sus campos vacíos y `qr.state: none`.
+      responses:
+        '200':
+          $ref: '#/components/responses/StageOk'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/bookings/{id}/return/evidence:
+    parameters:
+      - $ref: '#/components/parameters/parameters-BookingId'
+      - $ref: '#/components/parameters/RequestId'
+    put:
+      tags:
+        - entrega
+      operationId: putReturnEvidence
+      summary: Registrar la evidencia de la devolución (el solicitante)
+      description: |
+        Registra o reemplaza el estado del objeto y sus fotografías. Solo el solicitante;
+        la reserva debe estar en `in_progress` y la etapa sin confirmar (RF-13).
+
+        - `conditionNotes`: de 3 a 500 caracteres. `photos`: de 1 a 5, con el `publicId`
+          de imágenes subidas con propósito `evidence` (spec 004).
+        - Reemplazar la evidencia sube `evidenceVersion` e **invalida** el QR vigente.
+        - Las fotografías son privadas: la respuesta trae URL firmadas de 10 minutos.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvidenceRequest'
+            example:
+              conditionNotes: Taladro limpio, con el estuche y dos brocas. Sin rayones.
+              photos:
+                - publicId: vaiven/evidence/6731a0000000000000000009/1
+      responses:
+        '200':
+          $ref: '#/components/responses/StageOk'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/bookings/{id}/return/qr:
+    parameters:
+      - $ref: '#/components/parameters/parameters-BookingId'
+      - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+        - entrega
+      operationId: issueReturnQr
+      summary: Generar el QR de la devolución (el solicitante)
+      description: |
+        Genera un QR de **un solo uso**, vigente 15 minutos (POL-06), ligado a la
+        reserva, la etapa y la versión de evidencia. Generar otro invalida el anterior.
+        Solo el solicitante, con evidencia registrada y la etapa sin confirmar.
+
+        El `token` solo aparece en esta respuesta (el servidor guarda únicamente su
+        hash). La respuesta lleva `Cache-Control: no-store`.
+      responses:
+        '201':
+          description: QR generado.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+            Cache-Control:
+              description: Siempre `no-store`.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QrToken'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/bookings/{id}/return/confirm:
+    parameters:
+      - $ref: '#/components/parameters/parameters-BookingId'
+      - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+        - entrega
+      operationId: confirmReturn
+      summary: Confirmar la devolución con el QR (el propietario)
+      description: |
+        Solo el propietario. Valida que el QR sea vigente, no se haya usado, sea de esta
+        reserva y etapa y de la versión de evidencia actual; la reserva pasa a
+        `completed`. La confirmación es **atómica**: con el mismo QR a la vez,
+        exactamente una petición tiene éxito (RNF-02).
+
+        Un QR vencido, usado o reemplazado responde 409 `conflict`; se puede generar
+        otro. El QR **no** confirma ni condiciona el pago (RF-07).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmHandoverRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/responses-BookingOk'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/bookings/{id}/return:
+    parameters:
+      - $ref: '#/components/parameters/parameters-BookingId'
+      - $ref: '#/components/parameters/RequestId'
+    get:
+      tags:
+        - entrega
+      operationId: getReturn
+      summary: Ver la etapa de la devolución
+      description: |
+        Devuelve la etapa a las dos partes, con las fotografías mediante URL firmadas
+        de 10 minutos (RF-05). Una persona ajena (también un administrador) recibe 404.
+        Una etapa sin registrar devuelve sus campos vacíos y `qr.state: none`.
+      responses:
+        '200':
+          $ref: '#/components/responses/StageOk'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/bookings/{id}/payments/{stage}/report:
+    parameters:
+      - $ref: '#/components/parameters/parameters-BookingId'
+      - $ref: '#/components/parameters/PaymentStage'
+      - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+        - pagos
+      operationId: reportPayment
+      summary: Reportar el pago (solicitante)
+      description: |
+        El solicitante informa que ya pagó la etapa. Pasa de `pending` a `reported`
+        y avisa al propietario. `note` es opcional (hasta 200 caracteres).
+
+        - La etapa debe existir en la reserva (importes fijados al solicitar, spec
+          007); si no, 404. La reserva debe estar `accepted`, `in_progress` o
+          `completed`.
+        - Reportar un pago que ya no está `pending` responde 409.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportPaymentRequest'
+            example:
+              note: Transferencia SPEI del 20 de noviembre.
+      responses:
+        '200':
+          $ref: '#/components/responses/responses-BookingOk'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/bookings/{id}/payments/{stage}/confirm:
+    parameters:
+      - $ref: '#/components/parameters/parameters-BookingId'
+      - $ref: '#/components/parameters/PaymentStage'
+      - $ref: '#/components/parameters/RequestId'
+    post:
+      tags:
+        - pagos
+      operationId: confirmPayment
+      summary: Confirmar el pago recibido (propietario)
+      description: |
+        El propietario confirma que recibió el pago reportado. Solo desde
+        `reported` (si está `pending` o ya `confirmed`, 409) y avisa al solicitante.
+      responses:
+        '200':
+          $ref: '#/components/responses/responses-BookingOk'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/bookings/{id}/ratings:
+    post:
+      tags:
+        - calificaciones
+      operationId: rateBooking
+      summary: Calificar a la otra parte de una reserva
+      description: |
+        Guarda la calificación y actualiza de forma atómica el promedio y la
+        cantidad del perfil de la persona calificada (RF-01, RF-02).
+
+        - La reserva debe estar `completed` (si no, 409) y la ventana de 14 días
+          desde que se completó no debe haber vencido (si no, 409).
+        - Quien no es parte de la reserva recibe 404.
+        - Una segunda calificación propia a la misma reserva responde 409, también
+          si llegan dos iguales a la vez: solo una se guarda (RNF-01).
+        - `score` es un entero de 1 a 5; `comment` es opcional (hasta 300
+          caracteres; vacío = sin comentario).
+        - Avisa a la persona calificada (RF-10, evento `rating.received`).
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/BookingIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RateRequest'
+            example:
+              score: 5
+              comment: Todo salió muy bien, llegó puntual.
+      responses:
+        '201':
+          description: La calificación guardada.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Rating'
+              example:
+                id: 6731b0000000000000000010
+                bookingId: 6731a0000000000000000001
+                score: 5
+                comment: Todo salió muy bien, llegó puntual.
+                ratedRole: owner
+                rater:
+                  id: 6730f1c2a9b3e4d5f6a7b8c9
+                  displayName: Ana
+                createdAt: '2026-11-21T16:00:00Z'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/bookings/{id}/rating-status:
+    get:
+      tags:
+        - calificaciones
+      operationId: getRatingStatus
+      summary: Si puedo calificar esta reserva
+      description: |
+        `canRate` es verdadero si la reserva está `completed`, soy parte, aún no la
+        calificé y estoy dentro de la ventana de 14 días (RF-03). `myRating` es mi
+        calificación o `null`; `expiresAt` es cuándo vence la ventana (`null` si la
+        reserva aún no se completó). Quien no es parte recibe 404.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/BookingIdPath'
+      responses:
+        '200':
+          description: Estado de mi calificación.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RatingStatus'
+              example:
+                canRate: true
+                myRating: null
+                expiresAt: '2026-12-05T16:00:00Z'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/users/{id}/ratings:
+    get:
+      tags:
+        - calificaciones
+      operationId: listUserRatings
+      summary: Calificaciones recibidas por una persona
+      description: |
+        Puntaje, comentario, quién califica (nombre visible) y fecha; las más
+        recientes primero (RF-04). `nextCursor` null = no hay más. Un usuario que
+        no existe responde 404. El promedio y la cantidad están en el perfil público
+        (`GET /api/v1/users/{id}`).
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/UserIdPath'
+        - $ref: '#/components/parameters/CursorQuery'
+        - $ref: '#/components/parameters/LimitQuery'
+      responses:
+        '200':
+          description: Página de calificaciones.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RatingPage'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/bookings/{id}/incidents:
+    post:
+      tags:
+        - incidencias
+      operationId: openIncident
+      summary: Reportar un incumplimiento de una reserva
+      description: |
+        Abre una incidencia contra la otra parte (RF-05). Reglas:
+
+        - Solo las partes; quien no lo es recibe 404.
+        - La reserva debe estar `accepted`, `in_progress` o `completed` (POL-08: si
+          está completada, dentro de las 72 h siguientes). Si no, 409.
+        - `no_show` solo si ya llegó la fecha de inicio de la reserva (si no, 409).
+        - Máximo 3 incidencias abiertas por reserva; la cuarta responde 409 (CA-08).
+        - `description` de 10 a 1000 caracteres; `evidence` de 0 a 5 imágenes con
+          propósito `evidence` subidas por quien reporta.
+        - La reserva no cambia de estado (CA-04). Avisa a la parte reportada
+          (evento `incident.opened`).
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/BookingIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IncidentInput'
+            example:
+              reason: damaged
+              description: El objeto regresó con la tapa rota y no estaba así en la entrega.
+              evidence:
+                - publicId: vaiven/staging/evidence/6730f1c2a9b3e4d5f6a7b8c9/abc123
+      responses:
+        '201':
+          description: La incidencia abierta.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Incident'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/incidents/{id}:
+    get:
+      tags:
+        - incidencias
+      operationId: getIncident
+      summary: Ver una incidencia
+      description: |
+        Disponible para las dos partes y para el administrador (RF-07); cualquier
+        otra persona recibe 404. Las partes ven solo las notas con
+        `visibleToParties` verdadero (sin el campo) y la respuesta final; el
+        administrador ve todas las notas con su `visibleToParties`. La evidencia
+        trae URL firmadas de 10 minutos.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/IncidentIdPath'
+      responses:
+        '200':
+          description: La incidencia.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Incident'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/me/incidents:
+    get:
+      tags:
+        - incidencias
+      operationId: listMyIncidents
+      summary: Mis incidencias
+      description: |
+        Las incidencias en las que soy la parte que reporta o la reportada, las más
+        recientes primero (RF-07). `status` filtra por `open` o `closed`; sin él se
+        listan todas. `nextCursor` null = no hay más.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/IncidentStatus'
+        - $ref: '#/components/parameters/CursorQuery'
+        - $ref: '#/components/parameters/LimitQuery'
+      responses:
+        '200':
+          description: Página de incidencias.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentPage'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/incidents:
+    get:
+      tags:
+        - administracion
+      operationId: adminListIncidents
+      summary: Cola de incidencias (administración)
+      description: |
+        Lista incidencias para revisarlas (RF-08), las más antiguas primero. `status`
+        filtra por `open` o `closed`; sin él se listan las `open`. Cada incidencia
+        incluye todas sus notas con `visibleToParties`.
+      security:
+        - adminAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/IncidentStatus'
+        - $ref: '#/components/parameters/CursorQuery'
+        - $ref: '#/components/parameters/LimitQuery'
+      responses:
+        '200':
+          description: Página de incidencias (vista de administración).
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentPage'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/incidents/{id}/notes:
+    post:
+      tags:
+        - administracion
+      operationId: adminAddIncidentNote
+      summary: Agregar una nota a una incidencia
+      description: |
+        Agrega una nota (máximo 10 por incidencia; la undécima responde 409). Si
+        `visibleToParties` es verdadero, ambas partes la ven y reciben aviso (evento
+        `incident.note`); si no, es interna. Una incidencia cerrada no admite notas
+        (409).
+      security:
+        - adminAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/IncidentIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddIncidentNoteRequest'
+            example:
+              text: Por favor envía una foto del objeto antes de la entrega.
+              visibleToParties: true
+      responses:
+        '200':
+          description: La incidencia con la nota agregada (vista de administración).
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Incident'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/incidents/{id}/close:
+    post:
+      tags:
+        - administracion
+      operationId: adminCloseIncident
+      summary: Cerrar una incidencia con respuesta final
+      description: |
+        Pasa la incidencia de `open` a `closed` con una respuesta final
+        (`finalResponse`, 5 a 1000 caracteres) y un `outcome` (`none`,
+        `monetary_adjustment` o `restriction`), que solo registra la decisión: no
+        cobra ni restringe nada por sí mismo (la sanción es aparte). Ambas partes
+        ven la respuesta final y reciben aviso (evento `incident.closed`). Cerrar una
+        incidencia ya cerrada responde 409.
+      security:
+        - adminAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/IncidentIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CloseIncidentRequest'
+            example:
+              finalResponse: Revisamos la evidencia y acordamos un ajuste con ambas partes.
+              outcome: monetary_adjustment
+      responses:
+        '200':
+          description: La incidencia cerrada (vista de administración).
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Incident'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/users/{id}/sanctions:
+    post:
+      tags:
+        - administracion
+      operationId: adminApplySanction
+      summary: Registrar una advertencia o suspensión
+      description: |
+        Registra una sanción a una persona (RF-09). `warning` solo avisa;
+        `suspension` exige `endsAt` (futuro) y suspende la cuenta hasta esa fecha:
+        mientras dure no puede **crear** objetos ni solicitudes (403), pero sigue
+        pudiendo consultar y cerrar lo que ya tiene. Las sanciones no modifican las
+        calificaciones. `incidentId` es opcional y debe existir. La persona recibe
+        aviso (evento `sanction.applied`). Si ya había una suspensión, la última
+        fecha registrada es la que rige.
+      security:
+        - adminAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/UserIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SanctionInput'
+            example:
+              type: suspension
+              reason: Daño reiterado a objetos de otras personas.
+              endsAt: '2026-12-09T00:00:00Z'
+              incidentId: 6731c0000000000000000001
+      responses:
+        '201':
+          description: La sanción registrada.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sanction'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/me/notifications:
+    get:
+      tags:
+        - avisos
+      operationId: listMyNotifications
+      summary: Mis avisos
+      description: |
+        Lista mis avisos, los más recientes primero (RF-03). `nextCursor` null = no
+        hay más. Cada aviso trae `data` con los ids para abrir la pantalla correcta
+        (`bookingId`, `itemId`, `conversationId`, `incidentId`; solo los que
+        apliquen) y `readAt` (null si no se ha leído).
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/CursorQuery'
+        - $ref: '#/components/parameters/LimitQuery'
+      responses:
+        '200':
+          description: Página de avisos.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPage'
+              example:
+                items:
+                  - id: 6731d0000000000000000001
+                    type: booking_requested
+                    title: Nueva solicitud
+                    body: Alguien quiere Taladro.
+                    data:
+                      bookingId: 6731a0000000000000000001
+                      itemId: 6731a0000000000000000002
+                    readAt: null
+                    createdAt: '2026-11-17T16:00:00Z'
+                nextCursor: null
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/me/notifications/unread-count:
+    get:
+      tags:
+        - avisos
+      operationId: getMyUnreadNotificationCount
+      summary: Cuántos avisos no he leído
+      description: Cuenta mis avisos con `readAt` null (RF-03, CA-07).
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: El conteo.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - count
+                properties:
+                  count:
+                    type: integer
+                    minimum: 0
+              example:
+                count: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/me/notifications/read:
+    post:
+      tags:
+        - avisos
+      operationId: markMyNotificationsRead
+      summary: Marcar avisos como leídos
+      description: |
+        Marca como leídos los avisos indicados en `ids` (máximo 100; los que no son
+        míos o no existen se ignoran) o todos los míos con `all: true` (RF-03,
+        CA-07). Hay que enviar `ids` o `all`, no ambos. Repetirlo no cambia nada.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarkReadRequest'
+            example:
+              all: true
+      responses:
+        '204':
+          description: Listo.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/me/push-tokens:
+    post:
+      tags:
+        - avisos
+      operationId: registerMyPushToken
+      summary: Registrar mi token de push
+      description: |
+        Registra el token de Expo de este dispositivo o, si ya existía (p. ej. otra
+        persona había iniciado sesión en él), lo reasigna a mí (RF-04). Repetirlo
+        solo actualiza `lastSeenAt`.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PushTokenRequest'
+            example:
+              token: ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]
+              platform: android
+      responses:
+        '204':
+          description: Listo.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      tags:
+        - avisos
+      operationId: deleteMyPushToken
+      summary: Eliminar mi token de push
+      description: |
+        Elimina el token (al cerrar sesión). Solo borra un token que sea mío; si no
+        existe o es de otra persona responde igual 204 (no revela de quién es).
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PushTokenDeleteRequest'
+            example:
+              token: ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]
+      responses:
+        '204':
+          description: Listo.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/reports:
+    post:
+      tags:
+        - reportes
+      operationId: createReport
+      summary: Reportar un objeto, mensaje, perfil o decisión de moderación
+      description: |
+        Crea un reporte para revisión humana (RF-08).
+
+        - `targetType` `item`, `message` o `user`: `targetId` es el id del objeto,
+          mensaje o persona. Si no existe, 404.
+        - Un mensaje solo lo reporta quien participa en su conversación; quien no
+          participa recibe 404 (CA-06).
+        - `moderation_decision` (RF-09): reporta un rechazo automático del filtro
+          para seguimiento manual; `targetId` es una referencia de hasta 64
+          caracteres elegida por el cliente y el detalle va en `details`.
+        - No se puede reportar a uno mismo ni un objeto propio (409).
+        - Repetir el mismo reporte (mismo `targetType` y `targetId` de la misma
+          persona) no crea otro: responde 200 con el existente.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportInput'
+            example:
+              targetType: item
+              targetId: 6731a0000000000000000002
+              reason: prohibited_content
+              details: El título ofrece algo que no se permite.
+      responses:
+        '200':
+          description: Ya existía un reporte igual de esta persona; se devuelve ese.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportCreated'
+        '201':
+          description: Reporte creado.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportCreated'
+              example:
+                id: '6731e0000000000000000001'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/reports:
+    get:
+      tags:
+        - administracion
+      operationId: adminListReports
+      summary: Cola de reportes (administración)
+      description: |
+        Lista reportes para revisarlos (RF-10), los más antiguos primero. `status`
+        filtra por `open`, `actioned` o `dismissed`; sin él se listan los `open`.
+        `target.summary` es un resumen del contenido reportado (título del objeto,
+        vista previa del mensaje o nombre de la persona).
+      security:
+        - adminAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/ReportStatus'
+        - $ref: '#/components/parameters/CursorQuery'
+        - $ref: '#/components/parameters/LimitQuery'
+      responses:
+        '200':
+          description: Página de reportes.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportPage'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/admin/reports/{id}/resolve:
+    post:
+      tags:
+        - administracion
+      operationId: adminResolveReport
+      summary: Resolver un reporte
+      description: |
+        Cierra un reporte `open` con una decisión y su `note` (RF-10, RF-11; se
+        conserva quién la tomó y cuándo).
+
+        - `dismiss`: no hay falta; el reporte queda `dismissed`.
+        - `hide_item`: bloquea el objeto (sale de la búsqueda, CA-05) y avisa a su
+          dueño (`content_removed`). Solo para reportes de `item`; si no, 409.
+        - `suspend_user`: suspende 7 días a la persona reportada (o al dueño del
+          objeto, o a quien escribió el mensaje) y la avisa (`sanction_applied`).
+          No aplica a `moderation_decision` (409).
+
+        Un reporte ya resuelto responde 409.
+      security:
+        - adminAuth: []
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/ReportIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolveReportRequest'
+            example:
+              action: hide_item
+              note: El título incumple la política de contenido.
+      responses:
+        '200':
+          description: El reporte resuelto.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token de acceso que entregan login, register y refresh.
+    adminAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: El mismo token de acceso, de una cuenta con rol `admin` (spec 010, RF-11). Las demás cuentas reciben 403.
+  parameters:
+    BookingIdPath:
+      name: id
+      in: path
+      required: true
+      description: Identificador de la reserva (24 caracteres hexadecimales).
+      schema:
+        type: string
+        pattern: ^[0-9a-f]{24}$
+    UserIdPath:
+      name: id
+      in: path
+      required: true
+      description: Identificador de la persona (24 caracteres hexadecimales).
+      schema:
+        type: string
+        pattern: ^[0-9a-f]{24}$
+    ReportIdPath:
+      name: id
+      in: path
+      required: true
+      description: Id del reporte.
+      schema:
+        type: string
+    IncidentIdPath:
+      name: id
+      in: path
+      required: true
+      description: Identificador de la incidencia (24 caracteres hexadecimales).
+      schema:
+        type: string
+        pattern: ^[0-9a-f]{24}$
+    CursorQuery:
+      name: cursor
+      in: query
+      required: false
+      description: El `nextCursor` de la página anterior.
+      schema:
+        type: string
+        maxLength: 128
+    LimitQuery:
+      name: limit
+      in: query
+      required: false
+      description: Tamaño de página.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 50
+        default: 20
+    RequestId:
+      name: X-Request-Id
+      in: header
+      required: false
+      description: Identificador de la petición; se reutiliza si es válido.
+      schema:
+        type: string
+        maxLength: 64
+        pattern: ^[A-Za-z0-9-]{1,64}$
+    BookingId:
+      name: id
+      in: path
+      required: true
+      description: Identificador de la solicitud o reserva.
+      schema:
+        type: string
+        pattern: ^[0-9a-f]{24}$
+    ConversationId:
+      name: id
+      in: path
+      required: true
+      description: Identificador de la conversación.
+      schema:
+        type: string
+        pattern: ^[0-9a-f]{24}$
+    parameters-BookingId:
+      name: id
+      in: path
+      required: true
+      description: Identificador de la reserva.
+      schema:
+        type: string
+        pattern: ^[0-9a-f]{24}$
+    PaymentStage:
+      name: stage
+      in: path
+      required: true
+      description: Etapa del pago.
+      schema:
+        $ref: '#/components/schemas/PaymentStage'
+  headers:
+    X-Request-Id:
+      description: Identificador de la petición (el recibido si era válido o uno nuevo).
+      schema:
+        type: string
+        maxLength: 64
+  schemas:
+    Status:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+    Ready:
+      type: object
+      required:
+        - status
+        - redis
+      properties:
+        status:
+          type: string
+          enum:
+            - ready
+        redis:
+          type: string
+          enum:
+            - ok
+            - degradado
+          description: Estado de Redis; degradado si no responde o no está configurado.
+    Meta:
+      type: object
+      required:
+        - name
+        - version
+        - environment
+        - serverTime
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        environment:
+          type: string
+          enum:
+            - development
+            - test
+            - staging
+            - production
+        serverTime:
+          type: string
+          format: date-time
+          description: Hora del servidor en UTC (ISO-8601).
+    Role:
+      type: string
+      enum:
+        - user
+        - admin
+    User:
+      type: object
+      description: La cuenta propia (solo la ve su dueña).
+      required:
+        - id
+        - email
+        - displayName
+        - phone
+        - role
+        - ratingAverage
+        - ratingCount
+        - createdAt
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+        phone:
+          type:
+            - string
+            - 'null'
+        role:
+          $ref: '#/components/schemas/Role'
+        ratingAverage:
+          type:
+            - number
+            - 'null'
+          description: Promedio de calificaciones (1 a 5); null sin calificaciones (spec 010).
+        ratingCount:
+          type: integer
+          minimum: 0
+        createdAt:
+          type: string
+          format: date-time
+    PublicUser:
+      type: object
+      description: Perfil público; nunca incluye correo ni teléfono (Art. VI.4).
+      required:
+        - id
+        - displayName
+        - ratingAverage
+        - ratingCount
+        - memberSince
+      properties:
+        id:
+          type: string
+        displayName:
+          type: string
+          description: «Cuenta eliminada» si la cuenta se dio de baja.
+        ratingAverage:
+          type:
+            - number
+            - 'null'
+        ratingCount:
+          type: integer
+          minimum: 0
+        memberSince:
+          type: string
+          format: date-time
+    Tokens:
+      type: object
+      required:
+        - accessToken
+        - refreshToken
+        - expiresIn
+      properties:
+        accessToken:
+          type: string
+          description: 'JWT HS256 para el encabezado `Authorization: Bearer`.'
+        refreshToken:
+          type: string
+          description: Token opaco de un solo uso (30 días); se cambia en cada `refresh`.
+        expiresIn:
+          type: integer
+          description: Segundos de vida del token de acceso (900).
+    AuthResult:
+      type: object
+      required:
+        - user
+        - tokens
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        tokens:
+          $ref: '#/components/schemas/Tokens'
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+        - displayName
+        - acceptTerms
+        - isAdult
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: Se guarda en minúsculas y sin espacios.
+        password:
+          type: string
+          minLength: 8
+          maxLength: 72
+        displayName:
+          type: string
+          minLength: 2
+          maxLength: 40
+        acceptTerms:
+          type: boolean
+          const: true
+          description: Aceptación de términos y privacidad (POL-12).
+        isAdult:
+          type: boolean
+          const: true
+          description: Declaración de mayoría de edad (POL-12).
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          maxLength: 254
+        password:
+          type: string
+          maxLength: 72
+    RefreshRequest:
+      type: object
+      required:
+        - refreshToken
+      properties:
+        refreshToken:
+          type: string
+          maxLength: 128
+    UpdateMeRequest:
+      type: object
+      minProperties: 1
+      properties:
+        displayName:
+          type: string
+          minLength: 2
+          maxLength: 40
+        phone:
+          type:
+            - string
+            - 'null'
+          pattern: ^\+?[0-9]{10,15}$
+          description: 10 a 15 dígitos, con `+` opcional; null lo borra.
+    DeleteMeRequest:
+      type: object
+      required:
+        - password
+      properties:
+        password:
+          type: string
+          maxLength: 72
+    ImagePurpose:
+      type: string
+      enum:
+        - item_photo
+        - evidence
+      description: item_photo es pública; evidence es privada (solo las partes de la reserva).
+    UploadSignatureRequest:
+      type: object
+      required:
+        - purpose
+      properties:
+        purpose:
+          $ref: '#/components/schemas/ImagePurpose'
+    UploadSignature:
+      type: object
+      description: Datos para subir una imagen directo a Cloudinary (RF-01). Nunca incluye el API secret.
+      required:
+        - uploadUrl
+        - apiKey
+        - timestamp
+        - signature
+        - publicId
+        - type
+        - allowedFormats
+        - overwrite
+      properties:
+        uploadUrl:
+          type: string
+          format: uri
+        apiKey:
+          type: string
+          description: API key pública de Cloudinary (no es secreta).
+        timestamp:
+          type: integer
+          description: Segundos Unix; Cloudinary rechaza firmas de más de 1 h.
+        signature:
+          type: string
+          description: SHA-256 en hexadecimal de los parámetros firmados.
+        publicId:
+          type: string
+          description: <carpeta base>/<purpose>/<userId>/<id>; enviarlo sin cambios como public_id.
+        type:
+          type: string
+          enum:
+            - upload
+            - authenticated
+        allowedFormats:
+          type: string
+          const: jpg,jpeg,png,webp
+        overwrite:
+          type: string
+          const: 'false'
+          description: Va firmado; impide volver a subir encima de una imagen ya verificada.
+    ImageInput:
+      type: object
+      description: Referencia a una imagen ya subida, que reciben las demás rutas (RF-05). Máximo 5 por recurso.
+      required:
+        - publicId
+      properties:
+        publicId:
+          type: string
+          maxLength: 255
+    Image:
+      type: object
+      description: |
+        Imagen verificada con Cloudinary (RF-06, RF-07). Las URL se calculan al
+        leer; las de entrega authenticated caducan a los 10 minutos.
+      required:
+        - publicId
+        - width
+        - height
+        - format
+        - bytes
+        - delivery
+        - url
+        - thumbUrl
+      properties:
+        publicId:
+          type: string
+        width:
+          type: integer
+        height:
+          type: integer
+        format:
+          type: string
+          enum:
+            - jpg
+            - jpeg
+            - png
+            - webp
+        bytes:
+          type: integer
+          maximum: 5242880
+        delivery:
+          type: string
+          enum:
+            - public
+            - authenticated
+        url:
+          type: string
+          format: uri
+        thumbUrl:
+          type: string
+          format: uri
+    CategoryKey:
+      type: string
+      description: Categorías de POL-14.
+      enum:
+        - herramientas_manuales
+        - herramientas_electricas
+        - construccion_jardineria
+        - movilidad
+        - deportes
+        - hogar
+        - otros
+    Category:
+      type: object
+      required:
+        - key
+        - label
+      properties:
+        key:
+          $ref: '#/components/schemas/CategoryKey'
+        label:
+          type: string
+    ItemCondition:
+      type: string
+      enum:
+        - new
+        - like_new
+        - good
+        - fair
+        - worn
+    ItemModality:
+      type: string
+      enum:
+        - loan
+        - rent
+      description: loan = préstamo gratuito; rent = renta por día.
+    PriceSource:
+      type: string
+      enum:
+        - manual
+        - suggested
+    ItemStatus:
+      type: string
+      enum:
+        - active
+        - paused
+        - blocked
+      description: blocked lo pone moderación (spec 011). Los objetos eliminados nunca se devuelven.
+    Zone:
+      type: object
+      required:
+        - municipality
+      properties:
+        municipality:
+          type: string
+          minLength: 2
+          maxLength: 60
+        neighborhood:
+          type:
+            - string
+            - 'null'
+          maxLength: 60
+    ApproxLocation:
+      type: object
+      description: Ubicación aproximada; el servidor la redondea a 2 decimales (~1 km, RF-04).
+      required:
+        - lat
+        - lng
+      properties:
+        lat:
+          type: number
+          minimum: -90
+          maximum: 90
+        lng:
+          type: number
+          minimum: -180
+          maximum: 180
+    ItemInput:
+      type: object
+      required:
+        - title
+        - description
+        - category
+        - condition
+        - modality
+        - declaredValueCents
+        - pricePerDayCents
+        - priceSource
+        - zone
+        - photos
+      properties:
+        title:
+          type: string
+          minLength: 3
+          maxLength: 80
+        description:
+          type: string
+          maxLength: 1000
+        category:
+          $ref: '#/components/schemas/CategoryKey'
+        condition:
+          $ref: '#/components/schemas/ItemCondition'
+        modality:
+          $ref: '#/components/schemas/ItemModality'
+        declaredValueCents:
+          type: integer
+          minimum: 5000
+          maximum: 10000000
+          description: Valor declarado en centavos ($50 a $100,000). Solo lo ven el dueño y admin.
+        pricePerDayCents:
+          type: integer
+          minimum: 0
+          description: 0 en préstamo; en renta de 1000 ($10) al valor declarado.
+        priceSource:
+          $ref: '#/components/schemas/PriceSource'
+        usageRules:
+          type:
+            - string
+            - 'null'
+          maxLength: 500
+        zone:
+          $ref: '#/components/schemas/Zone'
+        approxLocation:
+          oneOf:
+            - $ref: '#/components/schemas/ApproxLocation'
+            - type: 'null'
+        photos:
+          type: array
+          minItems: 1
+          maxItems: 5
+          items:
+            $ref: '#/components/schemas/ImageInput'
+    ItemUpdate:
+      type: object
+      description: Campos a cambiar más la versión leída (control optimista). Al menos un campo además de version.
+      required:
+        - version
+      minProperties: 2
+      properties:
+        version:
+          type: integer
+          minimum: 1
+        title:
+          type: string
+          minLength: 3
+          maxLength: 80
+        description:
+          type: string
+          maxLength: 1000
+        category:
+          $ref: '#/components/schemas/CategoryKey'
+        condition:
+          $ref: '#/components/schemas/ItemCondition'
+        modality:
+          $ref: '#/components/schemas/ItemModality'
+        declaredValueCents:
+          type: integer
+          minimum: 5000
+          maximum: 10000000
+          description: Valor declarado en centavos ($50 a $100,000). Solo lo ven el dueño y admin.
+        pricePerDayCents:
+          type: integer
+          minimum: 0
+          description: 0 en préstamo; en renta de 1000 ($10) al valor declarado.
+        priceSource:
+          $ref: '#/components/schemas/PriceSource'
+        usageRules:
+          type:
+            - string
+            - 'null'
+          maxLength: 500
+        zone:
+          $ref: '#/components/schemas/Zone'
+        approxLocation:
+          oneOf:
+            - $ref: '#/components/schemas/ApproxLocation'
+            - type: 'null'
+        photos:
+          type: array
+          minItems: 1
+          maxItems: 5
+          items:
+            $ref: '#/components/schemas/ImageInput'
+    Item:
+      type: object
+      required:
+        - id
+        - owner
+        - title
+        - description
+        - category
+        - condition
+        - modality
+        - declaredValueCents
+        - pricePerDayCents
+        - priceSource
+        - usageRules
+        - zone
+        - approxLocation
+        - photos
+        - status
+        - createdAt
+        - updatedAt
+        - version
+      properties:
+        id:
+          type: string
+        owner:
+          $ref: '#/components/schemas/PublicUser'
+        title:
+          type: string
+        description:
+          type: string
+        category:
+          $ref: '#/components/schemas/CategoryKey'
+        condition:
+          $ref: '#/components/schemas/ItemCondition'
+        modality:
+          $ref: '#/components/schemas/ItemModality'
+        declaredValueCents:
+          type:
+            - integer
+            - 'null'
+          description: null si quien consulta no es el dueño ni admin.
+        pricePerDayCents:
+          type: integer
+        priceSource:
+          $ref: '#/components/schemas/PriceSource'
+        usageRules:
+          type:
+            - string
+            - 'null'
+        zone:
+          $ref: '#/components/schemas/Zone'
+        approxLocation:
+          oneOf:
+            - $ref: '#/components/schemas/ApproxLocation'
+            - type: 'null'
+        photos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Image'
+        status:
+          $ref: '#/components/schemas/ItemStatus'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+      example:
+        id: 6731a2b3c4d5e6f7a8b9c0d1
+        owner:
+          id: 6730f1c2a9b3e4d5f6a7b8c9
+          displayName: Ana
+          ratingAverage: null
+          ratingCount: 0
+          memberSince: '2026-11-06T18:00:00Z'
+        title: Taladro percutor 600 W
+        description: Incluye estuche y 5 brocas para concreto.
+        category: herramientas_electricas
+        condition: good
+        modality: rent
+        declaredValueCents: 100000
+        pricePerDayCents: 3000
+        priceSource: suggested
+        usageRules: Devolver limpio. No usar en metal.
+        zone:
+          municipality: Coyoacán
+          neighborhood: Del Carmen
+        approxLocation:
+          lat: 19.35
+          lng: -99.16
+        photos:
+          - publicId: vaiven/staging/item_photo/6730f1c2a9b3e4d5f6a7b8c9/9b2f6c1e4a7d4c0e8f3b5a2d1c6e7f80
+            width: 1200
+            height: 900
+            format: jpg
+            bytes: 245000
+            delivery: public
+            url: https://res.cloudinary.com/vaiven/image/upload/vaiven/staging/item_photo/6730f1c2a9b3e4d5f6a7b8c9/9b2f6c1e4a7d4c0e8f3b5a2d1c6e7f80.jpg
+            thumbUrl: https://res.cloudinary.com/vaiven/image/upload/c_fill,w_320,h_320/vaiven/staging/item_photo/6730f1c2a9b3e4d5f6a7b8c9/9b2f6c1e4a7d4c0e8f3b5a2d1c6e7f80.jpg
+        status: active
+        createdAt: '2026-11-08T16:00:00Z'
+        updatedAt: '2026-11-08T16:00:00Z'
+        version: 1
+    ItemPage:
+      type: object
+      required:
+        - items
+        - nextCursor
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Item'
+        nextCursor:
+          type:
+            - string
+            - 'null'
+    PriceSuggestion:
+      type: object
+      required:
+        - suggestedPricePerDayCents
+      properties:
+        suggestedPricePerDayCents:
+          type: integer
+          minimum: 1000
+    ItemCard:
+      type: object
+      description: Tarjeta pública de un resultado de búsqueda (RF-06). Sin valor declarado ni datos de contacto.
+      required:
+        - id
+        - title
+        - category
+        - modality
+        - pricePerDayCents
+        - zone
+        - approxLocation
+        - distanceKm
+        - thumbUrl
+        - photoCount
+        - owner
+        - createdAt
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        category:
+          $ref: '#/components/schemas/CategoryKey'
+        modality:
+          $ref: '#/components/schemas/ItemModality'
+        pricePerDayCents:
+          type: integer
+        zone:
+          $ref: '#/components/schemas/Zone'
+        approxLocation:
+          oneOf:
+            - $ref: '#/components/schemas/ApproxLocation'
+            - type: 'null'
+        distanceKm:
+          type:
+            - number
+            - 'null'
+          description: Distancia aproximada con 1 decimal; null si no se envió lat/lng.
+        thumbUrl:
+          type:
+            - string
+            - 'null'
+          format: uri
+          description: Miniatura de la primera foto.
+        photoCount:
+          type: integer
+          minimum: 0
+        owner:
+          type: object
+          required:
+            - id
+            - displayName
+            - ratingAverage
+            - ratingCount
+          properties:
+            id:
+              type: string
+            displayName:
+              type: string
+            ratingAverage:
+              type:
+                - number
+                - 'null'
+            ratingCount:
+              type: integer
+              minimum: 0
+        createdAt:
+          type: string
+          format: date-time
+    ItemCardPage:
+      type: object
+      required:
+        - items
+        - nextCursor
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ItemCard'
+        nextCursor:
+          type:
+            - string
+            - 'null'
+    CalendarDate:
+      type: string
+      format: date
+      description: Fecha de calendario YYYY-MM-DD en America/Mexico_City (excepción documentada al Art. V).
+    PaymentMode:
+      type: string
+      enum:
+        - none
+        - full_on_delivery
+        - split_50_50
+      description: none solo en préstamo; en renta full_on_delivery o split_50_50 (POL-05).
+    BookingStatus:
+      type: string
+      enum:
+        - pending
+        - accepted
+        - rejected
+        - expired
+        - cancelled
+        - in_progress
+        - completed
+    PaymentStage:
+      type: string
+      enum:
+        - delivery
+        - return
+    QuotePayment:
+      type: object
+      required:
+        - stage
+        - amountCents
+      properties:
+        stage:
+          $ref: '#/components/schemas/PaymentStage'
+        amountCents:
+          type: integer
+          minimum: 0
+    Quote:
+      type: object
+      required:
+        - itemId
+        - startDate
+        - endDate
+        - days
+        - modality
+        - pricePerDayCents
+        - totalCents
+        - currency
+        - paymentMode
+        - payments
+        - policy
+      properties:
+        itemId:
+          type: string
+        startDate:
+          $ref: '#/components/schemas/CalendarDate'
+        endDate:
+          $ref: '#/components/schemas/CalendarDate'
+        days:
+          type: integer
+          minimum: 1
+          maximum: 7
+        modality:
+          $ref: '#/components/schemas/ItemModality'
+        pricePerDayCents:
+          type: integer
+        totalCents:
+          type: integer
+        currency:
+          type: string
+          const: MXN
+        paymentMode:
+          $ref: '#/components/schemas/PaymentMode'
+        payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuotePayment'
+        policy:
+          type: object
+          required:
+            - requestExpiresInHours
+            - lateCancellationNotice
+            - noShowNotice
+          properties:
+            requestExpiresInHours:
+              type: integer
+              const: 48
+            lateCancellationNotice:
+              type: string
+            noShowNotice:
+              type: string
+      example:
+        itemId: 6731a2b3c4d5e6f7a8b9c0d1
+        startDate: '2026-11-10'
+        endDate: '2026-11-12'
+        days: 3
+        modality: rent
+        pricePerDayCents: 3000
+        totalCents: 9000
+        currency: MXN
+        paymentMode: split_50_50
+        payments:
+          - stage: delivery
+            amountCents: 4500
+          - stage: return
+            amountCents: 4500
+        policy:
+          requestExpiresInHours: 48
+          lateCancellationNotice: Cancelar tarde no tiene cargo automático, pero puede registrarse una incidencia.
+          noShowNotice: Si no te presentas a la entrega o la devolución puede registrarse una incidencia y una advertencia o suspensión.
+    BookingRequest:
+      type: object
+      required:
+        - itemId
+        - startDate
+        - endDate
+        - paymentMode
+        - acceptedTotalCents
+      properties:
+        itemId:
+          type: string
+          pattern: ^[0-9a-f]{24}$
+        startDate:
+          $ref: '#/components/schemas/CalendarDate'
+        endDate:
+          $ref: '#/components/schemas/CalendarDate'
+        paymentMode:
+          $ref: '#/components/schemas/PaymentMode'
+        acceptedTotalCents:
+          type: integer
+          minimum: 0
+          description: Total que mostró la cotización; si cambió, 409 con detalle quote_changed.
+    MeetingPoint:
+      type: object
+      required:
+        - description
+      properties:
+        description:
+          type: string
+          minLength: 3
+          maxLength: 200
+    AcceptBookingRequest:
+      type: object
+      properties:
+        meetingPoint:
+          $ref: '#/components/schemas/MeetingPoint'
+    RejectBookingRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 200
+    CancelBookingRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 200
+          description: Obligatorio al cancelar una reserva accepted.
+    BookingPayment:
+      type: object
+      required:
+        - stage
+        - amountCents
+        - status
+        - reportedAt
+        - note
+        - confirmedAt
+      properties:
+        stage:
+          $ref: '#/components/schemas/PaymentStage'
+        amountCents:
+          type: integer
+        status:
+          type: string
+          enum:
+            - pending
+            - reported
+            - confirmed
+          description: |
+            `pending` → `reported` (lo informa el solicitante) → `confirmed` (lo
+            confirma el propietario). VAIVÉN no cobra ni verifica el pago (spec 009).
+        reportedAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        note:
+          type:
+            - string
+            - 'null'
+          description: Nota opcional del reporte de pago (hasta 200 caracteres).
+        confirmedAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+    Stage:
+      type: object
+      description: |
+        Etapa presencial de la reserva: la entrega o la devolución (spec 009). Las
+        fotografías son privadas y traen URL firmadas de 10 minutos. Nunca incluye
+        el token ni su hash.
+      required:
+        - recordedAt
+        - recordedById
+        - conditionNotes
+        - photos
+        - evidenceVersion
+        - qr
+        - confirmedAt
+        - confirmedById
+      properties:
+        recordedAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        recordedById:
+          type:
+            - string
+            - 'null'
+        conditionNotes:
+          type: string
+          description: Estado del objeto; vacío mientras no haya evidencia.
+        photos:
+          type: array
+          maxItems: 5
+          items:
+            $ref: '#/components/schemas/Image'
+        evidenceVersion:
+          type: integer
+          description: 0 sin evidencia; sube al reemplazarla.
+        qr:
+          type: object
+          required:
+            - state
+            - expiresAt
+          properties:
+            state:
+              type: string
+              enum:
+                - none
+                - active
+                - expired
+                - used
+            expiresAt:
+              type:
+                - string
+                - 'null'
+              format: date-time
+              description: Solo con QR activo o vencido.
+        confirmedAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        confirmedById:
+          type:
+            - string
+            - 'null'
+    EvidenceRequest:
+      type: object
+      required:
+        - conditionNotes
+        - photos
+      properties:
+        conditionNotes:
+          type: string
+          minLength: 3
+          maxLength: 500
+        photos:
+          type: array
+          minItems: 1
+          maxItems: 5
+          items:
+            type: object
+            required:
+              - publicId
+            properties:
+              publicId:
+                type: string
+                description: Imagen subida con propósito `evidence` (spec 004).
+    QrToken:
+      type: object
+      required:
+        - token
+        - qrPayload
+        - expiresAt
+      properties:
+        token:
+          type: string
+          description: 32 bytes aleatorios en base64url. Solo se devuelve aquí.
+        qrPayload:
+          type: string
+          description: Texto que codifica el QR, `vaiven://qr?b=<reserva>&s=<delivery|return>&t=<token>`.
+        expiresAt:
+          type: string
+          format: date-time
+          description: 15 minutos después de generarlo (POL-06).
+    ConfirmHandoverRequest:
+      type: object
+      required:
+        - token
+      properties:
+        token:
+          type: string
+    ReportPaymentRequest:
+      type: object
+      properties:
+        note:
+          type:
+            - string
+            - 'null'
+          maxLength: 200
+    Adjustment:
+      type: object
+      description: Ajuste por devolución tardía. Se registra, no se cobra (RF-10).
+      required:
+        - type
+        - lateDays
+        - amountCents
+        - status
+      properties:
+        type:
+          type: string
+          const: late_return
+        lateDays:
+          type: integer
+          minimum: 1
+        amountCents:
+          type: integer
+          description: Días de retraso × tarifa diaria, en centavos de MXN.
+        status:
+          type: string
+          const: recorded
+    Booking:
+      type: object
+      required:
+        - id
+        - item
+        - owner
+        - requester
+        - startDate
+        - endDate
+        - days
+        - usageRules
+        - priceSnapshot
+        - paymentMode
+        - payments
+        - status
+        - expiresAt
+        - meetingPoint
+        - cancelReason
+        - cancelledBy
+        - rejectReason
+        - conversationId
+        - delivery
+        - return
+        - isLate
+        - adjustments
+        - affectedBy
+        - viewerRole
+        - createdAt
+        - updatedAt
+        - version
+      properties:
+        id:
+          type: string
+        item:
+          type: object
+          required:
+            - id
+            - title
+            - thumbUrl
+            - modality
+          properties:
+            id:
+              type: string
+            title:
+              type: string
+              description: Título de la instantánea (RF-04).
+            thumbUrl:
+              type:
+                - string
+                - 'null'
+              format: uri
+            modality:
+              $ref: '#/components/schemas/ItemModality'
+        owner:
+          $ref: '#/components/schemas/PublicUser'
+        requester:
+          $ref: '#/components/schemas/PublicUser'
+        startDate:
+          $ref: '#/components/schemas/CalendarDate'
+        endDate:
+          $ref: '#/components/schemas/CalendarDate'
+        days:
+          type: integer
+        usageRules:
+          type:
+            - string
+            - 'null'
+          description: Reglas de uso de la instantánea.
+        priceSnapshot:
+          type: object
+          required:
+            - modality
+            - pricePerDayCents
+            - totalCents
+            - currency
+          properties:
+            modality:
+              $ref: '#/components/schemas/ItemModality'
+            pricePerDayCents:
+              type: integer
+            totalCents:
+              type: integer
+            currency:
+              type: string
+              const: MXN
+        paymentMode:
+          $ref: '#/components/schemas/PaymentMode'
+        payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookingPayment'
+        status:
+          $ref: '#/components/schemas/BookingStatus'
+        expiresAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+          description: Solo en pending.
+        meetingPoint:
+          oneOf:
+            - $ref: '#/components/schemas/MeetingPoint'
+            - type: 'null'
+        cancelReason:
+          type:
+            - string
+            - 'null'
+        cancelledBy:
+          type:
+            - string
+            - 'null'
+          enum:
+            - owner
+            - requester
+            - null
+        rejectReason:
+          type:
+            - string
+            - 'null'
+          description: Motivo del rechazo; no_disponible si se aceptó otra solicitud que se cruzaba (RF-07).
+        conversationId:
+          type:
+            - string
+            - 'null'
+        delivery:
+          description: Etapa de entrega; null si no hay datos o quien consulta es administrador (RF-05).
+          oneOf:
+            - $ref: '#/components/schemas/Stage'
+            - type: 'null'
+        return:
+          description: Etapa de devolución; null si no hay datos o quien consulta es administrador (RF-05).
+          oneOf:
+            - $ref: '#/components/schemas/Stage'
+            - type: 'null'
+        isLate:
+          type: boolean
+          description: La devolución pasó la fecha de fin más la tolerancia de 2 h (POL-07).
+        adjustments:
+          type: array
+          description: Ajustes por retraso (spec 009); a lo más uno.
+          items:
+            $ref: '#/components/schemas/Adjustment'
+        affectedBy:
+          type:
+            - string
+            - 'null'
+          description: Id de la reserva tardía del mismo objeto que retrasa esta (spec 009, RF-09).
+        viewerRole:
+          type: string
+          enum:
+            - owner
+            - requester
+            - admin
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+    BookingPage:
+      type: object
+      required:
+        - items
+        - nextCursor
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Booking'
+        nextCursor:
+          type:
+            - string
+            - 'null'
+    Message:
+      type: object
+      required:
+        - id
+        - conversationId
+        - senderId
+        - body
+        - createdAt
+        - clientId
+      properties:
+        id:
+          type: string
+          description: ObjectID; crece con el tiempo (sirve de cursor before/after).
+        conversationId:
+          type: string
+        senderId:
+          type: string
+        body:
+          type: string
+          description: Texto plano; el cliente nunca lo interpreta como HTML.
+        createdAt:
+          type: string
+          format: date-time
+        clientId:
+          type:
+            - string
+            - 'null'
+    MessagePage:
+      type: object
+      required:
+        - items
+        - nextCursor
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+        nextCursor:
+          type:
+            - string
+            - 'null'
+    SendMessageRequest:
+      type: object
+      required:
+        - body
+      properties:
+        body:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        clientId:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: Generado por el cliente para reintentar sin duplicar.
+    Conversation:
+      type: object
+      required:
+        - id
+        - bookingId
+        - bookingStatus
+        - counterpart
+        - item
+        - canWrite
+        - lastMessage
+        - unreadCount
+      properties:
+        id:
+          type: string
+        bookingId:
+          type: string
+        bookingStatus:
+          $ref: '#/components/schemas/BookingStatus'
+        counterpart:
+          $ref: '#/components/schemas/PublicUser'
+        item:
+          type: object
+          required:
+            - id
+            - title
+            - thumbUrl
+          properties:
+            id:
+              type: string
+            title:
+              type: string
+            thumbUrl:
+              type:
+                - string
+                - 'null'
+              format: uri
+        canWrite:
+          type: boolean
+          description: false si la reserva ya no está pending, accepted ni in_progress, o si la contraparte se dio de baja.
+        lastMessage:
+          oneOf:
+            - type: object
+              required:
+                - preview
+                - at
+                - senderId
+              properties:
+                preview:
+                  type: string
+                  maxLength: 81
+                at:
+                  type: string
+                  format: date-time
+                senderId:
+                  type: string
+            - type: 'null'
+        unreadCount:
+          type: integer
+          minimum: 0
+          description: Solo mis no leídos; nunca los de la otra parte.
+    ConversationPage:
+      type: object
+      required:
+        - items
+        - nextCursor
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Conversation'
+        nextCursor:
+          type:
+            - string
+            - 'null'
+    RateRequest:
+      type: object
+      required:
+        - score
+      properties:
+        score:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type:
+            - string
+            - 'null'
+          maxLength: 300
+          description: Opcional; vacío equivale a sin comentario.
+    Rating:
+      type: object
+      required:
+        - id
+        - bookingId
+        - score
+        - comment
+        - ratedRole
+        - rater
+        - createdAt
+      properties:
+        id:
+          type: string
+        bookingId:
+          type: string
+        score:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type:
+            - string
+            - 'null'
+        ratedRole:
+          type: string
+          enum:
+            - owner
+            - requester
+          description: Papel que tenía en la reserva la persona calificada.
+        rater:
+          type: object
+          description: Quien califica, solo con su nombre visible (Art. VI.4).
+          required:
+            - id
+            - displayName
+          properties:
+            id:
+              type: string
+            displayName:
+              type: string
+        createdAt:
+          type: string
+          format: date-time
+    RatingPage:
+      type: object
+      required:
+        - items
+        - nextCursor
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Rating'
+        nextCursor:
+          type:
+            - string
+            - 'null'
+    RatingStatus:
+      type: object
+      required:
+        - canRate
+        - myRating
+        - expiresAt
+      properties:
+        canRate:
+          type: boolean
+        myRating:
+          oneOf:
+            - $ref: '#/components/schemas/Rating'
+            - type: 'null'
+        expiresAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+          description: Fin de la ventana de 14 días; null si la reserva aún no se completó.
+    IncidentReason:
+      type: string
+      enum:
+        - no_show
+        - late_return
+        - damaged
+        - not_returned
+        - payment_dispute
+        - other
+    IncidentStatus:
+      type: string
+      enum:
+        - open
+        - closed
+    IncidentOutcome:
+      type: string
+      enum:
+        - none
+        - monetary_adjustment
+        - restriction
+    IncidentInput:
+      type: object
+      required:
+        - reason
+        - description
+      properties:
+        reason:
+          $ref: '#/components/schemas/IncidentReason'
+        description:
+          type: string
+          minLength: 10
+          maxLength: 1000
+        evidence:
+          type: array
+          maxItems: 5
+          description: Imágenes con propósito `evidence` subidas por quien reporta (puede omitirse).
+          items:
+            $ref: '#/components/schemas/ImageInput'
+    Incident:
+      type: object
+      required:
+        - id
+        - bookingId
+        - reporter
+        - reported
+        - reason
+        - description
+        - evidence
+        - status
+        - notes
+        - finalResponse
+        - createdAt
+        - closedAt
+      properties:
+        id:
+          type: string
+        bookingId:
+          type: string
+        reporter:
+          $ref: '#/components/schemas/PublicUser'
+        reported:
+          $ref: '#/components/schemas/PublicUser'
+        reason:
+          $ref: '#/components/schemas/IncidentReason'
+        description:
+          type: string
+        evidence:
+          type: array
+          description: Evidencia con URL firmadas de 10 minutos.
+          items:
+            $ref: '#/components/schemas/Image'
+        status:
+          $ref: '#/components/schemas/IncidentStatus'
+        notes:
+          type: array
+          description: Las partes ven solo las notas visibles; el administrador ve todas, con `visibleToParties`.
+          items:
+            type: object
+            required:
+              - text
+              - at
+            properties:
+              text:
+                type: string
+              at:
+                type: string
+                format: date-time
+              visibleToParties:
+                type: boolean
+                description: Solo en la vista de administración.
+        finalResponse:
+          oneOf:
+            - type: object
+              required:
+                - text
+                - outcome
+                - at
+              properties:
+                text:
+                  type: string
+                outcome:
+                  $ref: '#/components/schemas/IncidentOutcome'
+                at:
+                  type: string
+                  format: date-time
+            - type: 'null'
+        createdAt:
+          type: string
+          format: date-time
+        closedAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+    IncidentPage:
+      type: object
+      required:
+        - items
+        - nextCursor
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Incident'
+        nextCursor:
+          type:
+            - string
+            - 'null'
+    AddIncidentNoteRequest:
+      type: object
+      required:
+        - text
+        - visibleToParties
+      properties:
+        text:
+          type: string
+          minLength: 3
+          maxLength: 1000
+        visibleToParties:
+          type: boolean
+    CloseIncidentRequest:
+      type: object
+      required:
+        - finalResponse
+        - outcome
+      properties:
+        finalResponse:
+          type: string
+          minLength: 5
+          maxLength: 1000
+        outcome:
+          $ref: '#/components/schemas/IncidentOutcome'
+    SanctionType:
+      type: string
+      enum:
+        - warning
+        - suspension
+    SanctionInput:
+      type: object
+      required:
+        - type
+        - reason
+      properties:
+        type:
+          $ref: '#/components/schemas/SanctionType'
+        reason:
+          type: string
+          minLength: 5
+          maxLength: 500
+        endsAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+          description: Obligatorio y futuro en `suspension`; debe omitirse en `warning`.
+        incidentId:
+          type:
+            - string
+            - 'null'
+          description: Incidencia que motiva la sanción (opcional; debe existir).
+    Sanction:
+      type: object
+      required:
+        - id
+        - userId
+        - type
+        - reason
+        - endsAt
+        - incidentId
+        - createdAt
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        type:
+          $ref: '#/components/schemas/SanctionType'
+        reason:
+          type: string
+        endsAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        incidentId:
+          type:
+            - string
+            - 'null'
+        createdAt:
+          type: string
+          format: date-time
+    ErrorCode:
+      type: string
+      description: Códigos permitidos por el Art. IV.3 de la constitución.
+      enum:
+        - validation_failed
+        - unauthorized
+        - forbidden
+        - not_found
+        - conflict
+        - rate_limited
+        - internal_error
+        - service_unavailable
+    ErrorDetail:
+      type: object
+      required:
+        - field
+        - issue
+      properties:
+        field:
+          type: string
+        issue:
+          type: string
+    Error:
+      type: object
+      description: Envoltorio único de errores (Art. IV.3).
+      examples:
+        - error:
+            code: validation_failed
+            message: Revisa los datos marcados.
+            details:
+              - field: email
+                issue: formato inválido
+            requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+            - requestId
+          properties:
+            code:
+              $ref: '#/components/schemas/ErrorCode'
+            message:
+              type: string
+              description: Texto legible en español (es-MX).
+            details:
+              type: array
+              items:
+                $ref: '#/components/schemas/ErrorDetail'
+            requestId:
+              type: string
+    NotificationType:
+      type: string
+      description: Tipo de aviso; el título y el cuerpo ya vienen en español.
+      enum:
+        - booking_requested
+        - booking_accepted
+        - booking_rejected
+        - booking_cancelled
+        - booking_expired
+        - message_received
+        - delivery_confirmed
+        - return_confirmed
+        - payment_reported
+        - payment_confirmed
+        - late_return
+        - booking_affected
+        - incident_opened
+        - incident_note
+        - incident_closed
+        - rating_received
+        - sanction_applied
+        - content_removed
+    Notification:
+      type: object
+      required:
+        - id
+        - type
+        - title
+        - body
+        - data
+        - readAt
+        - createdAt
+      properties:
+        id:
+          type: string
+        type:
+          $ref: '#/components/schemas/NotificationType'
+        title:
+          type: string
+        body:
+          type: string
+        data:
+          type: object
+          description: Ids para abrir la pantalla correcta; solo los que apliquen.
+          properties:
+            bookingId:
+              type: string
+            itemId:
+              type: string
+            conversationId:
+              type: string
+            incidentId:
+              type: string
+        readAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    NotificationPage:
+      type: object
+      required:
+        - items
+        - nextCursor
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Notification'
+        nextCursor:
+          type:
+            - string
+            - 'null'
+    MarkReadRequest:
+      type: object
+      description: 'Enviar `ids` o `all: true`, no ambos ni ninguno.'
+      properties:
+        ids:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: string
+        all:
+          type: boolean
+    PushTokenRequest:
+      type: object
+      required:
+        - token
+        - platform
+      properties:
+        token:
+          type: string
+          maxLength: 200
+          description: Token de Expo (`ExponentPushToken[...]` o `ExpoPushToken[...]`).
+        platform:
+          type: string
+          enum:
+            - android
+            - ios
+    PushTokenDeleteRequest:
+      type: object
+      required:
+        - token
+      properties:
+        token:
+          type: string
+          maxLength: 200
+    ReportTargetType:
+      type: string
+      enum:
+        - item
+        - message
+        - user
+        - moderation_decision
+    ReportReason:
+      type: string
+      enum:
+        - prohibited_content
+        - inappropriate
+        - spam
+        - other
+    ReportStatus:
+      type: string
+      enum:
+        - open
+        - actioned
+        - dismissed
+    ReportAction:
+      type: string
+      enum:
+        - dismiss
+        - hide_item
+        - suspend_user
+    ReportInput:
+      type: object
+      required:
+        - targetType
+        - targetId
+        - reason
+      properties:
+        targetType:
+          $ref: '#/components/schemas/ReportTargetType'
+        targetId:
+          type: string
+          maxLength: 64
+        reason:
+          $ref: '#/components/schemas/ReportReason'
+        details:
+          type:
+            - string
+            - 'null'
+          maxLength: 500
+    ReportCreated:
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          type: string
+    ResolveReportRequest:
+      type: object
+      required:
+        - action
+        - note
+      properties:
+        action:
+          $ref: '#/components/schemas/ReportAction'
+        note:
+          type: string
+          minLength: 3
+          maxLength: 500
+    Report:
+      type: object
+      required:
+        - id
+        - targetType
+        - targetId
+        - reason
+        - details
+        - reporter
+        - status
+        - target
+        - resolution
+        - createdAt
+      properties:
+        id:
+          type: string
+        targetType:
+          $ref: '#/components/schemas/ReportTargetType'
+        targetId:
+          type: string
+        reason:
+          $ref: '#/components/schemas/ReportReason'
+        details:
+          type:
+            - string
+            - 'null'
+        reporter:
+          $ref: '#/components/schemas/PublicUser'
+        status:
+          $ref: '#/components/schemas/ReportStatus'
+        target:
+          type: object
+          required:
+            - summary
+          properties:
+            summary:
+              type: string
+        resolution:
+          oneOf:
+            - type: object
+              required:
+                - action
+                - note
+                - at
+              properties:
+                action:
+                  $ref: '#/components/schemas/ReportAction'
+                note:
+                  type: string
+                at:
+                  type: string
+                  format: date-time
+            - type: 'null'
+        createdAt:
+          type: string
+          format: date-time
+    ReportPage:
+      type: object
+      required:
+        - items
+        - nextCursor
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Report'
+        nextCursor:
+          type:
+            - string
+            - 'null'
+  responses:
+    ValidationFailed:
+      description: Datos inválidos; `details` indica cada campo.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: validation_failed
+              message: Revisa los datos marcados.
+              details:
+                - field: email
+                  issue: formato inválido
+              requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+    Unauthorized:
+      description: Falta el token, es inválido o venció; también un refreshToken inválido o reutilizado.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: unauthorized
+              message: Tu sesión no es válida o venció. Inicia sesión de nuevo.
+              requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+    ServiceUnavailable:
+      description: |
+        Una dependencia obligatoria no responde (MongoDB, Cloudinary) o hay
+        demasiadas solicitudes de contraseña en curso (espera de turno de
+        argon2id agotada, 2 s). Se puede reintentar.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: service_unavailable
+              message: El servicio no está disponible por ahora. Intenta de nuevo en unos minutos.
+              requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+    Forbidden:
+      description: La persona no tiene permiso (no es la dueña o su cuenta está suspendida).
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: forbidden
+              message: No tienes permiso para esta acción.
+              requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+    NotFound:
+      description: El recurso no existe o la persona no puede verlo.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: not_found
+              message: No encontramos lo que buscas.
+              requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+    Conflict:
+      description: El estado actual no permite la acción (versión desactualizada, objeto bloqueado o con reservas activas).
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: conflict
+              message: El objeto cambió mientras lo editabas. Vuelve a cargarlo.
+              requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+    MethodNotAllowed:
+      description: Método no permitido para la ruta; usa el código not_found.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: not_found
+              message: Este método no está permitido para esta ruta.
+              requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+    RateLimited:
+      description: Se superó el límite de peticiones por IP o por usuario (Art. XIV.2).
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+        Retry-After:
+          description: Segundos que conviene esperar antes de reintentar.
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: rate_limited
+              message: Hiciste demasiadas solicitudes. Espera un momento e intenta de nuevo.
+              requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+    InternalError:
+      description: Fallo inesperado; nunca expone detalles internos.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: internal_error
+              message: Ocurrió un error inesperado. Intenta de nuevo.
+              requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+    BookingOk:
+      description: Solicitud o reserva.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Booking'
+    StageOk:
+      description: Etapa de entrega o devolución.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Stage'
+    responses-BookingOk:
+      description: La reserva actualizada.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Booking'

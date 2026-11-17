@@ -1,0 +1,1936 @@
+openapi: 3.1.0
+info:
+  title: VAIVÉN API
+  version: 0.11.0
+  summary: API REST del backend de VAIVÉN (préstamo y renta de objetos en México).
+  description: |
+    Contrato de la spec 002 (arquitectura base): endpoints de infraestructura y
+    el envoltorio único de errores (Art. IV de la constitución). La spec 003
+    agrega la cuenta y la autenticación (`api/paths/auth.yaml` y `users.yaml`) y
+    la spec 004 las imágenes (`api/paths/uploads.yaml`) y la spec 005 los objetos
+    (`api/paths/items.yaml`); la spec 006 la búsqueda (`api/paths/search.yaml`) y la
+    spec 007 las solicitudes y reservas (`api/paths/bookings.yaml`) y la spec
+    008 el chat privado (`api/paths/chat.yaml`) y la spec 009 la entrega, la
+    devolución y los pagos (`api/paths/handover.yaml` y `payments.yaml`) y la spec
+    010 las calificaciones, las incidencias y la administración
+    (`api/paths/ratings.yaml`, `incidents.yaml` y `admin.yaml`) y la spec 011 los
+    avisos y los reportes (`api/paths/notifications.yaml` y `reports.yaml`).
+
+    - Rutas de negocio bajo `/api/v1`; `/healthz` y `/readyz` fuera del prefijo.
+    - JSON en `camelCase`; fechas en ISO-8601 UTC.
+    - Toda respuesta trae `X-Request-Id`: si la petición envía uno válido
+      (≤ 64 caracteres alfanuméricos y guiones) se reutiliza; si no, se genera.
+    - Las specs siguientes agregan sus rutas en `api/paths/<modulo>.yaml`.
+    - Autenticación (spec 003): `Authorization: Bearer <accessToken>` (JWT de
+      15 min). Las rutas sin autenticación declaran `security: []`.
+security:
+  - bearerAuth: []
+servers:
+  - url: https://vaiven-staging.westus2.cloudapp.azure.com:8443
+    description: Staging (Azure)
+  - url: http://localhost:8080
+    description: Desarrollo local
+tags:
+  - name: infraestructura
+    description: Salud del proceso y de sus dependencias.
+  - name: meta
+    description: Información del servicio para el cliente móvil.
+  - name: auth
+    description: Registro, inicio de sesión y tokens (spec 003).
+  - name: cuenta
+    description: La cuenta de la persona autenticada (spec 003).
+  - name: usuarios
+    description: Perfiles públicos (spec 003).
+  - name: imagenes
+    description: Subida de imágenes a Cloudinary con firma del servidor (spec 004).
+  - name: objetos
+    description: Publicar, editar y pausar objetos; precio sugerido y categorías (spec 005).
+  - name: busqueda
+    description: Buscar objetos por texto, categoría, zona, cercanía y fechas (spec 006).
+  - name: reservas
+    description: Cotizar, solicitar, aceptar, rechazar y cancelar reservas (spec 007).
+  - name: chat
+    description: Conversación privada de texto de cada reserva (spec 008).
+  - name: entrega
+    description: Evidencia, QR de un solo uso y confirmación de la entrega y la devolución (spec 009).
+  - name: pagos
+    description: Reporte y confirmación del pago acordado, sin cobro (spec 009).
+  - name: calificaciones
+    description: Calificar a la otra parte de una reserva completada y ver las recibidas (spec 010).
+  - name: incidencias
+    description: Reportar un incumplimiento con evidencia y consultarlo (spec 010).
+  - name: administracion
+    description: Revisión de incidencias, sanciones y reportes; exige rol `admin` (specs 010 y 011).
+  - name: avisos
+    description: Avisos dentro de la app y tokens de push (spec 011).
+  - name: reportes
+    description: Reportar objetos, mensajes, perfiles y decisiones de moderación (spec 011).
+paths:
+  /healthz:
+    get:
+      tags: [infraestructura]
+      operationId: getHealthz
+      security: []
+      summary: El proceso está vivo
+      description: Responde 200 mientras el proceso vive; no consulta dependencias.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: El proceso está vivo.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+              example:
+                status: ok
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /readyz:
+    get:
+      tags: [infraestructura]
+      operationId: getReadyz
+      security: []
+      summary: El servicio puede atender peticiones
+      description: |
+        Hace ping a MongoDB (máximo 2 s). Responde 503 `service_unavailable` solo si
+        MongoDB no responde. Redis nunca es fuente de verdad: si falla, responde 200
+        con `redis: degradado` (Art. XIV.2).
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: MongoDB responde.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ready'
+              example:
+                status: ready
+                redis: ok
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/meta:
+    get:
+      tags: [meta]
+      operationId: getMeta
+      security: []
+      summary: Información del servicio
+      description: Permite al móvil comprobar conectividad y versión.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Datos del servicio.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Meta'
+              example:
+                name: vaiven-backend
+                version: 0.2.0
+                environment: staging
+                serverTime: '2026-11-07T15:00:00Z'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/auth/register:
+    $ref: './paths/auth.yaml#/register'
+  /api/v1/auth/login:
+    $ref: './paths/auth.yaml#/login'
+  /api/v1/auth/refresh:
+    $ref: './paths/auth.yaml#/refresh'
+  /api/v1/auth/logout:
+    $ref: './paths/auth.yaml#/logout'
+  /api/v1/me:
+    $ref: './paths/auth.yaml#/me'
+  /api/v1/users/{id}:
+    $ref: './paths/users.yaml#/userById'
+  /api/v1/uploads/signature:
+    $ref: './paths/uploads.yaml#/signature'
+  /api/v1/items:
+    # GET (búsqueda, 006) y POST (publicar, 005) comparten la ruta.
+    $ref: './paths/search.yaml#/items'
+  /api/v1/items/price-suggestion:
+    $ref: './paths/items.yaml#/priceSuggestion'
+  /api/v1/items/{id}:
+    $ref: './paths/items.yaml#/itemById'
+  /api/v1/items/{id}/pause:
+    $ref: './paths/items.yaml#/pauseItem'
+  /api/v1/items/{id}/resume:
+    $ref: './paths/items.yaml#/resumeItem'
+  /api/v1/me/items:
+    $ref: './paths/items.yaml#/myItems'
+  /api/v1/categories:
+    $ref: './paths/items.yaml#/categories'
+  /api/v1/items/{id}/quote:
+    $ref: './paths/bookings.yaml#/quote'
+  /api/v1/bookings:
+    $ref: './paths/bookings.yaml#/bookings'
+  /api/v1/bookings/{id}:
+    $ref: './paths/bookings.yaml#/bookingById'
+  /api/v1/me/bookings:
+    $ref: './paths/bookings.yaml#/myBookings'
+  /api/v1/bookings/{id}/accept:
+    $ref: './paths/bookings.yaml#/accept'
+  /api/v1/bookings/{id}/reject:
+    $ref: './paths/bookings.yaml#/reject'
+  /api/v1/bookings/{id}/cancel:
+    $ref: './paths/bookings.yaml#/cancel'
+  /api/v1/bookings/{id}/meeting-point:
+    $ref: './paths/bookings.yaml#/meetingPoint'
+  /api/v1/conversations:
+    $ref: './paths/chat.yaml#/conversations'
+  /api/v1/conversations/unread-count:
+    $ref: './paths/chat.yaml#/unreadCount'
+  /api/v1/conversations/{id}/messages:
+    $ref: './paths/chat.yaml#/messages'
+  /api/v1/conversations/{id}/read:
+    $ref: './paths/chat.yaml#/read'
+  /api/v1/bookings/{id}/delivery/evidence:
+    $ref: './paths/handover.yaml#/deliveryEvidence'
+  /api/v1/bookings/{id}/delivery/qr:
+    $ref: './paths/handover.yaml#/deliveryQr'
+  /api/v1/bookings/{id}/delivery/confirm:
+    $ref: './paths/handover.yaml#/deliveryConfirm'
+  /api/v1/bookings/{id}/delivery:
+    $ref: './paths/handover.yaml#/deliveryStage'
+  /api/v1/bookings/{id}/return/evidence:
+    $ref: './paths/handover.yaml#/returnEvidence'
+  /api/v1/bookings/{id}/return/qr:
+    $ref: './paths/handover.yaml#/returnQr'
+  /api/v1/bookings/{id}/return/confirm:
+    $ref: './paths/handover.yaml#/returnConfirm'
+  /api/v1/bookings/{id}/return:
+    $ref: './paths/handover.yaml#/returnStage'
+  /api/v1/bookings/{id}/payments/{stage}/report:
+    $ref: './paths/payments.yaml#/paymentReport'
+  /api/v1/bookings/{id}/payments/{stage}/confirm:
+    $ref: './paths/payments.yaml#/paymentConfirm'
+  /api/v1/bookings/{id}/ratings:
+    $ref: './paths/ratings.yaml#/bookingRatings'
+  /api/v1/bookings/{id}/rating-status:
+    $ref: './paths/ratings.yaml#/ratingStatus'
+  /api/v1/users/{id}/ratings:
+    $ref: './paths/ratings.yaml#/userRatings'
+  /api/v1/bookings/{id}/incidents:
+    $ref: './paths/incidents.yaml#/bookingIncidents'
+  /api/v1/incidents/{id}:
+    $ref: './paths/incidents.yaml#/incidentById'
+  /api/v1/me/incidents:
+    $ref: './paths/incidents.yaml#/myIncidents'
+  /api/v1/admin/incidents:
+    $ref: './paths/admin.yaml#/adminIncidents'
+  /api/v1/admin/incidents/{id}/notes:
+    $ref: './paths/admin.yaml#/adminIncidentNotes'
+  /api/v1/admin/incidents/{id}/close:
+    $ref: './paths/admin.yaml#/adminIncidentClose'
+  /api/v1/admin/users/{id}/sanctions:
+    $ref: './paths/admin.yaml#/adminUserSanctions'
+  /api/v1/me/notifications:
+    $ref: './paths/notifications.yaml#/myNotifications'
+  /api/v1/me/notifications/unread-count:
+    $ref: './paths/notifications.yaml#/myNotificationsUnreadCount'
+  /api/v1/me/notifications/read:
+    $ref: './paths/notifications.yaml#/myNotificationsRead'
+  /api/v1/me/push-tokens:
+    $ref: './paths/notifications.yaml#/myPushTokens'
+  /api/v1/reports:
+    $ref: './paths/reports.yaml#/reports'
+  /api/v1/admin/reports:
+    $ref: './paths/reports.yaml#/adminReports'
+  /api/v1/admin/reports/{id}/resolve:
+    $ref: './paths/reports.yaml#/adminReportResolve'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: "Token de acceso que entregan login, register y refresh."
+    adminAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: "El mismo token de acceso, de una cuenta con rol `admin` (spec 010, RF-11). Las demás cuentas reciben 403."
+  parameters:
+    BookingIdPath:
+      name: id
+      in: path
+      required: true
+      description: Identificador de la reserva (24 caracteres hexadecimales).
+      schema:
+        type: string
+        pattern: '^[0-9a-f]{24}$'
+    UserIdPath:
+      name: id
+      in: path
+      required: true
+      description: Identificador de la persona (24 caracteres hexadecimales).
+      schema:
+        type: string
+        pattern: '^[0-9a-f]{24}$'
+    ReportIdPath:
+      name: id
+      in: path
+      required: true
+      description: Id del reporte.
+      schema:
+        type: string
+    IncidentIdPath:
+      name: id
+      in: path
+      required: true
+      description: Identificador de la incidencia (24 caracteres hexadecimales).
+      schema:
+        type: string
+        pattern: '^[0-9a-f]{24}$'
+    CursorQuery:
+      name: cursor
+      in: query
+      required: false
+      description: El `nextCursor` de la página anterior.
+      schema:
+        type: string
+        maxLength: 128
+    LimitQuery:
+      name: limit
+      in: query
+      required: false
+      description: Tamaño de página.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 50
+        default: 20
+    RequestId:
+      name: X-Request-Id
+      in: header
+      required: false
+      description: Identificador de la petición; se reutiliza si es válido.
+      schema:
+        type: string
+        maxLength: 64
+        pattern: '^[A-Za-z0-9-]{1,64}$'
+  headers:
+    X-Request-Id:
+      description: Identificador de la petición (el recibido si era válido o uno nuevo).
+      schema:
+        type: string
+        maxLength: 64
+  schemas:
+    Status:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+    Ready:
+      type: object
+      required: [status, redis]
+      properties:
+        status:
+          type: string
+          enum: [ready]
+        redis:
+          type: string
+          enum: [ok, degradado]
+          description: Estado de Redis; degradado si no responde o no está configurado.
+    Meta:
+      type: object
+      required: [name, version, environment, serverTime]
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        environment:
+          type: string
+          enum: [development, test, staging, production]
+        serverTime:
+          type: string
+          format: date-time
+          description: Hora del servidor en UTC (ISO-8601).
+    Role:
+      type: string
+      enum: [user, admin]
+    User:
+      type: object
+      description: La cuenta propia (solo la ve su dueña).
+      required: [id, email, displayName, phone, role, ratingAverage, ratingCount, createdAt]
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+        phone:
+          type: [string, 'null']
+        role:
+          $ref: '#/components/schemas/Role'
+        ratingAverage:
+          type: [number, 'null']
+          description: Promedio de calificaciones (1 a 5); null sin calificaciones (spec 010).
+        ratingCount:
+          type: integer
+          minimum: 0
+        createdAt:
+          type: string
+          format: date-time
+    PublicUser:
+      type: object
+      description: Perfil público; nunca incluye correo ni teléfono (Art. VI.4).
+      required: [id, displayName, ratingAverage, ratingCount, memberSince]
+      properties:
+        id:
+          type: string
+        displayName:
+          type: string
+          description: «Cuenta eliminada» si la cuenta se dio de baja.
+        ratingAverage:
+          type: [number, 'null']
+        ratingCount:
+          type: integer
+          minimum: 0
+        memberSince:
+          type: string
+          format: date-time
+    Tokens:
+      type: object
+      required: [accessToken, refreshToken, expiresIn]
+      properties:
+        accessToken:
+          type: string
+          description: "JWT HS256 para el encabezado `Authorization: Bearer`."
+        refreshToken:
+          type: string
+          description: Token opaco de un solo uso (30 días); se cambia en cada `refresh`.
+        expiresIn:
+          type: integer
+          description: Segundos de vida del token de acceso (900).
+    AuthResult:
+      type: object
+      required: [user, tokens]
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        tokens:
+          $ref: '#/components/schemas/Tokens'
+    RegisterRequest:
+      type: object
+      required: [email, password, displayName, acceptTerms, isAdult]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: Se guarda en minúsculas y sin espacios.
+        password:
+          type: string
+          minLength: 8
+          maxLength: 72
+        displayName:
+          type: string
+          minLength: 2
+          maxLength: 40
+        acceptTerms:
+          type: boolean
+          const: true
+          description: Aceptación de términos y privacidad (POL-12).
+        isAdult:
+          type: boolean
+          const: true
+          description: Declaración de mayoría de edad (POL-12).
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          maxLength: 254
+        password:
+          type: string
+          maxLength: 72
+    RefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+          maxLength: 128
+    UpdateMeRequest:
+      type: object
+      minProperties: 1
+      properties:
+        displayName:
+          type: string
+          minLength: 2
+          maxLength: 40
+        phone:
+          type: [string, 'null']
+          pattern: '^\+?[0-9]{10,15}$'
+          description: 10 a 15 dígitos, con `+` opcional; null lo borra.
+    DeleteMeRequest:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+          maxLength: 72
+    ImagePurpose:
+      type: string
+      enum: [item_photo, evidence]
+      description: item_photo es pública; evidence es privada (solo las partes de la reserva).
+    UploadSignatureRequest:
+      type: object
+      required: [purpose]
+      properties:
+        purpose:
+          $ref: '#/components/schemas/ImagePurpose'
+    UploadSignature:
+      type: object
+      description: Datos para subir una imagen directo a Cloudinary (RF-01). Nunca incluye el API secret.
+      required: [uploadUrl, apiKey, timestamp, signature, publicId, type, allowedFormats, overwrite]
+      properties:
+        uploadUrl:
+          type: string
+          format: uri
+        apiKey:
+          type: string
+          description: API key pública de Cloudinary (no es secreta).
+        timestamp:
+          type: integer
+          description: Segundos Unix; Cloudinary rechaza firmas de más de 1 h.
+        signature:
+          type: string
+          description: SHA-256 en hexadecimal de los parámetros firmados.
+        publicId:
+          type: string
+          description: '<carpeta base>/<purpose>/<userId>/<id>; enviarlo sin cambios como public_id.'
+        type:
+          type: string
+          enum: [upload, authenticated]
+        allowedFormats:
+          type: string
+          const: jpg,jpeg,png,webp
+        overwrite:
+          type: string
+          const: 'false'
+          description: Va firmado; impide volver a subir encima de una imagen ya verificada.
+    ImageInput:
+      type: object
+      description: Referencia a una imagen ya subida, que reciben las demás rutas (RF-05). Máximo 5 por recurso.
+      required: [publicId]
+      properties:
+        publicId:
+          type: string
+          maxLength: 255
+    Image:
+      type: object
+      description: |
+        Imagen verificada con Cloudinary (RF-06, RF-07). Las URL se calculan al
+        leer; las de entrega authenticated caducan a los 10 minutos.
+      required: [publicId, width, height, format, bytes, delivery, url, thumbUrl]
+      properties:
+        publicId:
+          type: string
+        width:
+          type: integer
+        height:
+          type: integer
+        format:
+          type: string
+          enum: [jpg, jpeg, png, webp]
+        bytes:
+          type: integer
+          maximum: 5242880
+        delivery:
+          type: string
+          enum: [public, authenticated]
+        url:
+          type: string
+          format: uri
+        thumbUrl:
+          type: string
+          format: uri
+    CategoryKey:
+      type: string
+      description: Categorías de POL-14.
+      enum: [herramientas_manuales, herramientas_electricas, construccion_jardineria, movilidad, deportes, hogar, otros]
+    Category:
+      type: object
+      required: [key, label]
+      properties:
+        key:
+          $ref: '#/components/schemas/CategoryKey'
+        label:
+          type: string
+    ItemCondition:
+      type: string
+      enum: [new, like_new, good, fair, worn]
+    ItemModality:
+      type: string
+      enum: [loan, rent]
+      description: loan = préstamo gratuito; rent = renta por día.
+    PriceSource:
+      type: string
+      enum: [manual, suggested]
+    ItemStatus:
+      type: string
+      enum: [active, paused, blocked]
+      description: blocked lo pone moderación (spec 011). Los objetos eliminados nunca se devuelven.
+    Zone:
+      type: object
+      required: [municipality]
+      properties:
+        municipality:
+          type: string
+          minLength: 2
+          maxLength: 60
+        neighborhood:
+          type: [string, 'null']
+          maxLength: 60
+    ApproxLocation:
+      type: object
+      description: Ubicación aproximada; el servidor la redondea a 2 decimales (~1 km, RF-04).
+      required: [lat, lng]
+      properties:
+        lat:
+          type: number
+          minimum: -90
+          maximum: 90
+        lng:
+          type: number
+          minimum: -180
+          maximum: 180
+    ItemInput:
+      type: object
+      required: [title, description, category, condition, modality, declaredValueCents, pricePerDayCents, priceSource, zone, photos]
+      properties:
+        title:
+          type: string
+          minLength: 3
+          maxLength: 80
+        description:
+          type: string
+          maxLength: 1000
+        category:
+          $ref: '#/components/schemas/CategoryKey'
+        condition:
+          $ref: '#/components/schemas/ItemCondition'
+        modality:
+          $ref: '#/components/schemas/ItemModality'
+        declaredValueCents:
+          type: integer
+          minimum: 5000
+          maximum: 10000000
+          description: Valor declarado en centavos ($50 a $100,000). Solo lo ven el dueño y admin.
+        pricePerDayCents:
+          type: integer
+          minimum: 0
+          description: 0 en préstamo; en renta de 1000 ($10) al valor declarado.
+        priceSource:
+          $ref: '#/components/schemas/PriceSource'
+        usageRules:
+          type: [string, 'null']
+          maxLength: 500
+        zone:
+          $ref: '#/components/schemas/Zone'
+        approxLocation:
+          oneOf:
+            - $ref: '#/components/schemas/ApproxLocation'
+            - type: 'null'
+        photos:
+          type: array
+          minItems: 1
+          maxItems: 5
+          items:
+            $ref: '#/components/schemas/ImageInput'
+    ItemUpdate:
+      type: object
+      description: Campos a cambiar más la versión leída (control optimista). Al menos un campo además de version.
+      required: [version]
+      minProperties: 2
+      properties:
+        version:
+          type: integer
+          minimum: 1
+        title:
+          type: string
+          minLength: 3
+          maxLength: 80
+        description:
+          type: string
+          maxLength: 1000
+        category:
+          $ref: '#/components/schemas/CategoryKey'
+        condition:
+          $ref: '#/components/schemas/ItemCondition'
+        modality:
+          $ref: '#/components/schemas/ItemModality'
+        declaredValueCents:
+          type: integer
+          minimum: 5000
+          maximum: 10000000
+          description: Valor declarado en centavos ($50 a $100,000). Solo lo ven el dueño y admin.
+        pricePerDayCents:
+          type: integer
+          minimum: 0
+          description: 0 en préstamo; en renta de 1000 ($10) al valor declarado.
+        priceSource:
+          $ref: '#/components/schemas/PriceSource'
+        usageRules:
+          type: [string, 'null']
+          maxLength: 500
+        zone:
+          $ref: '#/components/schemas/Zone'
+        approxLocation:
+          oneOf:
+            - $ref: '#/components/schemas/ApproxLocation'
+            - type: 'null'
+        photos:
+          type: array
+          minItems: 1
+          maxItems: 5
+          items:
+            $ref: '#/components/schemas/ImageInput'
+    Item:
+      type: object
+      required: [id, owner, title, description, category, condition, modality, declaredValueCents, pricePerDayCents, priceSource, usageRules, zone, approxLocation, photos, status, createdAt, updatedAt, version]
+      properties:
+        id:
+          type: string
+        owner:
+          $ref: '#/components/schemas/PublicUser'
+        title:
+          type: string
+        description:
+          type: string
+        category:
+          $ref: '#/components/schemas/CategoryKey'
+        condition:
+          $ref: '#/components/schemas/ItemCondition'
+        modality:
+          $ref: '#/components/schemas/ItemModality'
+        declaredValueCents:
+          type: [integer, 'null']
+          description: null si quien consulta no es el dueño ni admin.
+        pricePerDayCents:
+          type: integer
+        priceSource:
+          $ref: '#/components/schemas/PriceSource'
+        usageRules:
+          type: [string, 'null']
+        zone:
+          $ref: '#/components/schemas/Zone'
+        approxLocation:
+          oneOf:
+            - $ref: '#/components/schemas/ApproxLocation'
+            - type: 'null'
+        photos:
+          type: array
+          items:
+            $ref: '#/components/schemas/Image'
+        status:
+          $ref: '#/components/schemas/ItemStatus'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+      example:
+        id: 6731a2b3c4d5e6f7a8b9c0d1
+        owner:
+          id: 6730f1c2a9b3e4d5f6a7b8c9
+          displayName: Ana
+          ratingAverage: null
+          ratingCount: 0
+          memberSince: '2026-11-06T18:00:00Z'
+        title: Taladro percutor 600 W
+        description: Incluye estuche y 5 brocas para concreto.
+        category: herramientas_electricas
+        condition: good
+        modality: rent
+        declaredValueCents: 100000
+        pricePerDayCents: 3000
+        priceSource: suggested
+        usageRules: Devolver limpio. No usar en metal.
+        zone:
+          municipality: Coyoacán
+          neighborhood: Del Carmen
+        approxLocation:
+          lat: 19.35
+          lng: -99.16
+        photos:
+          - publicId: vaiven/staging/item_photo/6730f1c2a9b3e4d5f6a7b8c9/9b2f6c1e4a7d4c0e8f3b5a2d1c6e7f80
+            width: 1200
+            height: 900
+            format: jpg
+            bytes: 245000
+            delivery: public
+            url: https://res.cloudinary.com/vaiven/image/upload/vaiven/staging/item_photo/6730f1c2a9b3e4d5f6a7b8c9/9b2f6c1e4a7d4c0e8f3b5a2d1c6e7f80.jpg
+            thumbUrl: https://res.cloudinary.com/vaiven/image/upload/c_fill,w_320,h_320/vaiven/staging/item_photo/6730f1c2a9b3e4d5f6a7b8c9/9b2f6c1e4a7d4c0e8f3b5a2d1c6e7f80.jpg
+        status: active
+        createdAt: '2026-11-08T16:00:00Z'
+        updatedAt: '2026-11-08T16:00:00Z'
+        version: 1
+    ItemPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Item'
+        nextCursor:
+          type: [string, 'null']
+    PriceSuggestion:
+      type: object
+      required: [suggestedPricePerDayCents]
+      properties:
+        suggestedPricePerDayCents:
+          type: integer
+          minimum: 1000
+    ItemCard:
+      type: object
+      description: Tarjeta pública de un resultado de búsqueda (RF-06). Sin valor declarado ni datos de contacto.
+      required: [id, title, category, modality, pricePerDayCents, zone, approxLocation, distanceKm, thumbUrl, photoCount, owner, createdAt]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        category:
+          $ref: '#/components/schemas/CategoryKey'
+        modality:
+          $ref: '#/components/schemas/ItemModality'
+        pricePerDayCents:
+          type: integer
+        zone:
+          $ref: '#/components/schemas/Zone'
+        approxLocation:
+          oneOf:
+            - $ref: '#/components/schemas/ApproxLocation'
+            - type: 'null'
+        distanceKm:
+          type: [number, 'null']
+          description: Distancia aproximada con 1 decimal; null si no se envió lat/lng.
+        thumbUrl:
+          type: [string, 'null']
+          format: uri
+          description: Miniatura de la primera foto.
+        photoCount:
+          type: integer
+          minimum: 0
+        owner:
+          type: object
+          required: [id, displayName, ratingAverage, ratingCount]
+          properties:
+            id:
+              type: string
+            displayName:
+              type: string
+            ratingAverage:
+              type: [number, 'null']
+            ratingCount:
+              type: integer
+              minimum: 0
+        createdAt:
+          type: string
+          format: date-time
+    ItemCardPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ItemCard'
+        nextCursor:
+          type: [string, 'null']
+    CalendarDate:
+      type: string
+      format: date
+      description: Fecha de calendario YYYY-MM-DD en America/Mexico_City (excepción documentada al Art. V).
+    PaymentMode:
+      type: string
+      enum: [none, full_on_delivery, split_50_50]
+      description: none solo en préstamo; en renta full_on_delivery o split_50_50 (POL-05).
+    BookingStatus:
+      type: string
+      enum: [pending, accepted, rejected, expired, cancelled, in_progress, completed]
+    PaymentStage:
+      type: string
+      enum: [delivery, return]
+    QuotePayment:
+      type: object
+      required: [stage, amountCents]
+      properties:
+        stage:
+          $ref: '#/components/schemas/PaymentStage'
+        amountCents:
+          type: integer
+          minimum: 0
+    Quote:
+      type: object
+      required: [itemId, startDate, endDate, days, modality, pricePerDayCents, totalCents, currency, paymentMode, payments, policy]
+      properties:
+        itemId:
+          type: string
+        startDate:
+          $ref: '#/components/schemas/CalendarDate'
+        endDate:
+          $ref: '#/components/schemas/CalendarDate'
+        days:
+          type: integer
+          minimum: 1
+          maximum: 7
+        modality:
+          $ref: '#/components/schemas/ItemModality'
+        pricePerDayCents:
+          type: integer
+        totalCents:
+          type: integer
+        currency:
+          type: string
+          const: MXN
+        paymentMode:
+          $ref: '#/components/schemas/PaymentMode'
+        payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuotePayment'
+        policy:
+          type: object
+          required: [requestExpiresInHours, lateCancellationNotice, noShowNotice]
+          properties:
+            requestExpiresInHours:
+              type: integer
+              const: 48
+            lateCancellationNotice:
+              type: string
+            noShowNotice:
+              type: string
+      example:
+        itemId: 6731a2b3c4d5e6f7a8b9c0d1
+        startDate: '2026-11-10'
+        endDate: '2026-11-12'
+        days: 3
+        modality: rent
+        pricePerDayCents: 3000
+        totalCents: 9000
+        currency: MXN
+        paymentMode: split_50_50
+        payments:
+          - stage: delivery
+            amountCents: 4500
+          - stage: return
+            amountCents: 4500
+        policy:
+          requestExpiresInHours: 48
+          lateCancellationNotice: Cancelar tarde no tiene cargo automático, pero puede registrarse una incidencia.
+          noShowNotice: Si no te presentas a la entrega o la devolución puede registrarse una incidencia y una advertencia o suspensión.
+    BookingRequest:
+      type: object
+      required: [itemId, startDate, endDate, paymentMode, acceptedTotalCents]
+      properties:
+        itemId:
+          type: string
+          pattern: '^[0-9a-f]{24}$'
+        startDate:
+          $ref: '#/components/schemas/CalendarDate'
+        endDate:
+          $ref: '#/components/schemas/CalendarDate'
+        paymentMode:
+          $ref: '#/components/schemas/PaymentMode'
+        acceptedTotalCents:
+          type: integer
+          minimum: 0
+          description: Total que mostró la cotización; si cambió, 409 con detalle quote_changed.
+    MeetingPoint:
+      type: object
+      required: [description]
+      properties:
+        description:
+          type: string
+          minLength: 3
+          maxLength: 200
+    AcceptBookingRequest:
+      type: object
+      properties:
+        meetingPoint:
+          $ref: '#/components/schemas/MeetingPoint'
+    RejectBookingRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 200
+    CancelBookingRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 200
+          description: Obligatorio al cancelar una reserva accepted.
+    BookingPayment:
+      type: object
+      required: [stage, amountCents, status, reportedAt, note, confirmedAt]
+      properties:
+        stage:
+          $ref: '#/components/schemas/PaymentStage'
+        amountCents:
+          type: integer
+        status:
+          type: string
+          enum: [pending, reported, confirmed]
+          description: |
+            `pending` → `reported` (lo informa el solicitante) → `confirmed` (lo
+            confirma el propietario). VAIVÉN no cobra ni verifica el pago (spec 009).
+        reportedAt:
+          type: [string, 'null']
+          format: date-time
+        note:
+          type: [string, 'null']
+          description: Nota opcional del reporte de pago (hasta 200 caracteres).
+        confirmedAt:
+          type: [string, 'null']
+          format: date-time
+    Stage:
+      type: object
+      description: |
+        Etapa presencial de la reserva: la entrega o la devolución (spec 009). Las
+        fotografías son privadas y traen URL firmadas de 10 minutos. Nunca incluye
+        el token ni su hash.
+      required: [recordedAt, recordedById, conditionNotes, photos, evidenceVersion, qr, confirmedAt, confirmedById]
+      properties:
+        recordedAt:
+          type: [string, 'null']
+          format: date-time
+        recordedById:
+          type: [string, 'null']
+        conditionNotes:
+          type: string
+          description: Estado del objeto; vacío mientras no haya evidencia.
+        photos:
+          type: array
+          maxItems: 5
+          items:
+            $ref: '#/components/schemas/Image'
+        evidenceVersion:
+          type: integer
+          description: 0 sin evidencia; sube al reemplazarla.
+        qr:
+          type: object
+          required: [state, expiresAt]
+          properties:
+            state:
+              type: string
+              enum: [none, active, expired, used]
+            expiresAt:
+              type: [string, 'null']
+              format: date-time
+              description: Solo con QR activo o vencido.
+        confirmedAt:
+          type: [string, 'null']
+          format: date-time
+        confirmedById:
+          type: [string, 'null']
+    EvidenceRequest:
+      type: object
+      required: [conditionNotes, photos]
+      properties:
+        conditionNotes:
+          type: string
+          minLength: 3
+          maxLength: 500
+        photos:
+          type: array
+          minItems: 1
+          maxItems: 5
+          items:
+            type: object
+            required: [publicId]
+            properties:
+              publicId:
+                type: string
+                description: Imagen subida con propósito `evidence` (spec 004).
+    QrToken:
+      type: object
+      required: [token, qrPayload, expiresAt]
+      properties:
+        token:
+          type: string
+          description: 32 bytes aleatorios en base64url. Solo se devuelve aquí.
+        qrPayload:
+          type: string
+          description: Texto que codifica el QR, `vaiven://qr?b=<reserva>&s=<delivery|return>&t=<token>`.
+        expiresAt:
+          type: string
+          format: date-time
+          description: 15 minutos después de generarlo (POL-06).
+    ConfirmHandoverRequest:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+    ReportPaymentRequest:
+      type: object
+      properties:
+        note:
+          type: [string, 'null']
+          maxLength: 200
+    Adjustment:
+      type: object
+      description: Ajuste por devolución tardía. Se registra, no se cobra (RF-10).
+      required: [type, lateDays, amountCents, status]
+      properties:
+        type:
+          type: string
+          const: late_return
+        lateDays:
+          type: integer
+          minimum: 1
+        amountCents:
+          type: integer
+          description: Días de retraso × tarifa diaria, en centavos de MXN.
+        status:
+          type: string
+          const: recorded
+    Booking:
+      type: object
+      required: [id, item, owner, requester, startDate, endDate, days, usageRules, priceSnapshot, paymentMode, payments, status, expiresAt, meetingPoint, cancelReason, cancelledBy, rejectReason, conversationId, delivery, return, isLate, adjustments, affectedBy, viewerRole, createdAt, updatedAt, version]
+      properties:
+        id:
+          type: string
+        item:
+          type: object
+          required: [id, title, thumbUrl, modality]
+          properties:
+            id:
+              type: string
+            title:
+              type: string
+              description: Título de la instantánea (RF-04).
+            thumbUrl:
+              type: [string, 'null']
+              format: uri
+            modality:
+              $ref: '#/components/schemas/ItemModality'
+        owner:
+          $ref: '#/components/schemas/PublicUser'
+        requester:
+          $ref: '#/components/schemas/PublicUser'
+        startDate:
+          $ref: '#/components/schemas/CalendarDate'
+        endDate:
+          $ref: '#/components/schemas/CalendarDate'
+        days:
+          type: integer
+        usageRules:
+          type: [string, 'null']
+          description: Reglas de uso de la instantánea.
+        priceSnapshot:
+          type: object
+          required: [modality, pricePerDayCents, totalCents, currency]
+          properties:
+            modality:
+              $ref: '#/components/schemas/ItemModality'
+            pricePerDayCents:
+              type: integer
+            totalCents:
+              type: integer
+            currency:
+              type: string
+              const: MXN
+        paymentMode:
+          $ref: '#/components/schemas/PaymentMode'
+        payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookingPayment'
+        status:
+          $ref: '#/components/schemas/BookingStatus'
+        expiresAt:
+          type: [string, 'null']
+          format: date-time
+          description: Solo en pending.
+        meetingPoint:
+          oneOf:
+            - $ref: '#/components/schemas/MeetingPoint'
+            - type: 'null'
+        cancelReason:
+          type: [string, 'null']
+        cancelledBy:
+          type: [string, 'null']
+          enum: [owner, requester, null]
+        rejectReason:
+          type: [string, 'null']
+          description: Motivo del rechazo; no_disponible si se aceptó otra solicitud que se cruzaba (RF-07).
+        conversationId:
+          type: [string, 'null']
+        delivery:
+          description: Etapa de entrega; null si no hay datos o quien consulta es administrador (RF-05).
+          oneOf:
+            - $ref: '#/components/schemas/Stage'
+            - type: 'null'
+        return:
+          description: Etapa de devolución; null si no hay datos o quien consulta es administrador (RF-05).
+          oneOf:
+            - $ref: '#/components/schemas/Stage'
+            - type: 'null'
+        isLate:
+          type: boolean
+          description: La devolución pasó la fecha de fin más la tolerancia de 2 h (POL-07).
+        adjustments:
+          type: array
+          description: Ajustes por retraso (spec 009); a lo más uno.
+          items:
+            $ref: '#/components/schemas/Adjustment'
+        affectedBy:
+          type: [string, 'null']
+          description: Id de la reserva tardía del mismo objeto que retrasa esta (spec 009, RF-09).
+        viewerRole:
+          type: string
+          enum: [owner, requester, admin]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+    BookingPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Booking'
+        nextCursor:
+          type: [string, 'null']
+    Message:
+      type: object
+      required: [id, conversationId, senderId, body, createdAt, clientId]
+      properties:
+        id:
+          type: string
+          description: ObjectID; crece con el tiempo (sirve de cursor before/after).
+        conversationId:
+          type: string
+        senderId:
+          type: string
+        body:
+          type: string
+          description: Texto plano; el cliente nunca lo interpreta como HTML.
+        createdAt:
+          type: string
+          format: date-time
+        clientId:
+          type: [string, 'null']
+    MessagePage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+        nextCursor:
+          type: [string, 'null']
+    SendMessageRequest:
+      type: object
+      required: [body]
+      properties:
+        body:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        clientId:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: Generado por el cliente para reintentar sin duplicar.
+    Conversation:
+      type: object
+      required: [id, bookingId, bookingStatus, counterpart, item, canWrite, lastMessage, unreadCount]
+      properties:
+        id:
+          type: string
+        bookingId:
+          type: string
+        bookingStatus:
+          $ref: '#/components/schemas/BookingStatus'
+        counterpart:
+          $ref: '#/components/schemas/PublicUser'
+        item:
+          type: object
+          required: [id, title, thumbUrl]
+          properties:
+            id:
+              type: string
+            title:
+              type: string
+            thumbUrl:
+              type: [string, 'null']
+              format: uri
+        canWrite:
+          type: boolean
+          description: false si la reserva ya no está pending, accepted ni in_progress, o si la contraparte se dio de baja.
+        lastMessage:
+          oneOf:
+            - type: object
+              required: [preview, at, senderId]
+              properties:
+                preview:
+                  type: string
+                  maxLength: 81
+                at:
+                  type: string
+                  format: date-time
+                senderId:
+                  type: string
+            - type: 'null'
+        unreadCount:
+          type: integer
+          minimum: 0
+          description: Solo mis no leídos; nunca los de la otra parte.
+    ConversationPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Conversation'
+        nextCursor:
+          type: [string, 'null']
+    RateRequest:
+      type: object
+      required: [score]
+      properties:
+        score:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type: [string, 'null']
+          maxLength: 300
+          description: Opcional; vacío equivale a sin comentario.
+    Rating:
+      type: object
+      required: [id, bookingId, score, comment, ratedRole, rater, createdAt]
+      properties:
+        id:
+          type: string
+        bookingId:
+          type: string
+        score:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type: [string, 'null']
+        ratedRole:
+          type: string
+          enum: [owner, requester]
+          description: Papel que tenía en la reserva la persona calificada.
+        rater:
+          type: object
+          description: Quien califica, solo con su nombre visible (Art. VI.4).
+          required: [id, displayName]
+          properties:
+            id:
+              type: string
+            displayName:
+              type: string
+        createdAt:
+          type: string
+          format: date-time
+    RatingPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Rating'
+        nextCursor:
+          type: [string, 'null']
+    RatingStatus:
+      type: object
+      required: [canRate, myRating, expiresAt]
+      properties:
+        canRate:
+          type: boolean
+        myRating:
+          oneOf:
+            - $ref: '#/components/schemas/Rating'
+            - type: 'null'
+        expiresAt:
+          type: [string, 'null']
+          format: date-time
+          description: Fin de la ventana de 14 días; null si la reserva aún no se completó.
+    IncidentReason:
+      type: string
+      enum: [no_show, late_return, damaged, not_returned, payment_dispute, other]
+    IncidentStatus:
+      type: string
+      enum: [open, closed]
+    IncidentOutcome:
+      type: string
+      enum: [none, monetary_adjustment, restriction]
+    IncidentInput:
+      type: object
+      required: [reason, description]
+      properties:
+        reason:
+          $ref: '#/components/schemas/IncidentReason'
+        description:
+          type: string
+          minLength: 10
+          maxLength: 1000
+        evidence:
+          type: array
+          maxItems: 5
+          description: Imágenes con propósito `evidence` subidas por quien reporta (puede omitirse).
+          items:
+            $ref: '#/components/schemas/ImageInput'
+    Incident:
+      type: object
+      required: [id, bookingId, reporter, reported, reason, description, evidence, status, notes, finalResponse, createdAt, closedAt]
+      properties:
+        id:
+          type: string
+        bookingId:
+          type: string
+        reporter:
+          $ref: '#/components/schemas/PublicUser'
+        reported:
+          $ref: '#/components/schemas/PublicUser'
+        reason:
+          $ref: '#/components/schemas/IncidentReason'
+        description:
+          type: string
+        evidence:
+          type: array
+          description: Evidencia con URL firmadas de 10 minutos.
+          items:
+            $ref: '#/components/schemas/Image'
+        status:
+          $ref: '#/components/schemas/IncidentStatus'
+        notes:
+          type: array
+          description: Las partes ven solo las notas visibles; el administrador ve todas, con `visibleToParties`.
+          items:
+            type: object
+            required: [text, at]
+            properties:
+              text:
+                type: string
+              at:
+                type: string
+                format: date-time
+              visibleToParties:
+                type: boolean
+                description: Solo en la vista de administración.
+        finalResponse:
+          oneOf:
+            - type: object
+              required: [text, outcome, at]
+              properties:
+                text:
+                  type: string
+                outcome:
+                  $ref: '#/components/schemas/IncidentOutcome'
+                at:
+                  type: string
+                  format: date-time
+            - type: 'null'
+        createdAt:
+          type: string
+          format: date-time
+        closedAt:
+          type: [string, 'null']
+          format: date-time
+    IncidentPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Incident'
+        nextCursor:
+          type: [string, 'null']
+    AddIncidentNoteRequest:
+      type: object
+      required: [text, visibleToParties]
+      properties:
+        text:
+          type: string
+          minLength: 3
+          maxLength: 1000
+        visibleToParties:
+          type: boolean
+    CloseIncidentRequest:
+      type: object
+      required: [finalResponse, outcome]
+      properties:
+        finalResponse:
+          type: string
+          minLength: 5
+          maxLength: 1000
+        outcome:
+          $ref: '#/components/schemas/IncidentOutcome'
+    SanctionType:
+      type: string
+      enum: [warning, suspension]
+    SanctionInput:
+      type: object
+      required: [type, reason]
+      properties:
+        type:
+          $ref: '#/components/schemas/SanctionType'
+        reason:
+          type: string
+          minLength: 5
+          maxLength: 500
+        endsAt:
+          type: [string, 'null']
+          format: date-time
+          description: Obligatorio y futuro en `suspension`; debe omitirse en `warning`.
+        incidentId:
+          type: [string, 'null']
+          description: Incidencia que motiva la sanción (opcional; debe existir).
+    Sanction:
+      type: object
+      required: [id, userId, type, reason, endsAt, incidentId, createdAt]
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        type:
+          $ref: '#/components/schemas/SanctionType'
+        reason:
+          type: string
+        endsAt:
+          type: [string, 'null']
+          format: date-time
+        incidentId:
+          type: [string, 'null']
+        createdAt:
+          type: string
+          format: date-time
+    ErrorCode:
+      type: string
+      description: Códigos permitidos por el Art. IV.3 de la constitución.
+      enum:
+        - validation_failed
+        - unauthorized
+        - forbidden
+        - not_found
+        - conflict
+        - rate_limited
+        - internal_error
+        - service_unavailable
+    ErrorDetail:
+      type: object
+      required: [field, issue]
+      properties:
+        field:
+          type: string
+        issue:
+          type: string
+    Error:
+      type: object
+      description: Envoltorio único de errores (Art. IV.3).
+      examples:
+        - error:
+            code: validation_failed
+            message: Revisa los datos marcados.
+            details:
+              - field: email
+                issue: formato inválido
+            requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, requestId]
+          properties:
+            code:
+              $ref: '#/components/schemas/ErrorCode'
+            message:
+              type: string
+              description: Texto legible en español (es-MX).
+            details:
+              type: array
+              items:
+                $ref: '#/components/schemas/ErrorDetail'
+            requestId:
+              type: string
+    NotificationType:
+      type: string
+      description: Tipo de aviso; el título y el cuerpo ya vienen en español.
+      enum:
+        - booking_requested
+        - booking_accepted
+        - booking_rejected
+        - booking_cancelled
+        - booking_expired
+        - message_received
+        - delivery_confirmed
+        - return_confirmed
+        - payment_reported
+        - payment_confirmed
+        - late_return
+        - booking_affected
+        - incident_opened
+        - incident_note
+        - incident_closed
+        - rating_received
+        - sanction_applied
+        - content_removed
+    Notification:
+      type: object
+      required: [id, type, title, body, data, readAt, createdAt]
+      properties:
+        id:
+          type: string
+        type:
+          $ref: '#/components/schemas/NotificationType'
+        title:
+          type: string
+        body:
+          type: string
+        data:
+          type: object
+          description: Ids para abrir la pantalla correcta; solo los que apliquen.
+          properties:
+            bookingId:
+              type: string
+            itemId:
+              type: string
+            conversationId:
+              type: string
+            incidentId:
+              type: string
+        readAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    NotificationPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Notification'
+        nextCursor:
+          type:
+            - string
+            - 'null'
+    MarkReadRequest:
+      type: object
+      description: 'Enviar `ids` o `all: true`, no ambos ni ninguno.'
+      properties:
+        ids:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: string
+        all:
+          type: boolean
+    PushTokenRequest:
+      type: object
+      required: [token, platform]
+      properties:
+        token:
+          type: string
+          maxLength: 200
+          description: Token de Expo (`ExponentPushToken[...]` o `ExpoPushToken[...]`).
+        platform:
+          type: string
+          enum: [android, ios]
+    PushTokenDeleteRequest:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          maxLength: 200
+    ReportTargetType:
+      type: string
+      enum: [item, message, user, moderation_decision]
+    ReportReason:
+      type: string
+      enum: [prohibited_content, inappropriate, spam, other]
+    ReportStatus:
+      type: string
+      enum: [open, actioned, dismissed]
+    ReportAction:
+      type: string
+      enum: [dismiss, hide_item, suspend_user]
+    ReportInput:
+      type: object
+      required: [targetType, targetId, reason]
+      properties:
+        targetType:
+          $ref: '#/components/schemas/ReportTargetType'
+        targetId:
+          type: string
+          maxLength: 64
+        reason:
+          $ref: '#/components/schemas/ReportReason'
+        details:
+          type:
+            - string
+            - 'null'
+          maxLength: 500
+    ReportCreated:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+    ResolveReportRequest:
+      type: object
+      required: [action, note]
+      properties:
+        action:
+          $ref: '#/components/schemas/ReportAction'
+        note:
+          type: string
+          minLength: 3
+          maxLength: 500
+    Report:
+      type: object
+      required: [id, targetType, targetId, reason, details, reporter, status, target, resolution, createdAt]
+      properties:
+        id:
+          type: string
+        targetType:
+          $ref: '#/components/schemas/ReportTargetType'
+        targetId:
+          type: string
+        reason:
+          $ref: '#/components/schemas/ReportReason'
+        details:
+          type:
+            - string
+            - 'null'
+        reporter:
+          $ref: '#/components/schemas/PublicUser'
+        status:
+          $ref: '#/components/schemas/ReportStatus'
+        target:
+          type: object
+          required: [summary]
+          properties:
+            summary:
+              type: string
+        resolution:
+          oneOf:
+            - type: object
+              required: [action, note, at]
+              properties:
+                action:
+                  $ref: '#/components/schemas/ReportAction'
+                note:
+                  type: string
+                at:
+                  type: string
+                  format: date-time
+            - type: 'null'
+        createdAt:
+          type: string
+          format: date-time
+    ReportPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Report'
+        nextCursor:
+          type:
+            - string
+            - 'null'
+  responses:
+    ValidationFailed:
+      description: Datos inválidos; `details` indica cada campo.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: validation_failed
+              message: Revisa los datos marcados.
+              details:
+                - field: email
+                  issue: formato inválido
+              requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+    Unauthorized:
+      description: Falta el token, es inválido o venció; también un refreshToken inválido o reutilizado.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: unauthorized
+              message: Tu sesión no es válida o venció. Inicia sesión de nuevo.
+              requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+    ServiceUnavailable:
+      description: |
+        Una dependencia obligatoria no responde (MongoDB, Cloudinary) o hay
+        demasiadas solicitudes de contraseña en curso (espera de turno de
+        argon2id agotada, 2 s). Se puede reintentar.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: service_unavailable
+              message: El servicio no está disponible por ahora. Intenta de nuevo en unos minutos.
+              requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+    Forbidden:
+      description: La persona no tiene permiso (no es la dueña o su cuenta está suspendida).
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: forbidden
+              message: No tienes permiso para esta acción.
+              requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+    NotFound:
+      description: El recurso no existe o la persona no puede verlo.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: not_found
+              message: No encontramos lo que buscas.
+              requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+    Conflict:
+      description: El estado actual no permite la acción (versión desactualizada, objeto bloqueado o con reservas activas).
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: conflict
+              message: El objeto cambió mientras lo editabas. Vuelve a cargarlo.
+              requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+    MethodNotAllowed:
+      description: Método no permitido para la ruta; usa el código not_found.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: not_found
+              message: Este método no está permitido para esta ruta.
+              requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+    RateLimited:
+      description: Se superó el límite de peticiones por IP o por usuario (Art. XIV.2).
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+        Retry-After:
+          description: Segundos que conviene esperar antes de reintentar.
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: rate_limited
+              message: Hiciste demasiadas solicitudes. Espera un momento e intenta de nuevo.
+              requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+    InternalError:
+      description: Fallo inesperado; nunca expone detalles internos.
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: internal_error
+              message: Ocurrió un error inesperado. Intenta de nuevo.
+              requestId: 43d4c7dbb802d8b3711c8f4163ffc823

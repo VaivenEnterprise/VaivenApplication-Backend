@@ -1,7 +1,7 @@
 # Spec 004 — Imágenes con Cloudinary (backend)
 
 - **Dueño:** BE-B · **Prioridad:** P0 · **Ventana:** 5–7 nov · **Depende de:** 001, 002, 003 (identidad)
-- **Constitución:** v1.4.0 (Art. II.4, VI.7) · **Políticas:** POL-13 · **Estado:** Borrador
+- **Constitución:** v1.4.0 (Art. II.4, VI.7) · **Políticas:** POL-13 · **Estado:** Aprobada e implementada (2026-11-07)
 
 ## 1. Objetivo y por qué
 Dar a toda la plataforma una manera segura y gratuita de recibir fotos (objetos y evidencias): la app sube directamente a Cloudinary con una **firma de un solo uso** del backend y después entrega solo una referencia. El backend valida que la imagen es de quien la envía y de qué tipo es, y sabe entregarla pública o con URL firmada de corta duración (evidencias privadas).
@@ -16,11 +16,11 @@ Dar a toda la plataforma una manera segura y gratuita de recibir fotos (objetos 
 ## 3. Requisitos
 | ID | Requisito |
 |---|---|
-| RF-01 | `POST /api/v1/uploads/signature` (autenticado) con `purpose` ∈ {`item_photo`, `evidence`} devuelve lo necesario para subir **una** imagen: `uploadUrl`, `apiKey`, `timestamp`, `signature`, `publicId`, `type`, `allowedFormats`. |
+| RF-01 | `POST /api/v1/uploads/signature` (autenticado) con `purpose` ∈ {`item_photo`, `evidence`} devuelve lo necesario para subir **una** imagen: `uploadUrl`, `apiKey`, `timestamp`, `signature`, `publicId`, `type`, `allowedFormats`, `overwrite` (`"false"`). |
 | RF-02 | `item_photo` se sube con `type=upload` (público); `evidence` con `type=authenticated` (privado). |
-| RF-03 | El `publicId` generado tiene la forma `<BaseFolder>/<purpose>/<userId>/<uuid>`; la firma cubre `allowed_formats` (`jpg,jpeg,png,webp`), `public_id`, `timestamp` y `type`. |
+| RF-03 | El `publicId` generado tiene la forma `<BaseFolder>/<purpose>/<userId>/<uuid>`; la firma cubre `allowed_formats` (`jpg,jpeg,png,webp`), `overwrite=false`, `public_id`, `timestamp` y `type` (con `overwrite=false` la firma no sirve para reemplazar una imagen ya verificada). |
 | RF-04 | Límite de firmas: 30 por persona y por hora → 429 `rate_limited`. |
-| RF-05 | Las demás specs reciben referencias como `{ "publicId": "…" }`. `images.Service.Resolve(ctx, userID, purpose, refs)` valida: cantidad (1–5), prefijo de carpeta propio, que exista en Cloudinary (API de administración) y que cumpla POL-13 (formato, ≤ 5 MB); devuelve `Image` con metadatos **verificados por Cloudinary**, no por el cliente. |
+| RF-05 | Las demás specs reciben referencias como `{ "publicId": "…" }`. `images.Service.Resolve(ctx, userID, purpose, field, refs)` (`field` = nombre del campo de quien llama, para los detalles del error) valida: cantidad (1–5), prefijo de carpeta propio, que exista en Cloudinary (API de administración) y que cumpla POL-13 (formato, ≤ 5 MB); devuelve `Image` con metadatos **verificados por Cloudinary**, no por el cliente. |
 | RF-06 | `Image = { publicId, width, height, format, bytes, delivery }` es lo que se guarda en MongoDB (Art. VI §6.10). |
 | RF-07 | `images.Service.URLs(img)` devuelve `url` y `thumbUrl`: públicas con transformación (`c_limit,w_1200` y `c_fill,w_300,h_300`) o, para `authenticated`, **URL firmada con vencimiento de 10 min** (descarga privada de Cloudinary). |
 | RF-08 | Si Cloudinary no responde → 503 `service_unavailable`; no se guarda nada parcial. |
@@ -40,5 +40,5 @@ Dar a toda la plataforma una manera segura y gratuita de recibir fotos (objetos 
 Borrado de imágenes huérfanas en Cloudinary, video, avatar de perfil, moderación visual automática.
 
 ## 6. Preguntas abiertas
-- [NEEDS CLARIFICATION: ¿Cloudinary firma con SHA-1 o SHA-256 en la cuenta creada? Se asume SHA-1 (por defecto) y se verifica en T002 con una subida real.]
-- [NEEDS CLARIFICATION: si la descarga privada con vencimiento no sirve para mostrar imágenes en la app, el plan alterno es URL firmada `s--firma--` sin vencimiento, documentando la relajación.]
+- ~~¿SHA-1 o SHA-256?~~ **Resuelto en T002:** la cuenta acepta SHA-1 (T002) y también SHA-256, que es el que se usa desde la corrección de CodeQL (`memoria.md`).
+- ~~¿Sirve la descarga privada con vencimiento?~~ **Resuelto en T002:** `image/download` firmada con `expires_at` devuelve la imagen (200) y, vencida, 401; no hace falta el plan alterno.

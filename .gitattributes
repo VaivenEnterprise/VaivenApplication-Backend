@@ -1,0 +1,6 @@
+# Los scripts de shell se ejecutan en Linux (VM de Azure): siempre con finales de linea LF.
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+# Go exige LF para gofmt; en Windows (core.autocrlf=true) evita falsos avisos de formato.
+*.go text eol=lf

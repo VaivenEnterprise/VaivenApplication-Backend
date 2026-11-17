@@ -1,7 +1,7 @@
 # Spec 015 — Recomendaciones con machine learning (backend)
 
 - **Dueño:** BE-B (con BE-A en revisión) · **Prioridad:** P1 · **Ventana:** 23 nov–1 dic · **Depende de:** 005, 006, 007, 013
-- **Constitución:** v1.4.0 · **Estado:** Borrador
+- **Constitución:** v2.0.0 · **Estado:** Borrador
 
 ## 1. Objetivo y por qué
 La entrega oficial (1–4 dic) exige integrar **ML** además de IA generativa (spec 014). El ML de VAIVÉN son las **recomendaciones de objetos**: «Recomendado para ti» en Explorar. Se implementa un **recomendador híbrido propio** (filtrado colaborativo objeto-objeto + contenido) en Go y MongoDB, **sin servicios externos ni costo**, explicable en una defensa y **evaluado con métricas** contra una línea base de popularidad. Nunca reemplaza la búsqueda; solo sugiere.

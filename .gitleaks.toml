@@ -1,0 +1,17 @@
+# Configuración de gitleaks (SEC-004). gitleaks la carga sola desde la raíz
+# del repositorio en `gitleaks git .` y `gitleaks dir .`. Extiende las reglas
+# por defecto: no quita ninguna.
+title = "VAIVÉN"
+
+[extend]
+useDefault = true
+
+# Las reglas por defecto no reconocen la URL de Cloudinary
+# (cloudinary://<api_key>:<api_secret>@<cloud_name>), que es justo el formato
+# de CLOUDINARY_URL. Los marcadores <...> de .env.example no coinciden.
+[[rules]]
+id = "cloudinary-url"
+description = "URL de Cloudinary con API key y API secret"
+regex = '''cloudinary://([A-Za-z0-9_-]{4,}):([A-Za-z0-9_-]{4,})@[A-Za-z0-9_-]+'''
+secretGroup = 2
+keywords = ["cloudinary://"]

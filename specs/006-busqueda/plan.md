@@ -42,7 +42,7 @@ Se registra como `r.Get("/api/v1/items")` en el **mismo** router; `POST /items` 
 ## 5. Decisiones
 | # | Decisión | Art. |
 |---|---|---|
-| P-01 | Cursor = JSON en base64url `{k:<valor de orden>,id:<ObjectID>}`; firma HMAC no necesaria (no es dato sensible); cursor inválido → 400 | IV |
+| P-01 | Cursor = JSON en base64url `{m:<modo>,k:<valor de orden>,id:<ObjectID>}` (un cursor de otro modo → 400); firma HMAC no necesaria (no es dato sensible); cursor inválido → 400 | IV |
 | P-02 | Las fechas del periodo son **fechas de calendario** `YYYY-MM-DD` (America/Mexico_City); `from` no puede ser anterior a hoy y `to ≥ from`; máximo 7 días (POL-02) | V |
 | P-03 | `thumbUrl` se calcula con `images.Service.URLs` de la primera foto | XII |
 | P-04 | Radio por defecto 25 km si hay `lat/lng` sin `radiusKm` | — |
@@ -59,3 +59,16 @@ Unitarias: validación de parámetros, codificación de cursor, constructor de p
 | IV | Cursor y envoltorio estándar |
 | VI | Solo tarjeta pública; ubicación aproximada |
 | XII | Índices propios; sin editar `items` de 005 |
+
+## 8. Ajustes durante la implementación (2026-11-08, BE-B)
+| # | Ajuste | Motivo |
+|---|---|---|
+| A-01 | `GET /api/v1/items` se declara en `api/paths/search.yaml` como path item con el GET de la búsqueda y `post: $ref: './items.yaml#/items/post'` (005 sin cambios). Redocly lo valida y el bundle de Swagger lo resuelve en línea | Una ruta OpenAPI solo admite un path item |
+| A-02 | Cursor `{m,k,id}`: el modo evita mezclar páginas de búsquedas distintas; clave = createdAt en ms, relevancia o distancia en metros | P-01 |
+| A-03 | Con `q` + cercanía cada palabra (máx. 8) debe aparecer (AND) con regex escapada sin acentos; en modo texto `$text` es OR por relevancia | `$text` y `$geoNear` no se combinan |
+| A-04 | `municipality`: igualdad exacta sin acentos ni mayúsculas; `q` de 2 a 80 caracteres; `radiusKm` sin `lat`/`lng` → 400 | RF-01, RF-08 |
+| A-05 | Índice extra `search_recent` `{status:1,createdAt:-1,_id:-1}` para el orden reciente | Revisión T009 |
+| A-06 | Archivos además de los listados: `internal/policy` (POL-02), `cmd/api/main.go` (índices y armado); `dto.go`/`routes.go` fusionados en `adapter/http/handler.go`; la prueba de índices vive en `search_repo_integration_test.go`; `time/tzdata` (stdlib) para America/Mexico_City en la imagen distroless | Tamaño del módulo |
+| A-07 | Disponibilidad: compara `$toString(_id)` con `bookings.itemId`; la 007 debe guardar `itemId` como **texto hexadecimal** (igual que `items.ownerId`) | [NEEDS CLARIFICATION] para BE-A en 007 plan §3 |
+
+Rendimiento (T008, 5,000 objetos, 500 reservas, Mongo 7 en Podman): p95 reciente con fechas 16 ms (21 ms antes del índice search_recent), texto 6 ms, cercanía + texto 13 ms (meta 500 ms).

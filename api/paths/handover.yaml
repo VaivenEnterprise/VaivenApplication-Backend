@@ -1,0 +1,335 @@
+# Entrega y devolución presenciales (spec 009, T001; Art. IV, VI y XII.2). Se
+# referencia desde api/openapi.yaml. El QR confirma una etapa: no confirma el
+# pago, la identidad ni el estado del objeto por sí solo. Entrega: el
+# propietario registra y genera el QR, el solicitante confirma (→ in_progress).
+# Devolución: el solicitante registra y genera el QR, el propietario confirma
+# (→ completed). Todas las rutas exigen sesión; una persona ajena recibe 404.
+deliveryEvidence:
+  parameters:
+    - $ref: '#/components/parameters/BookingId'
+    - $ref: '../openapi.yaml#/components/parameters/RequestId'
+  put:
+    tags: [entrega]
+    operationId: putDeliveryEvidence
+    summary: Registrar la evidencia de la entrega (el propietario)
+    description: |
+      Registra o reemplaza el estado del objeto y sus fotografías. Solo el propietario;
+      la reserva debe estar en `accepted` y la etapa sin confirmar (RF-13).
+
+      - `conditionNotes`: de 3 a 500 caracteres. `photos`: de 1 a 5, con el `publicId`
+        de imágenes subidas con propósito `evidence` (spec 004).
+      - Reemplazar la evidencia sube `evidenceVersion` e **invalida** el QR vigente.
+      - Las fotografías son privadas: la respuesta trae URL firmadas de 10 minutos.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/EvidenceRequest'
+          example:
+            conditionNotes: Taladro limpio, con el estuche y dos brocas. Sin rayones.
+            photos:
+              - publicId: vaiven/evidence/6731a0000000000000000009/1
+    responses:
+      '200':
+        $ref: '#/components/responses/StageOk'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '403':
+        $ref: '../openapi.yaml#/components/responses/Forbidden'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '409':
+        $ref: '../openapi.yaml#/components/responses/Conflict'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+deliveryQr:
+  parameters:
+    - $ref: '#/components/parameters/BookingId'
+    - $ref: '../openapi.yaml#/components/parameters/RequestId'
+  post:
+    tags: [entrega]
+    operationId: issueDeliveryQr
+    summary: Generar el QR de la entrega (el propietario)
+    description: |
+      Genera un QR de **un solo uso**, vigente 15 minutos (POL-06), ligado a la
+      reserva, la etapa y la versión de evidencia. Generar otro invalida el anterior.
+      Solo el propietario, con evidencia registrada y la etapa sin confirmar.
+
+      El `token` solo aparece en esta respuesta (el servidor guarda únicamente su
+      hash). La respuesta lleva `Cache-Control: no-store`.
+    responses:
+      '201':
+        description: QR generado.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+          Cache-Control:
+            description: Siempre `no-store`.
+            schema:
+              type: string
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/QrToken'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '403':
+        $ref: '../openapi.yaml#/components/responses/Forbidden'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '409':
+        $ref: '../openapi.yaml#/components/responses/Conflict'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+deliveryConfirm:
+  parameters:
+    - $ref: '#/components/parameters/BookingId'
+    - $ref: '../openapi.yaml#/components/parameters/RequestId'
+  post:
+    tags: [entrega]
+    operationId: confirmDelivery
+    summary: Confirmar la entrega con el QR (el solicitante)
+    description: |
+      Solo el solicitante. Valida que el QR sea vigente, no se haya usado, sea de esta
+      reserva y etapa y de la versión de evidencia actual; la reserva pasa a
+      `in_progress`. La confirmación es **atómica**: con el mismo QR a la vez,
+      exactamente una petición tiene éxito (RNF-02).
+
+      Un QR vencido, usado o reemplazado responde 409 `conflict`; se puede generar
+      otro. El QR **no** confirma ni condiciona el pago (RF-07). La entrega solo se confirma desde un día antes de `startDate` hasta `endDate` (hora de México).
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ConfirmHandoverRequest'
+    responses:
+      '200':
+        $ref: '#/components/responses/BookingOk'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '403':
+        $ref: '../openapi.yaml#/components/responses/Forbidden'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '409':
+        $ref: '../openapi.yaml#/components/responses/Conflict'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+deliveryStage:
+  parameters:
+    - $ref: '#/components/parameters/BookingId'
+    - $ref: '../openapi.yaml#/components/parameters/RequestId'
+  get:
+    tags: [entrega]
+    operationId: getDelivery
+    summary: Ver la etapa de la entrega
+    description: |
+      Devuelve la etapa a las dos partes, con las fotografías mediante URL firmadas
+      de 10 minutos (RF-05). Una persona ajena (también un administrador) recibe 404.
+      Una etapa sin registrar devuelve sus campos vacíos y `qr.state: none`.
+    responses:
+      '200':
+        $ref: '#/components/responses/StageOk'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+returnEvidence:
+  parameters:
+    - $ref: '#/components/parameters/BookingId'
+    - $ref: '../openapi.yaml#/components/parameters/RequestId'
+  put:
+    tags: [entrega]
+    operationId: putReturnEvidence
+    summary: Registrar la evidencia de la devolución (el solicitante)
+    description: |
+      Registra o reemplaza el estado del objeto y sus fotografías. Solo el solicitante;
+      la reserva debe estar en `in_progress` y la etapa sin confirmar (RF-13).
+
+      - `conditionNotes`: de 3 a 500 caracteres. `photos`: de 1 a 5, con el `publicId`
+        de imágenes subidas con propósito `evidence` (spec 004).
+      - Reemplazar la evidencia sube `evidenceVersion` e **invalida** el QR vigente.
+      - Las fotografías son privadas: la respuesta trae URL firmadas de 10 minutos.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/EvidenceRequest'
+          example:
+            conditionNotes: Taladro limpio, con el estuche y dos brocas. Sin rayones.
+            photos:
+              - publicId: vaiven/evidence/6731a0000000000000000009/1
+    responses:
+      '200':
+        $ref: '#/components/responses/StageOk'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '403':
+        $ref: '../openapi.yaml#/components/responses/Forbidden'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '409':
+        $ref: '../openapi.yaml#/components/responses/Conflict'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+returnQr:
+  parameters:
+    - $ref: '#/components/parameters/BookingId'
+    - $ref: '../openapi.yaml#/components/parameters/RequestId'
+  post:
+    tags: [entrega]
+    operationId: issueReturnQr
+    summary: Generar el QR de la devolución (el solicitante)
+    description: |
+      Genera un QR de **un solo uso**, vigente 15 minutos (POL-06), ligado a la
+      reserva, la etapa y la versión de evidencia. Generar otro invalida el anterior.
+      Solo el solicitante, con evidencia registrada y la etapa sin confirmar.
+
+      El `token` solo aparece en esta respuesta (el servidor guarda únicamente su
+      hash). La respuesta lleva `Cache-Control: no-store`.
+    responses:
+      '201':
+        description: QR generado.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+          Cache-Control:
+            description: Siempre `no-store`.
+            schema:
+              type: string
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/QrToken'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '403':
+        $ref: '../openapi.yaml#/components/responses/Forbidden'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '409':
+        $ref: '../openapi.yaml#/components/responses/Conflict'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+returnConfirm:
+  parameters:
+    - $ref: '#/components/parameters/BookingId'
+    - $ref: '../openapi.yaml#/components/parameters/RequestId'
+  post:
+    tags: [entrega]
+    operationId: confirmReturn
+    summary: Confirmar la devolución con el QR (el propietario)
+    description: |
+      Solo el propietario. Valida que el QR sea vigente, no se haya usado, sea de esta
+      reserva y etapa y de la versión de evidencia actual; la reserva pasa a
+      `completed`. La confirmación es **atómica**: con el mismo QR a la vez,
+      exactamente una petición tiene éxito (RNF-02).
+
+      Un QR vencido, usado o reemplazado responde 409 `conflict`; se puede generar
+      otro. El QR **no** confirma ni condiciona el pago (RF-07).
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ConfirmHandoverRequest'
+    responses:
+      '200':
+        $ref: '#/components/responses/BookingOk'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '403':
+        $ref: '../openapi.yaml#/components/responses/Forbidden'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '409':
+        $ref: '../openapi.yaml#/components/responses/Conflict'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+returnStage:
+  parameters:
+    - $ref: '#/components/parameters/BookingId'
+    - $ref: '../openapi.yaml#/components/parameters/RequestId'
+  get:
+    tags: [entrega]
+    operationId: getReturn
+    summary: Ver la etapa de la devolución
+    description: |
+      Devuelve la etapa a las dos partes, con las fotografías mediante URL firmadas
+      de 10 minutos (RF-05). Una persona ajena (también un administrador) recibe 404.
+      Una etapa sin registrar devuelve sus campos vacíos y `qr.state: none`.
+    responses:
+      '200':
+        $ref: '#/components/responses/StageOk'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+components:
+  parameters:
+    BookingId:
+      name: id
+      in: path
+      required: true
+      description: Identificador de la reserva.
+      schema:
+        type: string
+        pattern: '^[0-9a-f]{24}$'
+  responses:
+    StageOk:
+      description: Etapa de entrega o devolución.
+      headers:
+        X-Request-Id:
+          $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/Stage'
+    BookingOk:
+      description: La reserva actualizada.
+      headers:
+        X-Request-Id:
+          $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/Booking'

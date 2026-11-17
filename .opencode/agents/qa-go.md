@@ -7,6 +7,9 @@ permission:
   webfetch: deny
   bash:
     "*": ask
+    "az *": deny
+    "ssh *": deny
+    "scp *": deny
     "go test*": allow
     "go vet*": allow
     "gofmt*": allow

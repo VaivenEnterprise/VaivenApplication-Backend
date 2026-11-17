@@ -13,7 +13,10 @@ if (process.argv[2]==='go') {
   for (const layer of ['domain','usecase']) {
     const exists=files.some(p=>new RegExp('(^|/)'+layer+'/.*\\.go$').test(p)&&!p.endsWith('_test.go')&&!p.endsWith('/doc.go'));
     const [total,covered]=groups.get(layer)||[0,0];
-    if(exists && (!total||covered/total<.8)) throw new Error(layer+': cobertura menor a 80% o ausente.');
+    // Desde Go 1.22 el perfil incluye los paquetes sin pruebas (sus sentencias en 0),
+    // asi que total=0 solo ocurre si la capa no tiene sentencias (p. ej. solo
+    // interfaces de puertos); el codigo sin pruebas sigue fallando por <80%.
+    if(exists && total && covered/total<.8) throw new Error(layer+': cobertura menor a 80% o ausente.');
     if(total) console.log(layer+': '+(100*covered/total).toFixed(2)+'%');
   }
 } else {

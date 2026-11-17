@@ -1,0 +1,181 @@
+# Avisos dentro de la app y tokens de push (spec 011, T001; Art. IV y XII.2). Se
+# referencia desde api/openapi.yaml; los esquemas compartidos viven allí. Todas
+# las rutas exigen sesión y solo ven o cambian lo de la propia persona. Los
+# avisos se conservan 90 días (RNF-01). El push (Expo) se envía en segundo plano
+# y nunca afecta la operación de negocio (RF-05).
+myNotifications:
+  get:
+    tags: [avisos]
+    operationId: listMyNotifications
+    summary: Mis avisos
+    description: |
+      Lista mis avisos, los más recientes primero (RF-03). `nextCursor` null = no
+      hay más. Cada aviso trae `data` con los ids para abrir la pantalla correcta
+      (`bookingId`, `itemId`, `conversationId`, `incidentId`; solo los que
+      apliquen) y `readAt` (null si no se ha leído).
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+      - $ref: '../openapi.yaml#/components/parameters/CursorQuery'
+      - $ref: '../openapi.yaml#/components/parameters/LimitQuery'
+    responses:
+      '200':
+        description: Página de avisos.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/NotificationPage'
+            example:
+              items:
+                - id: 6731d0000000000000000001
+                  type: booking_requested
+                  title: Nueva solicitud
+                  body: Alguien quiere Taladro.
+                  data:
+                    bookingId: 6731a0000000000000000001
+                    itemId: 6731a0000000000000000002
+                  readAt: null
+                  createdAt: '2026-11-17T16:00:00Z'
+              nextCursor: null
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+myNotificationsUnreadCount:
+  get:
+    tags: [avisos]
+    operationId: getMyUnreadNotificationCount
+    summary: Cuántos avisos no he leído
+    description: Cuenta mis avisos con `readAt` null (RF-03, CA-07).
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+    responses:
+      '200':
+        description: El conteo.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [count]
+              properties:
+                count:
+                  type: integer
+                  minimum: 0
+            example:
+              count: 3
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+myNotificationsRead:
+  post:
+    tags: [avisos]
+    operationId: markMyNotificationsRead
+    summary: Marcar avisos como leídos
+    description: |
+      Marca como leídos los avisos indicados en `ids` (máximo 100; los que no son
+      míos o no existen se ignoran) o todos los míos con `all: true` (RF-03,
+      CA-07). Hay que enviar `ids` o `all`, no ambos. Repetirlo no cambia nada.
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/MarkReadRequest'
+          example:
+            all: true
+    responses:
+      '204':
+        description: Listo.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+myPushTokens:
+  post:
+    tags: [avisos]
+    operationId: registerMyPushToken
+    summary: Registrar mi token de push
+    description: |
+      Registra el token de Expo de este dispositivo o, si ya existía (p. ej. otra
+      persona había iniciado sesión en él), lo reasigna a mí (RF-04). Repetirlo
+      solo actualiza `lastSeenAt`.
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/PushTokenRequest'
+          example:
+            token: ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]
+            platform: android
+    responses:
+      '204':
+        description: Listo.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+  delete:
+    tags: [avisos]
+    operationId: deleteMyPushToken
+    summary: Eliminar mi token de push
+    description: |
+      Elimina el token (al cerrar sesión). Solo borra un token que sea mío; si no
+      existe o es de otra persona responde igual 204 (no revela de quién es).
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/PushTokenDeleteRequest'
+          example:
+            token: ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]
+    responses:
+      '204':
+        description: Listo.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'

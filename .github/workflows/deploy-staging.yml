@@ -1,0 +1,248 @@
+# Despliegue automático a staging (spec 017). Ver docs/devsecops.md §Despliegue
+# continuo a staging y la propuesta de enmienda docs/enmienda-2.0.0-propuesta.md:
+# el disparo automático no se enciende (variable STAGING_AUTODEPLOY) hasta que el
+# equipo apruebe la enmienda.
+#
+# Flujo: CI en verde tras un push a develop -> imagen linux/amd64 en GHCR con el
+# commit corto -> az vm run-command (OIDC, sin SSH ni secretos guardados) ejecuta
+# deploy/remote-deploy.sh en la VM (pull, current/previous-tag, compose up,
+# /healthz por HTTPS y rollback automático) -> humo desde el runner.
+name: Deploy staging
+
+on:
+  # Se usa workflow_run (y no `needs`) para no tocar ci.yml: el despliegue
+  # espera al resultado completo de CI («Required checks» incluido) y solo corre
+  # si terminó en verde para un push a develop de este mismo repositorio.
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [develop]
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'deploy: el último commit de develop con CI en verde; rollback: la imagen anterior de la VM'
+        type: choice
+        options: [deploy, rollback]
+        default: deploy
+
+permissions: {}
+
+# Un solo despliegue a la vez y sin cancelar el que está en curso (cortarlo a
+# mitad podría dejar la API detenida). GitHub conserva solo el último pendiente.
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+env:
+  AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP || 'rg-vaiven' }}
+  AZURE_VM_NAME: ${{ vars.AZURE_VM_NAME || 'vm-vaiven' }}
+  AZURE_HOST: vaiven-staging.westus2.cloudapp.azure.com
+  API_PORT: '8443'
+
+jobs:
+  prepare:
+    name: Prepare
+    # El disparo automático queda apagado hasta que la variable de repositorio
+    # STAGING_AUTODEPLOY valga 'true' (tras aprobar la enmienda); la ejecución
+    # manual sirve para la primera prueba.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (vars.STAGING_AUTODEPLOY == 'true' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'develop' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      action: ${{ steps.resolve.outputs.action }}
+      sha: ${{ steps.resolve.outputs.sha }}
+      tag: ${{ steps.resolve.outputs.tag }}
+      image: ${{ steps.resolve.outputs.image }}
+      skip: ${{ steps.resolve.outputs.skip }}
+    steps:
+      - id: resolve
+        name: Resolve commit and image
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          INPUT_ACTION: ${{ inputs.action }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          DISPATCH_SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          action=deploy
+          if [ "$EVENT" = workflow_dispatch ]; then
+            [ "$REF" = refs/heads/develop ] || { echo "::error::Solo se despliega desde develop (ref: $REF)"; exit 1; }
+            action=$INPUT_ACTION
+            sha=$DISPATCH_SHA
+          else
+            sha=$RUN_SHA
+          fi
+          case "$sha" in *[!0-9a-f]*|'') echo "::error::SHA inválido"; exit 1 ;; esac
+          skip=false
+          if [ "$action" = deploy ]; then
+            # En una ejecución manual, el commit también debe tener CI en verde.
+            if [ "$EVENT" = workflow_dispatch ]; then
+              ok=$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$sha&event=push&status=success" --jq '.total_count')
+              [ "$ok" -gt 0 ] || { echo "::error::$sha no tiene una ejecución de CI en verde por push"; exit 1; }
+            fi
+            # No se despliega un commit viejo encima de uno más nuevo: si develop
+            # ya avanzó, el despliegue de ese commit más nuevo lo cubre.
+            tip=$(gh api "repos/$REPO/commits/develop" --jq '.sha')
+            if [ "$tip" != "$sha" ]; then
+              echo "::notice::develop ya está en ${tip:0:7}; se omite el despliegue de ${sha:0:7}"
+              skip=true
+            fi
+          fi
+          owner=$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')
+          {
+            echo "action=$action"
+            echo "sha=$sha"
+            echo "tag=${sha:0:7}"
+            echo "image=ghcr.io/$owner/vaiven-api"
+            echo "skip=$skip"
+          } >>"$GITHUB_OUTPUT"
+
+  build:
+    name: Build image
+    needs: prepare
+    if: needs.prepare.outputs.action == 'deploy' && needs.prepare.outputs.skip == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          persist-credentials: false
+      - name: Build and push linux/amd64 to GHCR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACTOR: ${{ github.actor }}
+          IMAGE: ${{ needs.prepare.outputs.image }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          SHA: ${{ needs.prepare.outputs.sha }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+          trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
+          # Volver a ejecutar el mismo commit reutiliza la imagen ya publicada.
+          if docker manifest inspect "$IMAGE:$TAG" >/dev/null 2>&1; then
+            echo "::notice::$IMAGE:$TAG ya existe; no se recompila"
+            exit 0
+          fi
+          docker build --platform linux/amd64 \
+            --build-arg "APP_VERSION=$TAG" \
+            --label "org.opencontainers.image.source=$REPO_URL" \
+            --label "org.opencontainers.image.revision=$SHA" \
+            -t "$IMAGE:$TAG" .
+          docker push "$IMAGE:$TAG"
+          echo "Imagen: \`$IMAGE:$TAG\`" >>"$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: Deploy to VM
+    needs: [prepare, build]
+    if: >-
+      always() && needs.prepare.result == 'success' && needs.prepare.outputs.skip == 'false' &&
+      (needs.build.result == 'success' || (needs.build.result == 'skipped' && needs.prepare.outputs.action == 'rollback'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: staging
+      url: https://vaiven-staging.westus2.cloudapp.azure.com:8443/api/v1/meta
+    permissions:
+      contents: read
+      id-token: write
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.action == 'deploy' && needs.prepare.outputs.sha || github.sha }}
+          persist-credentials: false
+      - name: Azure login (OIDC, sin secreto)
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Run deploy/remote-deploy.sh on the VM
+        env:
+          MODE: ${{ needs.prepare.outputs.action }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          IMAGE: ${{ needs.prepare.outputs.image }}
+          ACTOR: ${{ github.actor }}
+          # Token del job (packages: read): caduca al terminar el job. Viaja dentro
+          # del script (archivo 600, @archivo), nunca como argumento.
+          PULL_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          payload="$RUNNER_TEMP/remote-deploy.sh"
+          trap 'rm -f "$payload"' EXIT
+          {
+            echo '#!/usr/bin/env bash'
+            printf 'export MODE=%q ENV_NAME=staging API_PORT=%q AZURE_HOST=%q\n' "$MODE" "$API_PORT" "$AZURE_HOST"
+            if [ "$MODE" = deploy ]; then
+              printf 'export TAG=%q PULL_IMAGE=%q REGISTRY_USER=%q REGISTRY_TOKEN=%q\n' \
+                "$TAG" "$IMAGE:$TAG" "$ACTOR" "$PULL_TOKEN"
+              printf 'export COMPOSE_B64=%q HOOK_B64=%q\n' \
+                "$(base64 -w0 deploy/docker-compose.yml)" "$(base64 -w0 deploy/certbot-deploy-hook.sh)"
+            fi
+            cat deploy/remote-deploy.sh
+          } >"$payload"
+          out=$(az vm run-command invoke \
+            --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_VM_NAME" \
+            --command-id RunShellScript --scripts "@$payload" \
+            --query 'value[0].message' --output tsv)
+          printf '%s\n' "$out"
+          result=$(printf '%s\n' "$out" | grep -o 'VAIVEN_DEPLOY_RESULT=[a-z_]*' | tail -n 1 | cut -d= -f2)
+          echo "Resultado en la VM: \`${result:-desconocido}\` (modo $MODE)" >>"$GITHUB_STEP_SUMMARY"
+          case "$MODE:$result" in
+            deploy:deployed|rollback:rolled_back) ;;
+            deploy:rolled_back) echo "::error::La versión $TAG falló y la VM volvió a la anterior"; exit 1 ;;
+            *) echo "::error::El despliegue falló en la VM (resultado: ${result:-sin resultado})"; exit 1 ;;
+          esac
+      - name: Azure logout
+        if: always()
+        shell: bash
+        run: az logout || true
+
+  smoke:
+    name: Smoke (HTTPS)
+    needs: [prepare, deploy]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: /healthz, /readyz and /api/v1/meta
+        env:
+          BASE: https://vaiven-staging.westus2.cloudapp.azure.com:8443
+          MODE: ${{ needs.prepare.outputs.action }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          get() { curl -fsS --max-time 10 --retry 3 --retry-all-errors --retry-delay 3 "$BASE$1"; }
+          get /healthz | jq -e '.status == "ok"' >/dev/null
+          get /readyz | jq -e '.status == "ready"' >/dev/null
+          meta=$(get /api/v1/meta)
+          printf '%s\n' "$meta" | jq -e '.environment == "staging"' >/dev/null
+          version=$(printf '%s\n' "$meta" | jq -r '.version')
+          if [ "$MODE" = deploy ] && [ "$version" != "$TAG" ]; then
+            echo "::error::/api/v1/meta devuelve $version y se esperaba $TAG"
+            exit 1
+          fi
+          echo "Humo OK en $BASE: versión \`$version\`" | tee -a "$GITHUB_STEP_SUMMARY"

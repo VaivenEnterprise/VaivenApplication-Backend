@@ -4,7 +4,7 @@ Instrucciones para cualquier agente de OpenCode que trabaje en `vaiven-backend/`
 
 ## 1. Orden de lectura obligatorio
 
-1. `constitution.md` — reglas no negociables (artículos I a XII). Para saber qué spec te toca, quién es el dueño y en qué orden, lee `ROADMAP.md`.
+1. `constitution.md` — reglas no negociables (artículos I a XV). Para saber qué spec te toca, quién es el dueño y en qué orden, lee `ROADMAP.md`.
 2. `memoria.md` — decisiones, estado actual y aprendizajes.
 3. `specs/<spec-activa>/spec.md` → `plan.md` → `tasks.md`.
 4. Solo entonces, el código.
@@ -69,7 +69,7 @@ Invocación: `@dev-go implementa la tarea T005 de specs/002-arquitectura-base/ta
 - **Trabajo humano mínimo:** la persona solo se registra (Azure, Cloudinary), hace `az login`, define `CLOUDINARY_URL` y aprueba acciones. **Todo lo demás lo hace `devops-mcp` desde OpenCode**, primero con los MCP y, si no cubren algo, con `az` o SSH.
 - **Solo `devops-mcp` usa los MCP, `az` y SSH a la VM.** Si tu tarea necesita infraestructura, pide `@devops-mcp ...`.
 - La API debe ser **sin estado** (Art. XIV): nada compartido en memoria; límite de tasa y caché en Redis (obligatorio) por los puertos `ratelimit.Limiter` y `cache.Cache`; Redis nunca es fuente de verdad.
-- **Orden de trabajo:** spec 001 (Azure y servicios) → 002 (base) → 003 … Cada spec termina con su tarea «Despliegue» (`@devops-mcp` ejecuta `scripts/deploy.sh staging` y verifica por HTTPS). No empieces la siguiente spec hasta que pase.
+- **Orden de trabajo:** spec 001 (Azure y servicios) → 002 (base) → 003 … Cada spec termina con su tarea «Despliegue»: al fusionar en `develop`, `deploy-staging.yml` despliega staging solo; `@devops-mcp` verifica esa ejecución por HTTPS (o, antes de fusionar, ejecuta `scripts/deploy.sh staging --allow-unmerged`). Art. XIII.5, enmienda 2.0.0. No empieces la siguiente spec hasta que pase.
 
 ## 6. Comandos
 
@@ -107,8 +107,10 @@ Si `make` no está disponible en Windows, usar Git Bash o WSL, o ejecutar el com
 
 ## 9. Alcance
 
-Specs `001` a `015` en `specs/`, en el orden y con los dueños de `ROADMAP.md`. Las tareas aún **no se ejecutan** hasta la fecha de arranque del calendario y la aprobación de cada spec.
+Specs `001` a `015` y `017` en `specs/`, en el orden y con los dueños de `ROADMAP.md`. Las specs 001 a 005 están completas (la 005 espera el visto bueno de BE-A) y la siguiente es la 006; ninguna spec se implementa sin su aprobación (Art. I).
 
 ## Repositorio y PR (Art. XV)
-- Una rama y PR por tarea (`tipo/SCRUM-NN-SPEC-NN-TNNN`); `main` protegida. Solo `@gestor-repo` usa el MCP de GitHub (token `GITHUB_PERSONAL_ACCESS_TOKEN`); nunca fusiona ni borra: una persona revisa y fusiona. Nunca se suben secretos.
+- Una rama de integracion por spec (`spec/SPEC-NN`), creada desde `develop`: implementar sus tareas ahi o en ramas `tipo/SPEC-NN-TNNN` con PR hacia la misma SPEC. Al completar la spec, PR hacia `develop`; publicar con PR `develop` -> `main`. Se conserva tarea -> `develop`. El segmento `SCRUM-NN-` es opcional tras la barra en ambos formatos; los nombres anteriores siguen siendo validos. Titulos de PR libres; completar Resumen, Validación y Seguridad. Solo `@gestor-repo` usa el MCP de GitHub; nunca fusiona ni borra: una persona revisa y fusiona. Nunca se suben secretos.
 
+
+- Tambien se admiten ramas por fase `tipo/SPEC-NN-Fase-N` (ejemplo: `feat/SPEC-02-Fase-3`, con SCRUM opcional), creadas desde la spec y con PR hacia esa misma SPEC o hacia develop. Implementar sus tareas una por una. No enviar fases directamente a main. Ver `docs/devsecops.md`.

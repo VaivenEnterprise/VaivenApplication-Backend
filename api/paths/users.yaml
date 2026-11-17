@@ -1,0 +1,55 @@
+# Perfiles públicos de usuarios (spec 003, T001; Art. IV y XII.2).
+# Se referencian desde api/openapi.yaml; los esquemas compartidos viven allí.
+userById:
+  get:
+    tags: [usuarios]
+    operationId: getUser
+    summary: Perfil público de una persona
+    description: |
+      Expone solo el mínimo (RF-09, Art. VI.4): nunca correo ni teléfono. Una
+      cuenta dada de baja se muestra como «Cuenta eliminada».
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+      - name: id
+        in: path
+        required: true
+        description: Identificador del usuario (24 caracteres hexadecimales).
+        schema:
+          type: string
+          pattern: '^[0-9a-f]{24}$'
+    responses:
+      '200':
+        description: Perfil público.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/PublicUser'
+            example:
+              id: 6730f1c2a9b3e4d5f6a7b8c9
+              displayName: Ana
+              ratingAverage: null
+              ratingCount: 0
+              memberSince: '2026-11-06T18:00:00Z'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '404':
+        description: No existe un usuario con ese identificador.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/Error'
+            example:
+              error:
+                code: not_found
+                message: No encontramos a esa persona.
+                requestId: 43d4c7dbb802d8b3711c8f4163ffc823
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'

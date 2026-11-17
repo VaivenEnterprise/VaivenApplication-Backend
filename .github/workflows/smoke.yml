@@ -1,0 +1,54 @@
+# Pruebas de humo del despliegue en staging (spec 017, T010).
+# Verifica por HTTPS, con certificado válido, /healthz, /readyz, /api/v1/meta
+# y el envoltorio de error del Art. IV. No usa secretos: la URL es pública.
+name: Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'URL base (https://). Vacío = variable STAGING_URL o staging por defecto.'
+        required: false
+        default: ''
+  schedule:
+    - cron: '23 13 * * *' # diario, 07:23 en Ciudad de México
+  # Tras fusionar en develop se comprueba que staging siga sano. El despliegue
+  # es manual (scripts/deploy.sh), así que esto no prueba el commit recién
+  # fusionado sino el estado actual de staging.
+  push:
+    branches: [develop]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: smoke-staging
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: Smoke staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      BASE_URL: ${{ inputs.base_url || vars.STAGING_URL || 'https://vaiven-staging.westus2.cloudapp.azure.com:8443' }}
+      SMOKE_EXPECT_ENV: staging
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Run smoke tests
+        shell: bash
+        run: |
+          set -o pipefail
+          {
+            echo '## Pruebas de humo'
+            echo
+            echo "Destino: \`$BASE_URL\`"
+            echo
+            echo '```text'
+          } >>"$GITHUB_STEP_SUMMARY"
+          status=0
+          bash scripts/smoke.sh "$BASE_URL" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" || status=$?
+          echo '```' >>"$GITHUB_STEP_SUMMARY"
+          exit "$status"

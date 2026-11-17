@@ -9,6 +9,13 @@
 *.pfx
 *.jks
 *.keystore
+# Llaves SSH privadas sin extensión (las públicas .pub sí pueden versionarse)
+id_rsa
+id_ecdsa
+id_ed25519
+vaiven_azure
+# Notas locales de Obsidian
+.obsidian/
 .aws/
 secrets.local/
 credentials.json
@@ -59,3 +66,31 @@ Thumbs.db
 Desktop.ini
 *.swp
 *.swo
+
+# Reportes locales de pruebas de mutación y carga (spec 017, T010)
+/reports/
+
+# Archivos comprimidos, respaldos y volcados (SEC-005): pueden arrastrar un .env
+# real sin que se vea en el diff. Si alguno debe versionarse, se agrega con
+# una excepción explícita y pasa por scripts/scan-archives.py en CI.
+*.tgz
+*.tar
+*.tar.*
+*.tbz2
+*.txz
+*.gz
+*.bz2
+*.xz
+*.zst
+*.zip
+*.7z
+*.rar
+*.sql
+*.dump
+*.bak
+
+# Carpetas temporales y salidas de asistentes (SEC-003)
+_tmp/
+Claude outputs/
+NUL
+__pycache__/

@@ -1,0 +1,167 @@
+# Reportes de contenido y su revisión (spec 011, T001; Art. IV, VI y XII.2). Se
+# referencia desde api/openapi.yaml. `POST /reports` lo usa cualquier persona
+# con sesión; las rutas `/admin/reports*` exigen la cuenta con rol `admin`
+# (security `adminAuth`) y para cualquier otra responden 403 (RF-10). No hay
+# apelaciones ni escalamiento (spec 011 §5).
+reports:
+  post:
+    tags: [reportes]
+    operationId: createReport
+    summary: Reportar un objeto, mensaje, perfil o decisión de moderación
+    description: |
+      Crea un reporte para revisión humana (RF-08).
+
+      - `targetType` `item`, `message` o `user`: `targetId` es el id del objeto,
+        mensaje o persona. Si no existe, 404.
+      - Un mensaje solo lo reporta quien participa en su conversación; quien no
+        participa recibe 404 (CA-06).
+      - `moderation_decision` (RF-09): reporta un rechazo automático del filtro
+        para seguimiento manual; `targetId` es una referencia de hasta 64
+        caracteres elegida por el cliente y el detalle va en `details`.
+      - No se puede reportar a uno mismo ni un objeto propio (409).
+      - Repetir el mismo reporte (mismo `targetType` y `targetId` de la misma
+        persona) no crea otro: responde 200 con el existente.
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ReportInput'
+          example:
+            targetType: item
+            targetId: 6731a0000000000000000002
+            reason: prohibited_content
+            details: El título ofrece algo que no se permite.
+    responses:
+      '201':
+        description: Reporte creado.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/ReportCreated'
+            example:
+              id: '6731e0000000000000000001'
+      '200':
+        description: Ya existía un reporte igual de esta persona; se devuelve ese.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/ReportCreated'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '409':
+        $ref: '../openapi.yaml#/components/responses/Conflict'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+adminReports:
+  get:
+    tags: [administracion]
+    operationId: adminListReports
+    summary: Cola de reportes (administración)
+    description: |
+      Lista reportes para revisarlos (RF-10), los más antiguos primero. `status`
+      filtra por `open`, `actioned` o `dismissed`; sin él se listan los `open`.
+      `target.summary` es un resumen del contenido reportado (título del objeto,
+      vista previa del mensaje o nombre de la persona).
+    security:
+      - adminAuth: []
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+      - name: status
+        in: query
+        required: false
+        schema:
+          $ref: '../openapi.yaml#/components/schemas/ReportStatus'
+      - $ref: '../openapi.yaml#/components/parameters/CursorQuery'
+      - $ref: '../openapi.yaml#/components/parameters/LimitQuery'
+    responses:
+      '200':
+        description: Página de reportes.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/ReportPage'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '403':
+        $ref: '../openapi.yaml#/components/responses/Forbidden'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+
+adminReportResolve:
+  post:
+    tags: [administracion]
+    operationId: adminResolveReport
+    summary: Resolver un reporte
+    description: |
+      Cierra un reporte `open` con una decisión y su `note` (RF-10, RF-11; se
+      conserva quién la tomó y cuándo).
+
+      - `dismiss`: no hay falta; el reporte queda `dismissed`.
+      - `hide_item`: bloquea el objeto (sale de la búsqueda, CA-05) y avisa a su
+        dueño (`content_removed`). Solo para reportes de `item`; si no, 409.
+      - `suspend_user`: suspende 7 días a la persona reportada (o al dueño del
+        objeto, o a quien escribió el mensaje) y la avisa (`sanction_applied`).
+        No aplica a `moderation_decision` (409).
+
+      Un reporte ya resuelto responde 409.
+    security:
+      - adminAuth: []
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+      - $ref: '../openapi.yaml#/components/parameters/ReportIdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ResolveReportRequest'
+          example:
+            action: hide_item
+            note: El título incumple la política de contenido.
+    responses:
+      '200':
+        description: El reporte resuelto.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/Report'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '403':
+        $ref: '../openapi.yaml#/components/responses/Forbidden'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '409':
+        $ref: '../openapi.yaml#/components/responses/Conflict'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
