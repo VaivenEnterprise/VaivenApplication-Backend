@@ -67,47 +67,75 @@ func BuildMatrix(events []domain.Event) Matrix {
 //
 // donde ‖i‖ es la norma de la columna del objeto i. Solo se suman personas que
 // tocaron los dos objetos, así que el costo es Σ_u n_u² y no objetos².
+//
+// Memoria (plan P-11): un índice invertido objeto → personas y un acumulador
+// denso que se reutiliza para cada objeto; no se guarda la matriz objeto ×
+// objeto. Todo se recorre en orden fijo (personas y objetos ordenados): sumar
+// flotantes en otro orden cambia los últimos decimales y podría cambiar un
+// desempate (P-01). Por eso cf(i, j) y cf(j, i) son idénticos.
 func CollaborativeNeighbors(m Matrix, k int) map[string][]Scored {
-	// Todo se recorre en orden fijo: sumar flotantes en otro orden cambia los
-	// últimos decimales y podría cambiar un desempate (P-01).
-	norms := map[string]float64{}
-	dots := map[string]map[string]float64{}
+	type cell struct {
+		idx int32
+		w   float64
+	}
+	itemIdx := map[string]int32{}
+	var names []string
 	for _, u := range sortedKeys(m) {
-		items := sortedKeys(m[u])
-		for _, it := range items {
-			norms[it] += m[u][it] * m[u][it]
-		}
-		for a := 0; a < len(items); a++ {
-			wa := m[u][items[a]]
-			for b := a + 1; b < len(items); b++ {
-				p := wa * m[u][items[b]]
-				addDot(dots, items[a], items[b], p)
-				addDot(dots, items[b], items[a], p)
+		for it := range m[u] {
+			if _, ok := itemIdx[it]; !ok {
+				itemIdx[it] = 0
+				names = append(names, it)
 			}
 		}
 	}
-	out := make(map[string][]Scored, len(dots))
-	best := newCollector(k)
-	for i, row := range dots {
-		ni := norms[i]
-		best.reset()
-		for j, d := range row {
-			best.add(j, d/math.Sqrt(ni*norms[j]))
+	slices.Sort(names)
+	for i, it := range names {
+		itemIdx[it] = int32(i) //nolint:gosec // G115: hay muchos menos de 2³¹ objetos
+	}
+	users := sortedKeys(m)
+	userItems := make([][]cell, len(users))
+	itemUsers := make([][]cell, len(names)) // cell.idx es la persona
+	norms := make([]float64, len(names))
+	for u, user := range users {
+		row := m[user]
+		cells := make([]cell, 0, len(row))
+		for _, it := range sortedKeys(row) {
+			i := itemIdx[it]
+			w := row[it]
+			cells = append(cells, cell{i, w})
+			itemUsers[i] = append(itemUsers[i], cell{int32(u), w}) //nolint:gosec // G115: hay muchas menos de 2³¹ personas
+			norms[i] += w * w
 		}
+		userItems[u] = cells
+	}
+
+	out := make(map[string][]Scored, len(names))
+	acc := make([]float64, len(names))
+	touched := make([]int32, 0, 256)
+	best := newCollector(k)
+	for i := range names {
+		for _, uc := range itemUsers[i] {
+			for _, jc := range userItems[uc.idx] {
+				if int(jc.idx) == i {
+					continue
+				}
+				if acc[jc.idx] == 0 {
+					touched = append(touched, jc.idx)
+				}
+				acc[jc.idx] += uc.w * jc.w
+			}
+		}
+		best.reset()
+		for _, j := range touched {
+			best.add(names[j], acc[j]/math.Sqrt(norms[i]*norms[j]))
+			acc[j] = 0
+		}
+		touched = touched[:0]
 		if len(best.best) > 0 {
-			out[i] = best.result()
+			out[names[i]] = best.result()
 		}
 	}
 	return out
-}
-
-func addDot(dots map[string]map[string]float64, i, j string, p float64) {
-	row := dots[i]
-	if row == nil {
-		row = map[string]float64{}
-		dots[i] = row
-	}
-	row[j] += p
 }
 
 func sortedKeys[V any](m map[string]V) []string {

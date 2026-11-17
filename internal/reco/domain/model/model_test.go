@@ -118,11 +118,11 @@ func TestContentExact(t *testing.T) {
 		a, b domain.ItemFeatures
 		want float64
 	}{
-		{f1, f2, 0.75},                 // categoría, modalidad y banda
-		{f1, f3, 0.25},                 // solo municipio (sin importar mayúsculas)
-		{f1, f4, 1 / math.Sqrt(12)},    // solo categoría; f4 tiene 3 rasgos
-		{f3, f4, 2 / math.Sqrt(12)},    // modalidad y banda de préstamo
-		{f1, f6, 0.5},                  // modalidad y banda
+		{f1, f2, 0.75},                    // categoría, modalidad y banda
+		{f1, f3, 0.25},                    // solo municipio (sin importar mayúsculas)
+		{f1, f4, 1 / math.Sqrt(12)},       // solo categoría; f4 tiene 3 rasgos
+		{f3, f4, 2 / math.Sqrt(12)},       // modalidad y banda de préstamo
+		{f1, f6, 0.5},                     // modalidad y banda
 		{f1, item("7", "", "", 0, ""), 0}, // nada en común
 	} {
 		got := ContentSimilarity(c.a, c.b)

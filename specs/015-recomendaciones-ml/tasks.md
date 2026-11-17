@@ -1,6 +1,6 @@
 # Tareas 015 — Recomendaciones con ML (backend)
 
-- **Dueño:** BE-B · **Estado:** en curso (3/11) · `[P]` = paralelizable
+- **Dueño:** BE-B · **Estado:** en curso (4/11) · `[P]` = paralelizable
 - Ventana del ROADMAP: 23 nov–1 dic (v1.1, detrás de `RECO_ENABLED`). No empieza hasta que la 014 termine su despliegue verificado (Art. XIII.5) y la spec esté aprobada (Art. I).
 - Cada tarea termina con `make fmt lint test` (y `go test -tags=integration` del paquete si tiene integración) en verde.
 
@@ -25,11 +25,12 @@
   - Refs: RF-01, RF-06, RF-09 · P-03, P-04, P-05, P-09
   - **Hecho (2026-11-17, BE-B):** `internal/reco/adapter/mongo`: `InteractionRepo` (vista repetida en el mismo bloque → `false` por el índice único; historial, ventana, borrado, purga de cuentas dadas de baja, demostración con `--purge`), `ModelRepo` (vecinos ≤ 20 y populares ≤ 50 por `buildId`; el nuevo convive con el anterior hasta `DeleteOtherBuilds`), `MetaRepo` (candado atómico con vencimiento: de 20 procesos a la vez gana exactamente 1; `Publish` solo si el candado sigue siendo suyo; fechas de borrado de historial), `RequestSource` (bookings) e `ItemSource` (items y users), estos dos en solo lectura comprobada. Tipos `Neighbor` e `ItemFeatures` en el dominio. Catálogo en **40** índices (`catalog.go`, propósitos, consulta representativa, siembra genérica con `type` y `bucket`, conteos de `cmd/admin`), fixture regenerado (solo +3 entradas) y `EnsureAll`. `go test -tags=integration ./...` completo en verde, lint 0, dominio 100 %, adaptador 84 % (integración).
 
-- [ ] **T004** Modelo colaborativo, de contenido, híbrido y métricas
+- [x] **T004** Modelo colaborativo, de contenido, híbrido y métricas
   - Archivos: `internal/reco/domain/model/{cosine.go, cooccurrence.go, content.go, hybrid.go, popular.go, metrics.go}`, `internal/reco/domain/synth/synth.go` y pruebas
   - Agente: `dev-go` · Depende de: T002
   - Aceptación: coseno objeto-objeto y de contenido con resultados exactos en matrices pequeñas; híbrido `α·cf + (1−α)·contenido`; populares por municipio y categoría; Hit@10, Recall@10 y MRR exactos en casos conocidos; deterministas (mismos datos y semilla → mismo resultado); *benchmark* con 5 000 objetos y 50 000 interacciones < 5 s y < 100 MB; cobertura ≥ 95 %
   - Refs: RF-02, RF-03, RF-04, RF-06, RF-07 · P-01, P-02, P-07, P-08, P-11
+  - **Hecho (2026-11-17, BE-B):** `internal/reco/domain/model` (coseno, colaborativo objeto-objeto con índice invertido y acumulador denso, contenido one-hot por bloques de categoría y municipio, `MergeNeighbors`, `Rank`, `ColdStart`, `Diversify`, `Popular`, `LeaveLastOut` y `Evaluate`; 99,4 %) y `internal/reco/domain/synth` (semilla fija, gustos por categoría y municipio, popularidad sesgada; 100 %). Pruebas exactas calculadas a mano (p. ej. cf(A,B) = 4/√30). Prueba de control reproducible: híbrido Hit@10 = 0,257 contra 0,087 de popularidad. *Benchmark* (5 000 objetos, 50 000 interacciones): **0,5 s y 31,7 MB asignados por recálculo** (cota superior del pico; límite 5 s y 100 MB). `golangci-lint` 0; `math/rand/v2` con semilla fija justificado con `nolint:gosec` (no es para seguridad).
 
 - [ ] **T005** Tarjetas por IDs en la búsqueda (spec 006)
   - Archivos: `internal/search/usecase` y `internal/search/adapter/mongo` (`CardsByIDs` con los mismos filtros de visibilidad que `Search`) y pruebas, `internal/reco/adapter/search/cards.go`

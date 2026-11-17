@@ -31,20 +31,15 @@ func MergeNeighbors(cf, content map[string][]Scored, feats map[string]domain.Ite
 	}
 	out := make(map[string][]domain.Neighbor, len(keys))
 	for _, i := range sortedKeys(keys) {
-		cfScore := map[string]float64{}
-		for _, s := range cf[i] {
-			cfScore[s.ItemID] = s.Score
-		}
-		seen := map[string]bool{}
-		var ns []domain.Neighbor
+		// Listas cortas (≤ 2k): buscar en ellas cuesta menos que crear mapas.
+		ns := make([]domain.Neighbor, 0, len(cf[i])+len(content[i]))
 		fi, keyActive := ft[i]
 		add := func(j string) {
 			fj, active := ft[j]
-			if seen[j] || !active || j == i {
+			if !active || j == i || slices.ContainsFunc(ns, func(n domain.Neighbor) bool { return n.ItemID == j }) {
 				return
 			}
-			seen[j] = true
-			n := domain.Neighbor{ItemID: j, CF: cfScore[j]}
+			n := domain.Neighbor{ItemID: j, CF: cfOf(cf[i], j)}
 			if keyActive {
 				n.Content = similarity(fi, fj)
 			}
@@ -63,13 +58,23 @@ func MergeNeighbors(cf, content map[string][]Scored, feats map[string]domain.Ite
 			return cmp.Compare(a.ItemID, b.ItemID)
 		})
 		if len(ns) > k {
-			ns = ns[:k]
+			ns = slices.Clip(ns[:k])
 		}
 		if len(ns) > 0 {
 			out[i] = ns
 		}
 	}
 	return out
+}
+
+// cfOf es el puntaje colaborativo de j en la lista; 0 si no está.
+func cfOf(list []Scored, j string) float64 {
+	for _, s := range list {
+		if s.ItemID == j {
+			return s.Score
+		}
+	}
+	return 0
 }
 
 // Candidate es un objeto recomendado con su puntaje y su motivo.

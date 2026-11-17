@@ -45,7 +45,12 @@ const (
 	pRequest     = 0.15 // la interacción es una solicitud y no una vista
 )
 
-func newRand(seed uint64) *rand.Rand { return rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)) }
+// newRand es un generador determinista: con la misma semilla da los mismos
+// datos (RF-07 exige una evaluación reproducible). No se usa para nada de
+// seguridad, por eso no es crypto/rand.
+func newRand(seed uint64) *rand.Rand {
+	return rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)) //nolint:gosec // G404: datos sintéticos reproducibles, no secretos
+}
 
 // Items genera cfg.Items objetos sintéticos con ids de 24 hexadecimales.
 func Items(cfg Config) []domain.ItemFeatures {
