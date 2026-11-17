@@ -107,7 +107,7 @@ Si `make` no está disponible en Windows, usar Git Bash o WSL, o ejecutar el com
 
 ## 9. Alcance
 
-Specs `001` a `015` y `017` en `specs/`, en el orden y con los dueños de `ROADMAP.md`. Las specs 001 a 005 están completas (la 005 espera el visto bueno de BE-A) y la siguiente es la 006; ninguna spec se implementa sin su aprobación (Art. I).
+Specs `001` a `017` en `specs/` (la `016` es la nueva auditoría de calidad, agregada el 2026-11-17), en el orden y con los dueños de `ROADMAP.md`. Las specs 001 a 005 están completas (la 005 espera el visto bueno de BE-A) y la siguiente es la 006; ninguna spec se implementa sin su aprobación (Art. I).
 
 ## Repositorio y PR (Art. XV)
 - Una rama de integracion por spec (`spec/SPEC-NN`), creada desde `develop`: implementar sus tareas ahi o en ramas `tipo/SPEC-NN-TNNN` con PR hacia la misma SPEC. Al completar la spec, PR hacia `develop`; publicar con PR `develop` -> `main`. Se conserva tarea -> `develop`. El segmento `SCRUM-NN-` es opcional tras la barra en ambos formatos; los nombres anteriores siguen siendo validos. Titulos de PR libres; completar Resumen, Validación y Seguridad. Solo `@gestor-repo` usa el MCP de GitHub; nunca fusiona ni borra: una persona revisa y fusiona. Nunca se suben secretos.
