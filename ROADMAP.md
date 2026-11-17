@@ -85,7 +85,7 @@ Prioridad: **P0** = sin esto no hay app · **P1** = esperado · **P2** = recorta
 | 011 | Notificaciones y moderación | Avisos en app y push (P2), filtro de contenido y reportes (**P1: exigidos por la política de contenido de usuarios de Google Play**) | BE-B / MO-B | P1 | 007–010 | 17–19 nov |
 | 012 | Integración y entrega | Pruebas de punta a punta, endurecimiento, documentación, AAB final | todos | P0 | todas | 19–22 nov |
 | 013 | Publicación en Google Play (móvil) y producción (backend) | Ficha, cumplimiento, prueba cerrada, producción; backend de producción | MO-B / BE-B + administrador | P0 | 002 (inicio), 012 (cierre) | 2 nov–7 dic |
-| 014 | **IA (v1.1, después de la 1.0)** | Sugerir título y categoría a partir de una foto, siempre con revisión de quien publica (proveedor gratuito; interruptor `AI_ENABLED`) | BE-A / MO-A (+ MO-B cumplimiento) | P1 | 004, 005, 011, 013 | 23 nov–1 dic |
+| 014 | **IA generativa (v1.1, después de la 1.0)** | (A) Sugerir título y categoría a partir de una foto, con revisión de quien publica; (B) **asistente de proyectos**: la persona escribe lo que quiere realizar y recibe qué objetos necesita, quién los tiene disponibles cerca (mapa, búsqueda de la 006) y los pasos para completarlo. Gemini (capa gratuita) en la VM, Ollama solo local; interruptores `AI_ENABLED` y `ASSISTANT_ENABLED` | BE-A / MO-A (+ MO-B cumplimiento) | P1 | 004, 005, 006, 007, 011, 013 | 23 nov–1 dic |
 | 015 | **ML: recomendaciones (v1.1)** | «Recomendado para ti»: recomendador híbrido propio (colaborativo objeto-objeto + contenido), evaluado con Hit@10/Recall@10/MRR contra popularidad; interruptor `RECO_ENABLED` | BE-B / MO-B | P1 | 005, 006, 007, 013 | 23 nov–1 dic |
 | L001 | Landing: base y páginas legales | Sitio estático, privacidad, términos, eliminación de cuenta, publicación gratuita | MO-B | P0 | — | 2–5 nov |
 | L002 | Landing: página principal | Información de la app, cómo funciona, FAQ, botón a Google Play | MO-B | P1 | L001 | 9–16 nov |
@@ -195,7 +195,7 @@ El PDF dice que importes y plazos se fijan en las políticas del servicio. Estos
 
 ## 9. Fuera de alcance (consciente)
 
-- Más IA o ML que la sugerencia por foto (spec 014) y las recomendaciones (spec 015): redes neuronales, embeddings externos, entrenamiento en línea. La IA y el ML **no** van en la 1.0; entran como v1.1.
+- Más IA o ML que la spec 014 (sugerencia por foto y asistente de proyectos) y las recomendaciones (spec 015): redes neuronales propias, embeddings externos, entrenamiento en línea, IA en el chat entre personas. La IA y el ML **no** van en la 1.0; entran como v1.1.
 - Páginas con servicios o cuentas en la web: la **landing** es solo informativa (no hay registro, ni inicio de sesión, ni panel web). Sin App Store en esta versión.
 - Verificación de correo, recuperación de contraseña, inicio de sesión social.
 - Pasarela de pagos, cobros automáticos, seguros, depósitos y garantías.
@@ -271,9 +271,9 @@ Incluye la tarea final de cierre de cada spec («Despliegue» en backend, «Veri
 | 010 | 12 | 14 |
 | 011 | 14 | 13 |
 | 012 | 12 | 12 |
-| 013 | 9 | 11 |
-| 014 | 9 | 8 |
+| 013 | 10 | 11 |
+| 014 | 15 | 8 |
 | 015 | 11 | 8 |
-| **Total** | **191** | **183** |
+| **Total** | **198** | **183** |
 
-Landing: L001 (12 tareas) y L002 (11 tareas), ver `specs/` del repositorio `vaiven-landing-page`. **Total general: 397 tareas.**
+Landing: L001 (12 tareas) y L002 (11 tareas), ver `specs/` del repositorio `vaiven-landing-page`. **Total general: 404 tareas.** (2026-11-16: +6 en la 014 por el asistente de proyectos y +1 en la 013 por T010; la spec móvil 014 debe sumar las pantallas del asistente y el mapa.)
