@@ -9,8 +9,10 @@
 #
 # Variables:
 #   MODE            deploy | rollback
-#   ENV_NAME        staging (production se despliega a mano, ver docs/devsecops.md)
-#   API_PORT        8443 en staging
+#   ENV_NAME        staging | production. production no tiene workflow: lo lanza una
+#                   persona con scripts/deploy-production.sh desde Cloud Shell, que
+#                   antes comprueba que el commit ya está en origin/main (spec 013, T010)
+#   API_PORT        8443 en staging, 443 en production (se valida)
 #   AZURE_HOST      nombre DNS del certificado (vaiven-staging.westus2.cloudapp.azure.com)
 #   TAG             (deploy) commit corto; la imagen queda como vaiven-api:<TAG>
 #   PULL_IMAGE      (deploy, opcional) referencia del registro, p. ej.
@@ -51,7 +53,10 @@ trap cleanup EXIT
 
 [ "$(id -u)" -eq 0 ] || { log "debe correr como root"; exit 1; }
 case "$MODE" in deploy|rollback) ;; *) log "MODE inválido: $MODE"; exit 1 ;; esac
-case "$ENV_NAME" in staging) ;; *) log "solo staging se despliega por aquí"; exit 1 ;; esac
+case "$ENV_NAME:$API_PORT" in
+    staging:8443 | production:443) ;;
+    *) log "entorno o puerto inválido: $ENV_NAME:$API_PORT (staging:8443 o production:443)"; exit 1 ;;
+esac
 [ -f "$REMOTE_DIR/.env" ] || { log "falta $REMOTE_DIR/.env (ver deploy/.env.example)"; exit 1; }
 
 compose_up() {
@@ -142,12 +147,12 @@ echo "$TAG" >"$REMOTE_DIR/current-tag"
 log "arrancando vaiven-api:$TAG"
 if compose_up "$TAG" && wait_healthy "$TAG"; then
     RESULT=deployed
-    # Solo se conservan la imagen actual y la anterior (disco de la VM).
-    previous=$(cat "$REMOTE_DIR/previous-tag" 2>/dev/null || true)
+    # Solo se conservan la imagen actual y la anterior DE CADA ENTORNO (disco de
+    # la VM): la limpieza de uno nunca borra la imagen ni la reversión del otro.
+    keep=" $TAG $(cat /opt/vaiven/*/current-tag /opt/vaiven/*/previous-tag 2>/dev/null | tr '
+' ' ') "
     docker image ls vaiven-api --format '{{.Tag}}' | while read -r t; do
-        if [ "$t" != "$TAG" ] && [ "$t" != "$previous" ]; then
-            docker rmi "vaiven-api:$t" >/dev/null 2>&1 || true
-        fi
+        case "$keep" in *" $t "*) ;; *) docker rmi "vaiven-api:$t" >/dev/null 2>&1 || true ;; esac
     done
     exit 0
 fi
