@@ -75,6 +75,12 @@ Claves de categoría permitidas:` + cats.String()
 // Sanitize limpia el mensaje de la persona: quita caracteres de control,
 // neutraliza los delimitadores y recorta a MaxMessageRunes.
 func Sanitize(msg string) string {
+	return clip(cleanup(msg), MaxMessageRunes)
+}
+
+// cleanup quita caracteres de control y saltos, neutraliza los delimitadores y
+// colapsa espacios, sin recortar (para medir el largo real).
+func cleanup(msg string) string {
 	msg = strings.Map(func(r rune) rune {
 		if r == '\n' || r == '\t' {
 			return ' '
@@ -85,13 +91,13 @@ func Sanitize(msg string) string {
 		return r
 	}, msg)
 	msg = tagLike.ReplaceAllString(msg, "[etiqueta]")
-	msg = strings.Join(strings.Fields(msg), " ")
-	return clip(msg, MaxMessageRunes)
+	return strings.Join(strings.Fields(msg), " ")
 }
 
-// ValidMessage indica si el mensaje, ya limpio, tiene el largo permitido.
+// ValidMessage indica si el mensaje, ya limpio, tiene el largo permitido. Se
+// mide antes de recortar: un mensaje de más de 500 no es válido (RF-09).
 func ValidMessage(msg string) bool {
-	n := utf8.RuneCountInString(Sanitize(msg))
+	n := utf8.RuneCountInString(cleanup(msg))
 	return n >= MinMessageRunes && n <= MaxMessageRunes
 }
 

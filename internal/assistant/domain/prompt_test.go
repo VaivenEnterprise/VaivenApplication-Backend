@@ -65,7 +65,8 @@ func TestSanitizeAndValidMessage(t *testing.T) {
 	if n := utf8.RuneCountInString(Sanitize(long)); n != MaxMessageRunes {
 		t.Errorf("recorte = %d runas", n)
 	}
-	for msg, want := range map[string]bool{"": false, " a ": false, "ok": true, "quiero pintar": true} {
+	for msg, want := range map[string]bool{"": false, " a ": false, "ok": true, "quiero pintar": true,
+		strings.Repeat("x", 500): true, strings.Repeat("x", 501): false, "  " + strings.Repeat("x", 500) + "  ": true} {
 		if ValidMessage(msg) != want {
 			t.Errorf("ValidMessage(%q) != %v", msg, want)
 		}

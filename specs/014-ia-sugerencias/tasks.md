@@ -78,11 +78,12 @@
   - Refs: RF-11, RNF-01 · P-07, P-10
   - Hecho (2026-11-16, BE-B): puertos `Finder`, `FindRequest` y `NeedResult` en `internal/assistant/usecase/ports.go` (reutilizan `searchusecase.CardView` de la 006, sin copiarla, Art. XII.6). `internal/assistant/adapter/search`: con ubicación busca término por término (la búsqueda por cercanía exige todas las palabras) y junta resultados únicos hasta 5; sin ubicación hace una sola búsqueda de texto o filtra por municipio; como máximo 4 búsquedas simultáneas entre todas las necesidades; 3 s por búsqueda; una falla deja esa necesidad en `[]` y solo si fallan todas se devuelve error; conserva el orden y nunca devuelve `null` (CA-08, error real encontrado por la prueba). Cobertura 98,5 %; lint y arquitectura en verde.
 
-- [ ] **T011** Caso de uso del asistente
-  - Archivos: `internal/assistant/{usecase.go, usecase_test.go}`
+- [x] **T011** Caso de uso del asistente
+  - Archivos: `internal/assistant/usecase/{ports.go, assistant.go, assistant_test.go}`
   - Agente: `dev-go` · Depende de: T003, T004, T008, T009, T010, 011 (filtro)
   - Aceptación: declara los puertos `Planner` y `Finder` (Art. III.3); arma el contexto (máximo 6 turnos); llama al proveedor **sin ubicación** (CA-11); valida y recorta la salida (CA-12); filtro de contenido en entrada y salida; caché en Redis del primer mensaje normalizado sin cachear coincidencias (CA-14); límites diarios y por minuto (CA-05); negativas (CA-10); necesidades sin coincidencias (CA-08); apagado o caída → `service_unavailable`; la ubicación no se guarda; textos en es-MX; cobertura ≥ 80 % (Art. VII.1)
   - Refs: RF-09 a RF-19
+  - Hecho (2026-11-16, BE-B): `Send` sigue este orden: apagado → longitud medida **antes** de recortar (501 caracteres = 400; error real que encontró la prueba) → filtro de contenido de la entrada (sin gastar cupo ni llamar al proveedor) → conversación propia (CA-13) → cupo diario en hora de México → plan (caché de 1 h solo en el primer mensaje, CA-14; el proveedor nunca recibe la ubicación, CA-11; un bloqueo del proveedor da una negativa amable, CA-10; una salida inválida o una caída da 503, CA-12) → filtro de la salida (resumen bloqueado → 503; necesidades, pasos y avisos bloqueados se quitan) → búsqueda → guarda los turnos (usuario en bloque de datos y resumen del modelo) → resumen con «Por ahora nadie presta cerca de ti: …» escrito por el backend (CA-08). `Delete` para la conversación propia. Cobertura 97,3 %; arquitectura y lint en verde.
 
 - [ ] **T012** Handler, rutas y registro (B)
   - Archivos: `internal/assistant/adapter/http/{handler.go, dto.go, routes.go}`, `cmd/api/modules.go` (una línea)
