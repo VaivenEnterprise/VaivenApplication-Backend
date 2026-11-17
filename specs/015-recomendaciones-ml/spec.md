@@ -1,7 +1,7 @@
 # Spec 015 — Recomendaciones con machine learning (backend)
 
 - **Dueño:** BE-B (con BE-A en revisión) · **Prioridad:** P1 · **Ventana:** 23 nov–1 dic · **Depende de:** 003, 005, 006, 007, 010, 013 (y del `Meta.features` que agrega la 014)
-- **Constitución:** v2.0.0 · **Estado:** Aprobada por BE-B (2026-11-17) tras la revisión contra la constitución; BE-A debe confirmar la lectura de `bookings` (P-05)
+- **Constitución:** v2.0.0 · **Estado:** Aprobada por BE-B (2026-11-17) tras la revisión contra la constitución; BE-A confirmó la lectura de `bookings`, `items` y `users` (P-05)
 
 ## 1. Objetivo y por qué
 La entrega oficial (1–4 dic) exige integrar **ML** además de IA generativa (spec 014). El ML de VAIVÉN son las **recomendaciones de objetos**: «Recomendado para ti» en Explorar. Se implementa un **recomendador híbrido propio** (filtrado colaborativo objeto-objeto + contenido) en Go y MongoDB, **sin servicios externos ni costo**, explicable en una defensa y **evaluado con métricas** contra una línea base de popularidad. Nunca reemplaza la búsqueda; solo sugiere.
@@ -52,7 +52,7 @@ Redes neuronales, embeddings externos, entrenamiento en línea, pruebas A/B, not
 - Resuelto (29 oct): no hay un algoritmo obligatorio; se usa ML clásico (filtrado colaborativo objeto-objeto + contenido), lo importante es que sirva a la app y se pueda explicar y medir.
 - Resuelto (17 nov, T010): con la evaluación, α pasa de 0.7 a 0.6 (mejor en Hit@10 y MRR, por poco) y los pesos 3/1 se mantienen porque los datos sintéticos no pueden medir si una solicitud pesa más que una vista. Justificación en `docs/ml/evaluacion.md` §4.
 - Resuelto (17 nov): el municipio del arranque en frío lo envía la app (`municipality`); los usuarios no tienen municipio guardado y no se agrega a la spec 003.
-- Pendiente de confirmar por BE-A (dueño de la 007): la lectura de `bookings` en solo lectura (plan P-05).
+- Resuelto (17 nov): BE-A confirmó la lectura en solo lectura de `bookings`, `items` y `users` (plan P-05).
 - Pendiente para el móvil (MO-B): pantalla «Recomendado para ti», envío del evento de vista, borrar historial en Ajustes y mención en el aviso de privacidad y en «Seguridad de datos» de Play.
 
 ## 7. Revisión de conformidad (2026-11-17, BE-B)
@@ -92,10 +92,10 @@ Protocolo de `revisor-constitucion` sobre T001–T009. La hizo Claude a pedido d
 | VII | ✅ | Cobertura: domain 100 %, model 99,4 %, synth 100 %, usecase 99,6 %, http 96,6 %, search 100 %; mongo 84 % (integración). Integración con MongoDB y Redis reales; lint 0. Las pruebas de mutación de estos paquetes quedan para la spec 016 (`mutation.sh` aún no los recorre) |
 | VIII | ✅ | Sin dependencias nuevas (`go.mod` sin cambios); álgebra con `map` y `slice` |
 | IX | ✅ | `slog`; el recálculo registra solo conteos |
-| XII | ⚠️ | Un módulo y una línea en `modules.go`; las tarjetas salen de la búsqueda (006, de BE-B) sin copiar filtros. **Falta que BE-A confirme la lectura en solo lectura de `bookings` (007), `items` (005) y `users` (003)** |
+| XII | ✅ | Un módulo y una línea en `modules.go`; las tarjetas salen de la búsqueda (006, de BE-B) sin copiar filtros. BE-A confirmó la lectura en solo lectura de `bookings` (007), `items` (005) y `users` (003) el 2026-11-17 |
 | XIII.5 | ⏳ | Pendiente: T011 (despliegue a staging) |
 | XIV | ✅ | Sin estado compartido en memoria; candado en MongoDB con vencimiento (CA-08); límite de tasa en Redis (CA-09); recálculo en 0,5 s y unos 32 MB |
 | XV | ✅ | Rama `spec/SPEC-15` y una rama por tarea |
 | §6 | ✅ | Colecciones `snake_case` en plural (se renombraron `reco_model`, `reco_popular` y `reco_meta` en T010); `createdAt`/`updatedAt`; arreglos acotados (20 y 50); índices en el catálogo (40) |
 
-**Veredicto: CONFORME CON OBSERVACIONES.** (1) La confirmación de BE-A sobre las lecturas de otras specs es la única condición abierta; (2) la validación de los parámetros de consulta en el dominio es la misma que usan las demás specs y no bloquea; (3) las pruebas de mutación de `reco` entran en la spec 016.
+**Veredicto: CONFORME** (actualizado el 2026-11-17 tras la confirmación de BE-A). Observaciones que no bloquean: (1) la validación de los parámetros de consulta en el dominio es la misma que usan las demás specs y no bloquea; (2) las pruebas de mutación de `reco` entran en la spec 016.
