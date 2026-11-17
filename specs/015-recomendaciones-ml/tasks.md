@@ -1,6 +1,6 @@
 # Tareas 015 — Recomendaciones con ML (backend)
 
-- **Dueño:** BE-B · **Estado:** en curso (7/11) · `[P]` = paralelizable
+- **Dueño:** BE-B · **Estado:** en curso (8/11) · `[P]` = paralelizable
 - Ventana del ROADMAP: 23 nov–1 dic (v1.1, detrás de `RECO_ENABLED`). No empieza hasta que la 014 termine su despliegue verificado (Art. XIII.5) y la spec esté aprobada (Art. I).
 - Cada tarea termina con `make fmt lint test` (y `go test -tags=integration` del paquete si tiene integración) en verde.
 
@@ -53,11 +53,12 @@
   - Refs: RF-01, RF-05, RF-09, RF-10 · P-10
   - **Hecho (2026-11-17, BE-B):** `internal/reco/adapter/http/handler.go` (96,6 %; DTO y rutas en el mismo archivo por ser cortos): `POST /recommendations/events` con `validator/v10` y `DisallowUnknownFields`, 60 por minuto por persona con 429 y `Retry-After` (CA-09); `GET /recommendations` con la tarjeta de la búsqueda y `nextCursor: null`; `DELETE /recommendations/history`; apagado, las tres responden 503 antes de validar (CA-06); los errores internos se registran sin el objeto (CA-07). `/meta` expone `features.recommendations`; una línea en `modules.go` y `newRecoModule` en `main.go`. Lint 0 y `go test -tags=integration ./...` en verde.
 
-- [ ] **T008** Comandos de administración
+- [x] **T008** Comandos de administración
   - Archivos: `cmd/admin/{reco_recompute.go, reco_seed.go, reco_eval.go}`, `cmd/admin/main.go` (tres casos) y pruebas
   - Agente: `dev-go` · Depende de: T006
   - Aceptación: `recompute-recommendations`; `seed-interactions` (sintético con patrones, `demo: true`, personas `demo-NNN`, `--purge`, se niega en producción); `eval-recommendations` con Hit@10, Recall@10 y MRR de híbrido, colaborativo, contenido y popularidad, en memoria con semilla fija por defecto y `--source=db` fuera de producción; misma salida en dos ejecuciones
   - Refs: RF-06, RF-07, RF-08 · P-07, P-08
+  - **Hecho (2026-11-17, BE-B):** `cmd/admin/reco_{eval,recompute,seed,deps}.go` y tres casos en `main.go`. `eval-recommendations`: por defecto sintético en memoria, sin base ni configuración, salida idéntica en dos corridas (tabla Markdown para `docs/ml/evaluacion.md`); `--source db` lee los últimos 90 días y se niega en producción. `recompute-recommendations`: usa el mismo candado y solo imprime conteos; no necesita Cloudinary. `seed-interactions`: personas `demo-NNN` sobre los objetos activos, fechas dentro de la ventana, `--purge`, y se niega en producción **antes de conectar**. Pruebas unitarias con dobles e integración real de los tres comandos (sembrar → recalcular → evaluar → purgar). Lint 0 y `go test -tags=integration ./...` en verde.
 
 - [ ] **T009** Prueba de integración de punta a punta
   - Archivos: `internal/reco/integration_test.go`
