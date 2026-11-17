@@ -94,7 +94,7 @@ func TestRecoEvalSyntheticIsReproducible(t *testing.T) {
 	if a.String() != b.String() {
 		t.Error("la salida no es reproducible")
 	}
-	for _, s := range []string{"| Híbrido (α = 0.7) | 0.257 |", "| Popularidad (línea base) | 0.087 |", "Personas evaluadas: 300", "semilla 15"} {
+	for _, s := range []string{"| Híbrido (α = 0.6) | 0.263 |", "| Popularidad (línea base) | 0.087 |", "Personas evaluadas: 300", "semilla 15"} {
 		if !strings.Contains(a.String(), s) {
 			t.Errorf("falta %q en:\n%s", s, a.String())
 		}

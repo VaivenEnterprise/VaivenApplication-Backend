@@ -157,11 +157,11 @@ func TestMergeNeighbors(t *testing.T) {
 	content := map[string][]Scored{"A": {{"D", 0.25}, {"B", 1}, {"A", 1}}}
 	got := MergeNeighbors(cf, content, feats, 20)
 	a := got["A"]
-	// C no está activo y A no es vecino de sí mismo. B: 0.7·0.5 + 0.3·1 = 0.65; D: 0.3·0.25 = 0.075.
+	// C no está activo y A no es vecino de sí mismo. B: 0.6·0.5 + 0.4·1 = 0.7; D: 0.4·0.25 = 0.1.
 	if len(a) != 2 || a[0] != (domain.Neighbor{ItemID: "B", CF: 0.5, Content: 1}) || a[1].ItemID != "D" || a[1].CF != 0 || !near(a[1].Content, 0.25) {
 		t.Fatalf("A = %+v", a)
 	}
-	if !near(Hybrid(a[0].CF, a[0].Content), 0.65) || !near(Hybrid(1, 0), 0.7) || !near(Hybrid(0, 1), 0.3) {
+	if !near(Hybrid(a[0].CF, a[0].Content), 0.7) || !near(Hybrid(1, 0), 0.6) || !near(Hybrid(0, 1), 0.4) {
 		t.Error("híbrido")
 	}
 	// Z ya no está activo: conserva vecinos colaborativos, sin contenido.
@@ -182,10 +182,10 @@ func TestRankExact(t *testing.T) {
 		"A": {{ItemID: "C", CF: 0.5, Content: 0.5}, {ItemID: "D", CF: 1}, {ItemID: "B", CF: 1, Content: 1}, {ItemID: "Z"}},
 		"B": {{ItemID: "C", CF: 1, Content: 1}, {ItemID: "A", CF: 1, Content: 1}},
 	}
-	// C: 3·(0.35+0.15) + 1·(0.7+0.3) = 2.5 (más por A); D: 3·0.7 = 2.1.
+	// C: 3·(0.3+0.2) + 1·(0.6+0.4) = 2.5 (más por A); D: 3·0.6 = 1.8.
 	got := Rank(history, neighbors, nil)
 	if len(got) != 2 || got[0].ItemID != "C" || !near(got[0].Score, 2.5) || got[0].Reason != (domain.Reason{Code: domain.ReasonSimilarTo, ItemID: "A"}) ||
-		got[1].ItemID != "D" || !near(got[1].Score, 2.1) {
+		got[1].ItemID != "D" || !near(got[1].Score, 1.8) {
 		t.Fatalf("Rank = %+v", got)
 	}
 	if ex := Rank(history, neighbors, map[string]bool{"D": true}); len(ex) != 1 || ex[0].ItemID != "C" {

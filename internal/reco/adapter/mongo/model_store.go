@@ -14,8 +14,8 @@ import (
 
 // Colecciones del modelo calculado (plan §2 y P-03).
 const (
-	ModelCollection   = "reco_model"
-	PopularCollection = "reco_popular"
+	ModelCollection   = "reco_neighbors"
+	PopularCollection = "reco_popular_lists"
 )
 
 // saveBatch es el tamaño de cada InsertMany al guardar un modelo.
@@ -81,7 +81,7 @@ func (r *ModelRepo) Save(ctx context.Context, buildID string, neighbors map[stri
 		models = append(models, d)
 	}
 	if err := insertBatches(ctx, r.model, models); err != nil {
-		return fmt.Errorf("reco_model: guardar vecinos: %w", err)
+		return fmt.Errorf("reco_neighbors: guardar vecinos: %w", err)
 	}
 	pops := make([]any, 0, len(popular))
 	for key, ids := range popular {
@@ -91,7 +91,7 @@ func (r *ModelRepo) Save(ctx context.Context, buildID string, neighbors map[stri
 		pops = append(pops, popularDoc{ID: docID(buildID, key), BuildID: buildID, Key: key, Items: ids, CreatedAt: now, UpdatedAt: now})
 	}
 	if err := insertBatches(ctx, r.popular, pops); err != nil {
-		return fmt.Errorf("reco_popular: guardar populares: %w", err)
+		return fmt.Errorf("reco_popular_lists: guardar populares: %w", err)
 	}
 	return nil
 }
@@ -111,10 +111,10 @@ func insertBatches(ctx context.Context, col *drv.Collection, docs []any) error {
 func (r *ModelRepo) DeleteOtherBuilds(ctx context.Context, keepBuildID string) error {
 	filter := bson.D{{Key: "buildId", Value: bson.D{{Key: "$ne", Value: keepBuildID}}}}
 	if _, err := r.model.DeleteMany(ctx, filter); err != nil {
-		return fmt.Errorf("reco_model: borrar modelos anteriores: %w", err)
+		return fmt.Errorf("reco_neighbors: borrar modelos anteriores: %w", err)
 	}
 	if _, err := r.popular.DeleteMany(ctx, filter); err != nil {
-		return fmt.Errorf("reco_popular: borrar modelos anteriores: %w", err)
+		return fmt.Errorf("reco_popular_lists: borrar modelos anteriores: %w", err)
 	}
 	return nil
 }
@@ -132,11 +132,11 @@ func (r *ModelRepo) Neighbors(ctx context.Context, buildID string, itemIDs []str
 	}
 	cur, err := r.model.Find(ctx, bson.D{{Key: "_id", Value: bson.D{{Key: "$in", Value: ids}}}})
 	if err != nil {
-		return nil, fmt.Errorf("reco_model: leer vecinos: %w", err)
+		return nil, fmt.Errorf("reco_neighbors: leer vecinos: %w", err)
 	}
 	var docs []modelDoc
 	if err := cur.All(ctx, &docs); err != nil {
-		return nil, fmt.Errorf("reco_model: leer vecinos: %w", err)
+		return nil, fmt.Errorf("reco_neighbors: leer vecinos: %w", err)
 	}
 	for _, d := range docs {
 		ns := make([]domain.Neighbor, len(d.Neighbors))
@@ -162,11 +162,11 @@ func (r *ModelRepo) Popular(ctx context.Context, buildID string, keys []string) 
 	cur, err := r.popular.Find(ctx, bson.D{{Key: "_id", Value: bson.D{{Key: "$in", Value: ids}}}},
 		options.Find().SetProjection(bson.D{{Key: "key", Value: 1}, {Key: "items", Value: 1}}))
 	if err != nil {
-		return nil, fmt.Errorf("reco_popular: leer populares: %w", err)
+		return nil, fmt.Errorf("reco_popular_lists: leer populares: %w", err)
 	}
 	var docs []popularDoc
 	if err := cur.All(ctx, &docs); err != nil {
-		return nil, fmt.Errorf("reco_popular: leer populares: %w", err)
+		return nil, fmt.Errorf("reco_popular_lists: leer populares: %w", err)
 	}
 	for _, d := range docs {
 		out[d.Key] = d.Items

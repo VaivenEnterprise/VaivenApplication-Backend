@@ -72,6 +72,7 @@
   - Agente: `spec-writer` y `revisor-constitucion` · Depende de: T008, T009
   - Aceptación: resultados reales de la evaluación (CA-04) con α y pesos finales justificados, fórmulas, supuestos, límites y declaración de que los datos son sintéticos; si el híbrido no supera a popularidad, se explica y se ajustan α y pesos; veredicto **CONFORME**; BE-A confirma la lectura de `bookings`
   - Refs: RF-07, RF-11, DoD
+  - **Avance (2026-11-17, BE-B), falta solo la confirmación de BE-A:** `docs/ml/evaluacion.md` (resultados reales; híbrido Hit@10 0,263 frente a 0,087 de popularidad; barrido de α con el pipeline real), `docs/ml/modelo.md` (datos, fórmulas, supuestos, límites y por qué no una red neuronal) y `docs/produccion.md` §12. **α pasa de 0.7 a 0.6** (mejor por poco en Hit@10 y MRR) y los pesos 3/1 se mantienen (los datos sintéticos no pueden medirlos). Colecciones renombradas en plural (§6.1). Revisión de conformidad en `spec.md` §8: **CONFORME CON OBSERVACIONES**. Se marca `[x]` cuando BE-A confirme la lectura de `bookings`, `items` y `users`.
 
 - [ ] **T011** Despliegue de la spec en Azure (staging)
   - Archivos: `memoria.md` (solo anexar), `docs/produccion.md` (registro)
