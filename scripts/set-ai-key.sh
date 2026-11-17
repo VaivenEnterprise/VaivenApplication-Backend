@@ -40,6 +40,24 @@ if [ "$MODE" != --disable ]; then
         "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1")
     [ "$code" = 200 ] || die "Google rechazó la clave (HTTP $code): no se cambió nada"
     echo "Clave válida para Google (HTTP 200)."
+    # Listar modelos funciona aunque el proyecto no tenga nivel gratuito: se
+    # prueba además una generación mínima con el modelo que usará la API. Si
+    # Google exige facturación (Art. XIII.1: costo cero) o el modelo no existe,
+    # se detiene sin tocar la VM.
+    MODEL=${AI_MODEL:-gemini-2.5-flash}
+    body='{"contents":[{"role":"user","parts":[{"text":"Responde solo: ok"}]}],"generationConfig":{"maxOutputTokens":8}}'
+    out=$(mktemp)
+    code=$(curl -s -o "$out" -w '%{http_code}' --max-time 30 -H "x-goog-api-key: $KEY" -H "Content-Type: application/json" \
+        -d "$body" "https://generativelanguage.googleapis.com/v1beta/models/$MODEL:generateContent")
+    reason=$(grep -o '"status": *"[A-Z_]*"' "$out" | head -1 | sed 's/.*"\([A-Z_]*\)"$/\1/' || true)
+    rm -f "$out"
+    case "$code" in
+        200) echo "Generación de prueba con $MODEL: OK (nivel disponible sin facturación)." ;;
+        429) die "Google respondió 429 ($reason): sin cuota gratuita o límite alcanzado. No se cambió nada; no configures facturación sin decisión del equipo." ;;
+        403) die "Google respondió 403 ($reason): el proyecto no tiene acceso (¿pide facturación?). No se cambió nada." ;;
+        404) die "El modelo $MODEL no existe para esta clave (404). Revisa AI_MODEL. No se cambió nada." ;;
+        *) die "La generación de prueba falló (HTTP $code, $reason). No se cambió nada." ;;
+    esac
 fi
 
 # Script que corre en la VM. Recibe AI_KEY (protegido), ENV_NAME, OTHER y MODE.
