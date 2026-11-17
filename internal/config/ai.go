@@ -2,16 +2,21 @@ package config
 
 import "strings"
 
-// Proveedores de IA aceptados en AI_PROVIDER (spec 014, RF-03).
+// Proveedores de IA aceptados en AI_PROVIDER (spec 014, RF-03 y T016).
+// openai es cualquier API compatible con OpenAI (Groq en staging); ollama usa
+// el mismo adaptador en local; gemini queda como alternativa.
 const (
+	AIProviderOpenAI = "openai"
 	AIProviderGemini = "gemini"
 	AIProviderOllama = "ollama"
 )
 
 // Valores por defecto de la IA (spec 014; plan P-01 y P-05).
 const (
+	DefaultOpenAIBaseURL = "https://api.groq.com/openai/v1"
+	DefaultOpenAIModel   = "meta-llama/llama-4-scout-17b-16e-instruct" // texto e imagen
 	DefaultGeminiBaseURL = "https://generativelanguage.googleapis.com"
-	DefaultOllamaBaseURL = "http://localhost:11434"
+	DefaultOllamaBaseURL = "http://localhost:11434/v1"
 	DefaultGeminiModel   = "gemini-2.5-flash"
 	maxAssistantRadiusKm = 50
 )
@@ -23,7 +28,7 @@ type AI struct {
 	SuggestionsEnabled bool
 	// AssistantEnabled activa la parte B (ASSISTANT_ENABLED). Apagada por defecto.
 	AssistantEnabled bool
-	// Provider es gemini (staging y producción) u ollama (solo development).
+	// Provider es openai (Groq u otro compatible), gemini u ollama (solo development).
 	Provider string
 	// BaseURL es la raíz de la API del proveedor (AI_BASE_URL).
 	BaseURL string
@@ -52,14 +57,17 @@ func loadAI(r *reader, appEnv string) AI {
 	a := AI{
 		SuggestionsEnabled:  r.boolean("AI_ENABLED", false),
 		AssistantEnabled:    r.boolean("ASSISTANT_ENABLED", false),
-		Provider:            r.oneOf("AI_PROVIDER", AIProviderGemini, AIProviderGemini, AIProviderOllama),
+		Provider:            r.oneOf("AI_PROVIDER", AIProviderOpenAI, AIProviderOpenAI, AIProviderGemini, AIProviderOllama),
 		APIKey:              Secret(r.text("AI_API_KEY", "")),
 		DailyLimit:          r.positiveInt("AI_DAILY_LIMIT", 20),
 		AssistantDailyLimit: r.positiveInt("ASSISTANT_DAILY_LIMIT", 30),
 		AssistantRadiusKm:   r.positiveInt("ASSISTANT_RADIUS_KM", 10),
 	}
-	defURL, defModel := DefaultGeminiBaseURL, DefaultGeminiModel
-	if a.Provider == AIProviderOllama {
+	defURL, defModel := DefaultOpenAIBaseURL, DefaultOpenAIModel
+	switch a.Provider {
+	case AIProviderGemini:
+		defURL, defModel = DefaultGeminiBaseURL, DefaultGeminiModel
+	case AIProviderOllama:
 		defURL, defModel = DefaultOllamaBaseURL, ""
 	}
 	a.BaseURL = strings.TrimRight(r.text("AI_BASE_URL", defURL), "/")
@@ -81,8 +89,8 @@ func loadAI(r *reader, appEnv string) AI {
 		if a.Model == "" {
 			r.fail("AI_MODEL", "obligatoria cuando AI_ENABLED o ASSISTANT_ENABLED está activo")
 		}
-		if a.Provider == AIProviderGemini && a.APIKey == "" {
-			r.fail("AI_API_KEY", "obligatoria con gemini cuando AI_ENABLED o ASSISTANT_ENABLED está activo")
+		if a.Provider != AIProviderOllama && a.APIKey == "" {
+			r.fail("AI_API_KEY", "obligatoria con "+a.Provider+" cuando AI_ENABLED o ASSISTANT_ENABLED está activo")
 		}
 	}
 	return a

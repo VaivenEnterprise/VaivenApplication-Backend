@@ -112,18 +112,25 @@
 
 - [ ] **T015** Despliegue de la spec en Azure (staging)
   - Archivos: `memoria.md` (solo anexar)
-  - Agente: `devops-mcp` · Depende de: T014 (y todas las anteriores `[x]`)
+  - Agente: `devops-mcp` · Depende de: T014, T016 (y todas las anteriores `[x]`)
   - Aceptación: `make fmt lint test` en verde; al fusionar en `develop`, `deploy-staging.yml` despliega staging; `/healthz` y `/readyz` devuelven 200 por HTTPS sin `-k`; cada endpoint nuevo de `api/paths/ai.yaml` responde con una petición correcta y una inválida en el formato de error del Art. IV; una conversación real con Gemini en staging devuelve necesidades, coincidencias y pasos; registros sin secretos ni datos personales; resultado anotado en `memoria.md`. **La spec siguiente no empieza hasta que esta tarea pase.**
   - Refs: Art. XIII.5
+
+- [x] **T016** Adaptador compatible con OpenAI (Groq en staging, Ollama en local)
+  - Archivos: `internal/ai/adapter/openai/{client.go, client_test.go}`, `internal/ai/adapter/imagefetch/{fetch.go, fetch_test.go}` (y `gemini/client.go` pasa a usarlo), `internal/config/ai.go` (+ test), `cmd/api/main.go` (elegir adaptador), `scripts/set-ai-key.sh`, `.env.example`, `deploy/*.env.example`, `docs/produccion.md` §11
+  - Agente: `dev-go` · Depende de: T003, T014
+  - Aceptación: `POST {AI_BASE_URL}/chat/completions` con `Authorization: Bearer`; instrucciones fijas como mensaje `system` con el esquema JSON; turnos `user`/`assistant`; la miniatura como `image_url` en base64 (descarga acotada, solo https); JSON pedido con `response_format` cuando no hay imagen y extraído del texto siempre (sin cercos de código); un reintento ante 429, 5xx o red; `content_filter` → `ErrBlocked`; errores sin el contenido de la persona; `AI_PROVIDER` acepta `gemini`, `openai` y `ollama` (este solo en development); pruebas con `httptest`, sin red; `set-ai-key.sh` valida la clave con una generación mínima en Groq; sin dependencias nuevas
+  - Refs: RF-03, RF-07, RF-17, RF-18 · P-01, P-05, P-06
+  - Hecho (2026-11-17, BE-B): `internal/ai/adapter/openai` (90,2 %) y `internal/ai/adapter/imagefetch` (91,7 %; Gemini pasó a usarlo, sin duplicar código). `AI_PROVIDER` acepta `openai` (por defecto: Groq, modelo de texto e imagen), `gemini` (alternativa) y `ollama` (solo development); en `cmd/api/main.go`, `newAIProvider` elige el adaptador. `set-ai-key.sh` valida con Groq (lista de modelos y generación mínima con el modelo real) antes de tocar la VM y escribe proveedor, URL, modelo y clave; probado con archivos de prueba. Guía §11 y `.env.example` al día. Unitarias e integración de la IA en verde, lint en 0 y `go.mod` sin cambios.
 
 ## Trazabilidad
 | Requisito | Tareas |
 |---|---|
 | RF-01, RF-02, RF-04, RF-05, RF-06, RF-07 | T001, T005, T006, T007 |
-| RF-03, RF-17 | T002, T003, T008 |
+| RF-03, RF-17 | T002, T003, T008, T016 |
 | RF-08 | T001 |
 | RF-09 a RF-16, RF-18 | T008 a T013 |
 | RNF-01 | T007, T010, T013 |
 
-| Total | 15 tareas |
+| Total | 16 tareas |
 |---|---|

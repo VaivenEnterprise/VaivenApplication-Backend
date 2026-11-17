@@ -218,26 +218,28 @@ Ninguno es igual a los de staging (CA-02). **Sin `seed` en producción** (RF-05)
 
 ## 11. IA generativa (spec 014)
 
-Dos funciones, las dos **apagadas por defecto**: sugerencias al publicar (`AI_ENABLED`, parte A) y asistente de proyectos (`ASSISTANT_ENABLED`, parte B). Proveedor: Gemini, en su capa gratuita (costo cero, Art. XIII.1). `GET /api/v1/meta` dice cuáles están encendidas (`features`).
+Dos funciones, las dos **apagadas por defecto**: sugerencias al publicar (`AI_ENABLED`, parte A) y asistente de proyectos (`ASSISTANT_ENABLED`, parte B). `GET /api/v1/meta` dice cuáles están encendidas (`features`).
 
-**Clave.** Se crea en Google AI Studio con la cuenta del proyecto (*Get API key → Create API key*), **una por entorno**: la de producción es distinta de la de staging (CA-02). Se guarda en el gestor de contraseñas del equipo y nunca en el repositorio ni en chats. Para ponerla en la VM, desde Cloud Shell (Bash):
+**Proveedor (RF-03, T016).** **Groq**, con su capa gratuita y sin tarjeta (costo cero, Art. XIII.1), mediante el adaptador compatible con OpenAI (`AI_PROVIDER=openai`, `AI_BASE_URL=https://api.groq.com/openai/v1`, modelo de texto e imagen en `AI_MODEL`). Gemini queda como alternativa (`AI_PROVIDER=gemini`): el 17 nov su nivel gratuito no estaba disponible para la cuenta del proyecto y pagar no está permitido. En local se puede usar Ollama con el mismo adaptador (`AI_PROVIDER=ollama`). Cambiar de proveedor es cambiar variables.
+
+**Clave.** Se crea en **console.groq.com** (*API Keys → Create API Key*) con la cuenta del proyecto, **una por entorno**: la de producción es distinta de la de staging (CA-02). Se guarda en el gestor de contraseñas del equipo y nunca en el repositorio ni en chats. Para ponerla en la VM, desde Cloud Shell (Bash):
 
 ```bash
-C=<commit de main o develop que tenga el script>
+C=<commit que tenga el script>
 curl -fsSLO "https://raw.githubusercontent.com/VaivenEnterprise/VaivenApplication-Backend/$C/scripts/set-ai-key.sh"
-bash set-ai-key.sh staging            # guarda la clave (la valida con Google antes)
-bash set-ai-key.sh staging --enable   # guarda la clave y enciende las dos funciones
+bash set-ai-key.sh staging --enable   # valida con Groq, guarda la clave y enciende A y B
 bash set-ai-key.sh staging --disable  # apaga las dos (la clave se conserva)
+PROVIDER=gemini bash set-ai-key.sh staging --enable   # alternativa, si hay nivel gratuito
 ```
 
-El script valida la clave con Google antes de tocar la VM, la envía como parámetro protegido, se niega si coincide con la del otro entorno y borra el run command al terminar. El cambio se aplica **al recrear la API**: en staging, con el siguiente despliegue (o «Run workflow → deploy»); en producción, con `scripts/deploy-production.sh`.
+El script valida la clave y hace una generación mínima con el modelo real **antes** de tocar la VM; si el proveedor pide pago (429/403) o el modelo no existe (404), se detiene. La envía como parámetro protegido, se niega si coincide con la del otro entorno y borra el run command. El cambio se aplica **al recrear la API**: en staging, con el siguiente despliegue (o «Run workflow → deploy»); en producción, con `scripts/deploy-production.sh`.
 
-**Apagado de emergencia.** Si Gemini falla, cambia sus condiciones o hay un problema de contenido: `bash set-ai-key.sh <entorno> --disable` y recrear la API. La app sigue funcionando sin IA (`features` en `false`; las rutas responden 503).
+**Apagado de emergencia.** `bash set-ai-key.sh <entorno> --disable` y recrear la API. La app sigue sin IA (`features` en `false`; las rutas responden 503).
 
 **Privacidad (RF-07 y RF-18).**
-- Parte A: a Google solo viaja la **miniatura** de la foto, cuando la persona pide la sugerencia.
-- Parte B: solo viaja el **texto** de la conversación (máximo 6 turnos). La **ubicación nunca sale del backend**: se usa solo para la búsqueda.
+- Parte A: al proveedor solo viaja la **miniatura** de la foto, cuando la persona pide la sugerencia.
+- Parte B: solo viaja el **texto** de la conversación (máximo 6 turnos). La **ubicación nunca sale del backend**.
 - No se guardan fotos ni respuestas del modelo; la conversación dura 24 h y se puede borrar. Los registros no llevan fotos, mensajes ni respuestas.
-- La capa gratuita de Gemini puede usar lo enviado para mejorar el servicio: el aviso de privacidad (landing) y «Seguridad de datos» de Play deben decirlo (mobile 014-T006). La app pide no escribir datos personales en el chat.
+- El aviso de privacidad (landing) y «Seguridad de datos» de Play deben nombrar al proveedor (Groq) y lo que hace con los datos según sus términos vigentes (mobile 014-T006). La app pide no escribir datos personales en el chat.
 
 **Producción.** Según el ROADMAP, la IA sale como v1.1: se enciende en producción solo cuando el equipo lo decida y la versión de la app con IA esté publicada.

@@ -20,17 +20,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ai/adapter/imagefetch"
 	aidomain "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ai/domain"
 )
 
 // Límites del cliente.
 const (
-	httpTimeout   = 20 * time.Second // tope por intento; el caso de uso pone 10–12 s con su contexto
-	retryDelay    = 500 * time.Millisecond
-	maxImageBytes = 5 << 20 // POL-13
-	maxRespBytes  = 1 << 20
-	temperature   = 0.4
-	maxOutTokens  = 2048
+	httpTimeout  = 20 * time.Second // tope por intento; el caso de uso pone 10–12 s con su contexto
+	retryDelay   = 500 * time.Millisecond
+	maxRespBytes = 1 << 20
+	temperature  = 0.4
+	maxOutTokens = 2048
 )
 
 // Config es lo que el cliente necesita de config.AI.
@@ -140,40 +140,13 @@ func (c *Client) buildBody(ctx context.Context, req aidomain.Request) ([]byte, e
 	return json.Marshal(gr)
 }
 
-// fetchImage descarga la miniatura que construyó el servidor (nunca una URL de
-// la persona; spec 014, RF-02) con tamaño y tipo acotados.
+// fetchImage descarga la miniatura con el paquete común (spec 014, RF-02).
 func (c *Client) fetchImage(ctx context.Context, raw string) (*inlineData, error) {
-	u, err := url.Parse(raw)
-	if err != nil || (u.Scheme != "https" && (!c.allowHTTPImages || u.Scheme != "http")) || u.Host == "" {
-		return nil, errors.New("gemini: la miniatura debe ser una URL https")
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	img, err := imagefetch.Fetch(ctx, c.http, raw, c.allowHTTPImages)
 	if err != nil {
-		return nil, errors.New("gemini: no se pudo preparar la descarga de la miniatura")
+		return nil, err
 	}
-	res, err := c.http.Do(req)
-	if err != nil {
-		return nil, aidomain.ErrUnavailable
-	}
-	defer func() { _ = res.Body.Close() }()
-	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("gemini: miniatura: HTTP %d", res.StatusCode)
-	}
-	data, err := io.ReadAll(io.LimitReader(res.Body, maxImageBytes+1))
-	if err != nil {
-		return nil, aidomain.ErrUnavailable
-	}
-	if len(data) > maxImageBytes {
-		return nil, errors.New("gemini: la miniatura supera 5 MB")
-	}
-	mime := strings.TrimSpace(strings.Split(res.Header.Get("Content-Type"), ";")[0])
-	if !strings.HasPrefix(mime, "image/") {
-		mime = http.DetectContentType(data)
-		if !strings.HasPrefix(mime, "image/") {
-			return nil, errors.New("gemini: la miniatura no es una imagen")
-		}
-	}
-	return &inlineData{MIMEType: mime, Data: base64.StdEncoding.EncodeToString(data)}, nil
+	return &inlineData{MIMEType: img.MIMEType, Data: base64.StdEncoding.EncodeToString(img.Data)}, nil
 }
 
 // --- Respuesta ---

@@ -1,15 +1,20 @@
 #!/usr/bin/env bash
-# scripts/set-ai-key.sh — guarda la clave de Gemini en el .env de un entorno de
-# la VM y, si se pide, enciende la IA (spec 014, T014). Se ejecuta en Azure Cloud
-# Shell (Bash), con la sesión de az de quien opera:
+# scripts/set-ai-key.sh — guarda la clave del proveedor de IA en el .env de un
+# entorno de la VM y, si se pide, enciende la IA (spec 014, T014 y T016). Se
+# ejecuta en Azure Cloud Shell (Bash), con la sesión de az de quien opera:
 #
 #   bash set-ai-key.sh staging                 # solo guarda la clave (IA apagada)
 #   bash set-ai-key.sh staging --enable        # guarda la clave y enciende A y B
 #   bash set-ai-key.sh staging --disable       # apaga A y B (la clave se conserva)
 #
+# Proveedor (variable PROVIDER): groq (por defecto, API compatible con OpenAI)
+# o gemini (alternativa). AI_MODEL cambia el modelo.
+#
 # Seguridad:
-#   - La clave se lee sin mostrarla y se valida con Google ANTES de tocar la VM
-#     (GET /v1beta/models, solo lectura, clave en cabecera).
+#   - La clave se lee sin mostrarla y se valida con el proveedor ANTES de tocar
+#     la VM: lista de modelos y una generación mínima con el modelo que usará la
+#     API. Si el proveedor exige pago o el modelo no existe, se detiene
+#     (Art. XIII.1: costo cero).
 #   - Viaja a la VM como parámetro protegido de un Managed Run Command (Azure lo
 #     guarda cifrado y no lo devuelve) y el run command se borra al terminar.
 #   - En la VM se rechaza si es igual a la del otro entorno (CA-02).
@@ -21,6 +26,7 @@ set -euo pipefail
 RG=${RG:-rg-vaiven}
 VM=${VM:-vm-vaiven}
 LOCATION=${LOCATION:-westus2}
+PROVIDER=${PROVIDER:-groq}
 NAME=set-ai-key
 
 die() { echo "set-ai-key: $*" >&2; exit 1; }
@@ -29,38 +35,50 @@ ENV_NAME=$1
 MODE=${2:-key}
 case "$ENV_NAME" in staging) OTHER=production ;; production) OTHER=staging ;; *) die "entorno inválido: $ENV_NAME" ;; esac
 case "$MODE" in key | --enable | --disable) ;; *) die "opción desconocida: $MODE" ;; esac
+case "$PROVIDER" in
+    groq) AI_PROVIDER=openai BASE=https://api.groq.com/openai/v1 MODEL=${AI_MODEL:-meta-llama/llama-4-scout-17b-16e-instruct} ;;
+    gemini) AI_PROVIDER=gemini BASE=https://generativelanguage.googleapis.com MODEL=${AI_MODEL:-gemini-2.5-flash} ;;
+    *) die "PROVIDER debe ser groq o gemini" ;;
+esac
 command -v az >/dev/null || die "falta az (usa Azure Cloud Shell)"
+
+# check CODIGO: interpreta la respuesta de la generación de prueba.
+check() {
+    case "$1" in
+        200) echo "Generación de prueba con $MODEL: OK (sin pago)." ;;
+        401) die "el proveedor rechazó la clave (401). No se cambió nada." ;;
+        429) die "el proveedor respondió 429: sin cuota gratuita o límite alcanzado. No se cambió nada; no actives pagos sin decisión del equipo." ;;
+        403) die "el proveedor respondió 403: sin acceso (¿pide pago?). No se cambió nada." ;;
+        404) die "el modelo $MODEL no existe para esta clave (404). No se cambió nada." ;;
+        *) die "la generación de prueba falló (HTTP $1). No se cambió nada." ;;
+    esac
+}
 
 KEY=
 if [ "$MODE" != --disable ]; then
-    read -rsp "Clave de Gemini para $ENV_NAME (no se muestra): " KEY
+    read -rsp "Clave de $PROVIDER para $ENV_NAME (no se muestra): " KEY
     echo
     [ ${#KEY} -ge 20 ] || die "la clave parece incompleta (${#KEY} caracteres)"
-    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 -H "x-goog-api-key: $KEY" \
-        "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1")
-    [ "$code" = 200 ] || die "Google rechazó la clave (HTTP $code): no se cambió nada"
-    echo "Clave válida para Google (HTTP 200)."
-    # Listar modelos funciona aunque el proyecto no tenga nivel gratuito: se
-    # prueba además una generación mínima con el modelo que usará la API. Si
-    # Google exige facturación (Art. XIII.1: costo cero) o el modelo no existe,
-    # se detiene sin tocar la VM.
-    MODEL=${AI_MODEL:-gemini-2.5-flash}
-    body='{"contents":[{"role":"user","parts":[{"text":"Responde solo: ok"}]}],"generationConfig":{"maxOutputTokens":8}}'
-    out=$(mktemp)
-    code=$(curl -s -o "$out" -w '%{http_code}' --max-time 30 -H "x-goog-api-key: $KEY" -H "Content-Type: application/json" \
-        -d "$body" "https://generativelanguage.googleapis.com/v1beta/models/$MODEL:generateContent")
-    reason=$(grep -o '"status": *"[A-Z_]*"' "$out" | head -1 | sed 's/.*"\([A-Z_]*\)"$/\1/' || true)
-    rm -f "$out"
-    case "$code" in
-        200) echo "Generación de prueba con $MODEL: OK (nivel disponible sin facturación)." ;;
-        429) die "Google respondió 429 ($reason): sin cuota gratuita o límite alcanzado. No se cambió nada; no configures facturación sin decisión del equipo." ;;
-        403) die "Google respondió 403 ($reason): el proyecto no tiene acceso (¿pide facturación?). No se cambió nada." ;;
-        404) die "El modelo $MODEL no existe para esta clave (404). Revisa AI_MODEL. No se cambió nada." ;;
-        *) die "La generación de prueba falló (HTTP $code, $reason). No se cambió nada." ;;
-    esac
+    prompt='Responde solo: ok'
+    if [ "$PROVIDER" = groq ]; then
+        code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 -H "Authorization: Bearer $KEY" "$BASE/models")
+        [ "$code" = 200 ] || die "Groq rechazó la clave (HTTP $code): no se cambió nada"
+        body=$(printf '{"model":"%s","messages":[{"role":"user","content":"%s"}],"max_tokens":8}' "$MODEL" "$prompt")
+        code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 -H "Authorization: Bearer $KEY" \
+            -H "Content-Type: application/json" -d "$body" "$BASE/chat/completions")
+    else
+        code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 -H "x-goog-api-key: $KEY" "$BASE/v1beta/models?pageSize=1")
+        [ "$code" = 200 ] || die "Google rechazó la clave (HTTP $code): no se cambió nada"
+        body=$(printf '{"contents":[{"role":"user","parts":[{"text":"%s"}]}],"generationConfig":{"maxOutputTokens":8}}' "$prompt")
+        code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 -H "x-goog-api-key: $KEY" \
+            -H "Content-Type: application/json" -d "$body" "$BASE/v1beta/models/$MODEL:generateContent")
+    fi
+    echo "Clave válida para $PROVIDER."
+    check "$code"
 fi
 
-# Script que corre en la VM. Recibe AI_KEY (protegido), ENV_NAME, OTHER y MODE.
+# Script que corre en la VM. Recibe AI_KEY (protegido) y, en claro, ENV_NAME,
+# OTHER, MODE, AI_PROVIDER, BASE y MODEL (ninguno es secreto).
 REMOTE='set -eu
 F=/opt/vaiven/$ENV_NAME/.env
 O=/opt/vaiven/$OTHER/.env
@@ -75,8 +93,9 @@ if [ -n "${AI_KEY:-}" ]; then
     echo "ES LA MISMA CLAVE DE $OTHER: no se cambió nada (CA-02)"; exit 1
   fi
   setv AI_API_KEY "$AI_KEY"
-  grep -q "^AI_PROVIDER=" "$F" || setv AI_PROVIDER gemini
-  grep -q "^AI_MODEL=" "$F" || setv AI_MODEL gemini-2.5-flash
+  setv AI_PROVIDER "$AI_PROVIDER"
+  setv AI_BASE_URL "$BASE"
+  setv AI_MODEL "$MODEL"
   echo "AI_API_KEY guardada en $F (valor no mostrado)"
 fi
 case "$MODE" in
@@ -84,12 +103,12 @@ case "$MODE" in
   --disable) setv AI_ENABLED false; setv ASSISTANT_ENABLED false; echo "IA APAGADA en $ENV_NAME (se aplica al recrear la API)" ;;
 esac
 stat -c "permisos .env: %a %U" "$F"
-grep -E "^(AI_ENABLED|ASSISTANT_ENABLED|AI_PROVIDER|AI_MODEL)=" "$F" || true
+grep -E "^(AI_ENABLED|ASSISTANT_ENABLED|AI_PROVIDER|AI_BASE_URL|AI_MODEL)=" "$F" || true
 echo "SET_AI_KEY_RESULT=ok"'
 
 az vm run-command create -g "$RG" --vm-name "$VM" --location "$LOCATION" --name "$NAME" \
     --async-execution false --timeout-in-seconds 120 \
-    --parameters "ENV_NAME=$ENV_NAME" "OTHER=$OTHER" "MODE=$MODE" \
+    --parameters "ENV_NAME=$ENV_NAME" "OTHER=$OTHER" "MODE=$MODE" "AI_PROVIDER=$AI_PROVIDER" "BASE=$BASE" "MODEL=$MODEL" \
     --protected-parameters "AI_KEY=$KEY" \
     --script "$REMOTE" --query provisioningState -o tsv >/dev/null || true
 unset KEY

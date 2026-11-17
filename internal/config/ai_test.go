@@ -15,15 +15,15 @@ func TestAIDefaultsAreOffAndSafe(t *testing.T) {
 	if a.SuggestionsEnabled || a.AssistantEnabled || a.Enabled() {
 		t.Errorf("las funciones deben nacer apagadas: %+v", a)
 	}
-	if a.Provider != AIProviderGemini || a.BaseURL != DefaultGeminiBaseURL || a.Model != DefaultGeminiModel {
-		t.Errorf("proveedor por defecto = %+v", a)
+	if a.Provider != AIProviderOpenAI || a.BaseURL != DefaultOpenAIBaseURL || a.Model != DefaultOpenAIModel {
+		t.Errorf("proveedor por defecto (Groq) = %+v", a)
 	}
 	if a.DailyLimit != 20 || a.AssistantDailyLimit != 30 || a.AssistantRadiusKm != 10 {
 		t.Errorf("límites por defecto = %+v", a)
 	}
 }
 
-func TestAIEnabledNeedsKeyWithGemini(t *testing.T) {
+func TestAIEnabledNeedsKey(t *testing.T) {
 	for _, flag := range []string{"AI_ENABLED", "ASSISTANT_ENABLED"} {
 		e := valid()
 		e[flag] = "true"
@@ -77,6 +77,20 @@ func TestAIOllamaOnlyInDevelopment(t *testing.T) {
 	}
 }
 
+func TestAIGeminiAlternativeDefaults(t *testing.T) {
+	e := valid()
+	e["AI_PROVIDER"] = "gemini"
+	e["AI_ENABLED"] = "true"
+	if _, err := load(e.lookup); err == nil || !strings.Contains(err.Error(), "AI_API_KEY") {
+		t.Errorf("gemini sin clave: err = %v", err)
+	}
+	e["AI_API_KEY"] = "clave"
+	cfg, err := load(e.lookup)
+	if err != nil || cfg.AI.BaseURL != DefaultGeminiBaseURL || cfg.AI.Model != DefaultGeminiModel {
+		t.Errorf("gemini: %+v %v", cfg.AI, err)
+	}
+}
+
 func TestAIOllamaNeedsModelWhenEnabled(t *testing.T) {
 	e := valid()
 	e["AI_PROVIDER"] = "ollama"
@@ -110,7 +124,7 @@ func TestAILimitsValidation(t *testing.T) {
 		"AI_DAILY_LIMIT":        "0",
 		"ASSISTANT_DAILY_LIMIT": "-3",
 		"ASSISTANT_RADIUS_KM":   "51",
-		"AI_PROVIDER":           "openai",
+		"AI_PROVIDER":           "proveedor-desconocido",
 		"ASSISTANT_ENABLED":     "quizá",
 	} {
 		e := valid()

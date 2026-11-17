@@ -64,7 +64,7 @@ func TestLoadDefaults(t *testing.T) {
 		Images: Images{MaxBytes: 5 * 1024 * 1024, SignaturesPerHour: 30},
 		Push:   Push{Enabled: false, URL: DefaultExpoPushURL},
 		AI: AI{
-			Provider: AIProviderGemini, BaseURL: DefaultGeminiBaseURL, Model: DefaultGeminiModel,
+			Provider: AIProviderOpenAI, BaseURL: DefaultOpenAIBaseURL, Model: DefaultOpenAIModel,
 			DailyLimit: 20, AssistantDailyLimit: 30, AssistantRadiusKm: 10,
 		},
 		DocsEnabled: true,

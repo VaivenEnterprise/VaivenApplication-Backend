@@ -22,6 +22,8 @@ import (
 	adaptermongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/mongo"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ai/adapter/gemini"
 	aimongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ai/adapter/mongo"
+	aiopenai "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ai/adapter/openai"
+	aidomain "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ai/domain"
 	assistanthttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/assistant/adapter/http"
 	assistantmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/assistant/adapter/mongo"
 	assistantsearch "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/assistant/adapter/search"
@@ -639,15 +641,12 @@ func newNotifier(cfg config.Config, log *slog.Logger, notifications *notificatio
 
 // newSuggestModule arma la parte A de la spec 014. Con AI_ENABLED=false no se
 // crea el cliente del proveedor y la ruta responde service_unavailable
-// (RF-06). Ollama es opcional (P2) y todavía no tiene adaptador.
+// (RF-06).
 func newSuggestModule(cfg config.Config, log *slog.Logger, authModule *authhttp.Module, limiter ratelimit.Limiter,
 	imgs imgport.Service, usage *aimongo.UsageRepo, mod moderation.Checker) (*suggesthttp.Module, error) {
 	var gen suggestusecase.Describer
 	if cfg.AI.SuggestionsEnabled {
-		if cfg.AI.Provider != config.AIProviderGemini {
-			return nil, fmt.Errorf("AI_PROVIDER=%s todavía no tiene adaptador; usa gemini", cfg.AI.Provider)
-		}
-		c, err := gemini.New(gemini.Config{BaseURL: cfg.AI.BaseURL, Model: cfg.AI.Model, APIKey: cfg.AI.APIKey.Reveal()})
+		c, err := newAIProvider(cfg.AI)
 		if err != nil {
 			return nil, err
 		}
@@ -675,10 +674,7 @@ func newAssistantModule(cfg config.Config, log *slog.Logger, authModule *authhtt
 	convs *assistantmongo.ConversationRepo, mod moderation.Checker) (*assistanthttp.Module, error) {
 	var planner assistantusecase.Planner
 	if cfg.AI.AssistantEnabled {
-		if cfg.AI.Provider != config.AIProviderGemini {
-			return nil, fmt.Errorf("AI_PROVIDER=%s todavía no tiene adaptador; usa gemini", cfg.AI.Provider)
-		}
-		c, err := gemini.New(gemini.Config{BaseURL: cfg.AI.BaseURL, Model: cfg.AI.Model, APIKey: cfg.AI.APIKey.Reveal()})
+		c, err := newAIProvider(cfg.AI)
 		if err != nil {
 			return nil, err
 		}
@@ -702,4 +698,20 @@ func newAssistantModule(cfg config.Config, log *slog.Logger, authModule *authhtt
 		Service: svc, Authenticate: authModule.Authenticate(), Log: log,
 		Limiter: limiter, LimiterFallback: redis.NewMemoryLimiter(), Location: loc,
 	})
+}
+
+// aiGenerator es el método que declaran como puerto los casos de uso de la
+// spec 014 (suggest.Describer y assistant.Planner).
+type aiGenerator interface {
+	Generate(ctx context.Context, req aidomain.Request) ([]byte, error)
+}
+
+// newAIProvider elige el adaptador según AI_PROVIDER (spec 014, RF-03 y T016):
+// openai (Groq en staging) y ollama (local) usan el adaptador compatible con
+// OpenAI; gemini, el suyo. Cambiar de proveedor es cambiar variables.
+func newAIProvider(ai config.AI) (aiGenerator, error) {
+	if ai.Provider == config.AIProviderGemini {
+		return gemini.New(gemini.Config{BaseURL: ai.BaseURL, Model: ai.Model, APIKey: ai.APIKey.Reveal()})
+	}
+	return aiopenai.New(aiopenai.Config{BaseURL: ai.BaseURL, Model: ai.Model, APIKey: ai.APIKey.Reveal()})
 }
