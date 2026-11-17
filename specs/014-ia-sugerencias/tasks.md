@@ -57,11 +57,12 @@
 
 ## Parte B — Asistente de proyectos
 
-- [ ] **T008** [P] Instrucciones fijas y reglas del asistente
-  - Archivos: `internal/assistant/{domain.go, prompt.go}`, `internal/assistant/prompt_test.go`
+- [x] **T008** [P] Instrucciones fijas y reglas del asistente
+  - Archivos: `internal/assistant/domain/{prompt.go, prompt_test.go}`
   - Agente: `dev-go` · Depende de: T002
   - Aceptación: instrucciones del sistema fijas con alcance y negativas (RF-14); el mensaje y los turnos van como bloque de datos delimitado (P-08); la lista de categorías de POL-14 sale del código, no se escribe a mano; pruebas de que ninguna entrada cambia las instrucciones
   - Refs: RF-10, RF-14, RF-17 · P-08
+  - Hecho (2026-11-16, BE-B): `SystemPrompt` fijo, en español de México, con alcance, negativas (RF-14), «nunca inventes objetos ni personas» y las categorías tomadas de `policy.POL14Categories`. El mensaje de la persona viaja en `<mensaje_de_la_persona>…</mensaje_de_la_persona>`: `Sanitize` neutraliza cualquier variante del delimitador (con espacios, mayúsculas o barra), quita caracteres de control y saltos, y recorta a 500. `BuildRequest` conserva como máximo 6 turnos contando el nuevo y no modifica el historial recibido; `ModelTurn` resume la respuesta previa sin coincidencias; `Normalize` y `CacheKey` (SHA-256, sin el texto) sirven para la caché. Pruebas de inyección (CA-09): ninguna entrada cambia las instrucciones ni rompe el bloque. Cobertura 96,5 %; sin dependencias nuevas (los acentos se quitan con la biblioteca estándar, Art. VIII.1); sin estado global mutable (§5).
 
 - [ ] **T009** [P] Conversaciones en MongoDB
   - Archivos: `internal/assistant/adapter/mongo/{conversations.go, conversations_test.go}`, índices en `Indexes()`

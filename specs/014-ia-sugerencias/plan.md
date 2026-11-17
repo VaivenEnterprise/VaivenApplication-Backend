@@ -11,7 +11,8 @@ internal/ai/adapter/ollama/{client.go, client_test.go}             (solo desarro
 internal/ai/adapter/mongo/usage.go (+ test)                        (contador diario común, TTL)
 internal/suggest/usecase/{suggest.go, suggest_test.go}             (parte A; capa usecase vigilada por la prueba de arquitectura)
 internal/suggest/adapter/http/{handler.go, dto.go, routes.go}
-internal/assistant/{domain.go, prompt.go, usecase.go, usecase_test.go}   (parte B: reglas, instrucciones fijas, armado de la respuesta)
+internal/assistant/domain/{prompt.go, prompt_test.go}              (parte B: instrucciones fijas, bloque de datos, historial, clave de caché)
+internal/assistant/usecase/{assistant.go, assistant_test.go}        (parte B: caso de uso y puertos)
 internal/assistant/adapter/mongo/conversations.go (+ test)         (ai_conversations, TTL 24 h)
 internal/assistant/adapter/search/finder.go (+ test)               (usa el caso de uso de búsqueda de la 006)
 internal/assistant/adapter/http/{handler.go, dto.go, routes.go}
