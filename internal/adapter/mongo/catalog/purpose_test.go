@@ -73,6 +73,10 @@ var purpose = map[string]struct {
 	"ai_usage.user_feature_day_unique": {forUnique, "límite diario atómico de IA por persona, función y día (RF-05 y RF-15 de la 014)"},
 	"ai_usage.created_ttl":             {forTTL, "borrar contadores de uso de IA a los 3 días (plan P-04 de la 014)"},
 	"ai_conversations.updated_ttl":     {forTTL, "borrar conversaciones con el asistente 24 h después del último mensaje (RF-13 de la 014)"},
+
+	"reco_interactions.user_item_type_bucket_unique": {forUnique, "una vista por persona, objeto y bloque de 10 min (RF-01 de la 015)"},
+	"reco_interactions.user_createdAt":               {forQuery, "historial reciente de una persona y borrado de historial (RF-04 y RF-09 de la 015)"},
+	"reco_interactions.created_ttl":                  {forTTL, "borrar eventos de interacción a los 90 días (RF-09 de la 015)"},
 }
 
 // justifiedPrefixes registra los pares (a es prefijo de b en la misma

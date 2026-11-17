@@ -17,6 +17,7 @@ import (
 	notificationsmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/notifications/adapter/mongo"
 	paymentsmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/payments/adapter/mongo"
 	ratingsmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ratings/adapter/mongo"
+	recomongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/reco/adapter/mongo"
 	reportsmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/reports/adapter/mongo"
 	sanctionsmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/sanctions/adapter/mongo"
 	searchmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/search/adapter/mongo"
@@ -42,6 +43,7 @@ var sources = []func() []adaptermongo.IndexSpec{
 	reportsmongo.ReportIndexes,
 	aimongo.UsageIndexes,
 	assistantmongo.ConversationIndexes,
+	recomongo.InteractionIndexes,
 }
 
 // All devuelve todos los índices declarados, en el orden de sources.

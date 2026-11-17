@@ -487,6 +487,58 @@
     }
   },
   {
+    "collection": "reco_interactions",
+    "name": "created_ttl",
+    "spec": {
+      "key": {
+        "createdAt": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "created_ttl",
+      "expireAfterSeconds": {
+        "$numberInt": "7776000"
+      }
+    }
+  },
+  {
+    "collection": "reco_interactions",
+    "name": "user_createdAt",
+    "spec": {
+      "key": {
+        "userId": {
+          "$numberInt": "1"
+        },
+        "createdAt": {
+          "$numberInt": "-1"
+        }
+      },
+      "name": "user_createdAt"
+    }
+  },
+  {
+    "collection": "reco_interactions",
+    "name": "user_item_type_bucket_unique",
+    "spec": {
+      "key": {
+        "userId": {
+          "$numberInt": "1"
+        },
+        "itemId": {
+          "$numberInt": "1"
+        },
+        "type": {
+          "$numberInt": "1"
+        },
+        "bucket": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "user_item_type_bucket_unique",
+      "unique": true
+    }
+  },
+  {
     "collection": "refresh_tokens",
     "name": "expiresAt_ttl",
     "spec": {
