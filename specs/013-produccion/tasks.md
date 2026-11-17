@@ -39,12 +39,12 @@
 
 ## Fase 2 — Operación (19–22 nov)
 
-- [ ] **T005** Secretos, administrador y cuenta de revisión
+- [x] **T005** Secretos, administrador y cuenta de revisión
   - Archivos: `docs/produccion.md` (sección secretos)
   - Agente: `dev-go` y `devops-mcp` · Depende de: T001, 003-T012
   - Aceptación: secretos nuevos y distintos de staging (CA-02); procedimiento de rotación escrito y probado en staging; `create-admin` en producción; cuenta de revisión de Google Play con datos ficticios; **sin `seed`** (RF-05)
   - Refs: RF-04, RF-05
-  - Avance (2026-11-16): secretos de producción nuevos y distintos de staging (CA-02: MongoDB, Redis, JWT y Cloudinary). Rotación escrita en `docs/produccion.md` §8 y probada en staging (P-1 y P-2, 2026-11-11). Cuenta de administrador creada en producción con `create-admin` por parámetros protegidos (la restauración de CA-04 muestra `users: 1`). Sin `seed` (se niega en producción). **Falta:** la cuenta de revisión de Google Play, con datos ficticios.
+  - Avance (2026-11-16): secretos de producción nuevos y distintos de staging (CA-02: MongoDB, Redis, JWT y Cloudinary). Rotación escrita en `docs/produccion.md` §8 y probada en staging (P-1 y P-2, 2026-11-11). Cuenta de administrador creada en producción con `create-admin` por parámetros protegidos (la restauración de CA-04 muestra `users: 1`). Sin `seed` (se niega en producción). Hecho (2026-11-16): cuenta de revisión de Google Play registrada en producción con nombre ficticio («Revisión Google Play») y las mismas credenciales que ya tenía Play Console en «Datos de inicio de sesión»: registro 201 e inicio de sesión 200 en producción y en staging. Las credenciales viven solo en Play Console y en el gestor de contraseñas del equipo.
 
 - [x] **T006** Respaldo y restauración
   - Archivos: `scripts/backup.sh`, `scripts/restore.sh`, `docs/respaldos.md`
@@ -72,7 +72,7 @@
   - Agente: `revisor-constitucion` · Depende de: T008, T010, 012-T011
   - Aceptación: lista completa (secretos, índices, sin seed, monitor, respaldo, humo, registros, HTTPS, capacidad, disco); p95 < 800 ms en producción (RNF-01); costo adicional cero en *Cost Management* (RNF-02); veredicto **CONFORME**; hito H5 (producción) marcado
   - Refs: RNF-01, RNF-02
-  - Avance (2026-11-16): lista de `docs/produccion.md` §10 llena. p95 del servidor en producción 1,0 ms (`/readyz`, que consulta MongoDB y Redis, y `/meta`; medido dentro de la VM, RNF-01). RNF-02 verificado en *Cost Management* (2026-11-16): solo la IP pública ($1.55) y la VM en capa gratuita (<$0.01). **Falta:** T005 y T008 cerrados, 012-T011 (BE-A) y el veredicto **CONFORME**.
+  - Avance (2026-11-16): lista de `docs/produccion.md` §10 llena. p95 del servidor en producción 1,0 ms (`/readyz`, que consulta MongoDB y Redis, y `/meta`; medido dentro de la VM, RNF-01). RNF-02 verificado en *Cost Management* (2026-11-16): solo la IP pública ($1.55) y la VM en capa gratuita (<$0.01). **Falta:** T008 cerrada, 012-T011 (BE-A) y el veredicto **CONFORME**.
 
 - [x] **T010** API de producción y paso a `main` (al final)
   - Archivos: `docs/produccion.md` (paso 6 y mediciones), `memoria.md` (solo anexar); y, si se aprueba, el mecanismo de despliegue de producción sin SSH (`deploy/remote-deploy.sh` o equivalente)
