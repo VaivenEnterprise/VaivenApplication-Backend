@@ -5,6 +5,7 @@
 #
 #   bash set-ai-key.sh staging                 # solo guarda la clave (IA apagada)
 #   bash set-ai-key.sh staging --enable        # guarda la clave y enciende A y B
+#   bash set-ai-key.sh staging --assistant-only # enciende solo B (sin modelo con visión)
 #   bash set-ai-key.sh staging --disable       # apaga A y B (la clave se conserva)
 #
 # Proveedor (variable PROVIDER): groq (por defecto, API compatible con OpenAI)
@@ -30,13 +31,13 @@ PROVIDER=${PROVIDER:-groq}
 NAME=set-ai-key
 
 die() { echo "set-ai-key: $*" >&2; exit 1; }
-[ $# -ge 1 ] && [ $# -le 2 ] || die "uso: $0 <staging|production> [--enable|--disable]"
+[ $# -ge 1 ] && [ $# -le 2 ] || die "uso: $0 <staging|production> [--enable|--assistant-only|--disable]"
 ENV_NAME=$1
 MODE=${2:-key}
 case "$ENV_NAME" in staging) OTHER=production ;; production) OTHER=staging ;; *) die "entorno inválido: $ENV_NAME" ;; esac
-case "$MODE" in key | --enable | --disable) ;; *) die "opción desconocida: $MODE" ;; esac
+case "$MODE" in key | --enable | --assistant-only | --disable) ;; *) die "opción desconocida: $MODE" ;; esac
 case "$PROVIDER" in
-    groq) AI_PROVIDER=openai BASE=https://api.groq.com/openai/v1 MODEL=${AI_MODEL:-meta-llama/llama-4-scout-17b-16e-instruct} ;;
+    groq) AI_PROVIDER=openai BASE=https://api.groq.com/openai/v1 MODEL=${AI_MODEL:-openai/gpt-oss-120b} ;;
     gemini) AI_PROVIDER=gemini BASE=https://generativelanguage.googleapis.com MODEL=${AI_MODEL:-gemini-2.5-flash} ;;
     *) die "PROVIDER debe ser groq o gemini" ;;
 esac
@@ -100,6 +101,7 @@ if [ -n "${AI_KEY:-}" ]; then
 fi
 case "$MODE" in
   --enable) setv AI_ENABLED true; setv ASSISTANT_ENABLED true; echo "IA ENCENDIDA en $ENV_NAME (se aplica al recrear la API)" ;;
+  --assistant-only) setv AI_ENABLED false; setv ASSISTANT_ENABLED true; echo "ASISTENTE ENCENDIDO y sugerencias por foto apagadas en $ENV_NAME (se aplica al recrear la API)" ;;
   --disable) setv AI_ENABLED false; setv ASSISTANT_ENABLED false; echo "IA APAGADA en $ENV_NAME (se aplica al recrear la API)" ;;
 esac
 stat -c "permisos .env: %a %U" "$F"

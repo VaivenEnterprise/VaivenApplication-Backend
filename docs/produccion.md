@@ -220,14 +220,15 @@ Ninguno es igual a los de staging (CA-02). **Sin `seed` en producción** (RF-05)
 
 Dos funciones, las dos **apagadas por defecto**: sugerencias al publicar (`AI_ENABLED`, parte A) y asistente de proyectos (`ASSISTANT_ENABLED`, parte B). `GET /api/v1/meta` dice cuáles están encendidas (`features`).
 
-**Proveedor (RF-03, T016).** **Groq**, con su capa gratuita y sin tarjeta (costo cero, Art. XIII.1), mediante el adaptador compatible con OpenAI (`AI_PROVIDER=openai`, `AI_BASE_URL=https://api.groq.com/openai/v1`, modelo de texto e imagen en `AI_MODEL`). Gemini queda como alternativa (`AI_PROVIDER=gemini`): el 17 nov su nivel gratuito no estaba disponible para la cuenta del proyecto y pagar no está permitido. En local se puede usar Ollama con el mismo adaptador (`AI_PROVIDER=ollama`). Cambiar de proveedor es cambiar variables.
+**Proveedor (RF-03, T016).** **Groq**, con su capa gratuita y sin tarjeta (costo cero, Art. XIII.1), mediante el adaptador compatible con OpenAI (`AI_PROVIDER=openai`, `AI_BASE_URL=https://api.groq.com/openai/v1`, `AI_MODEL=openai/gpt-oss-120b`). **Groq no ofrece hoy (17 nov) un modelo con visión** para la clave del proyecto, así que en staging se enciende **solo el asistente** (`--assistant-only`); las sugerencias por foto quedan apagadas hasta que haya uno, sin tocar código. Verificado con una petición real: JSON en español, `finish_reason: stop`, ~1 060 tokens con el razonamiento (por eso el límite de salida es 4 096). Gemini queda como alternativa (`AI_PROVIDER=gemini`): el 17 nov su nivel gratuito no estaba disponible para la cuenta del proyecto y pagar no está permitido. En local se puede usar Ollama con el mismo adaptador (`AI_PROVIDER=ollama`). Cambiar de proveedor es cambiar variables.
 
 **Clave.** Se crea en **console.groq.com** (*API Keys → Create API Key*) con la cuenta del proyecto, **una por entorno**: la de producción es distinta de la de staging (CA-02). Se guarda en el gestor de contraseñas del equipo y nunca en el repositorio ni en chats. Para ponerla en la VM, desde Cloud Shell (Bash):
 
 ```bash
 C=<commit que tenga el script>
 curl -fsSLO "https://raw.githubusercontent.com/VaivenEnterprise/VaivenApplication-Backend/$C/scripts/set-ai-key.sh"
-bash set-ai-key.sh staging --enable   # valida con Groq, guarda la clave y enciende A y B
+bash set-ai-key.sh staging --assistant-only  # valida con Groq, guarda la clave y enciende solo B
+bash set-ai-key.sh staging --enable   # enciende A y B (cuando haya un modelo con visión: AI_MODEL=<modelo>)
 bash set-ai-key.sh staging --disable  # apaga las dos (la clave se conserva)
 PROVIDER=gemini bash set-ai-key.sh staging --enable   # alternativa, si hay nivel gratuito
 ```

@@ -29,7 +29,7 @@ const (
 	retryDelay   = 500 * time.Millisecond
 	maxRespBytes = 1 << 20
 	temperature  = 0.4
-	maxOutTokens = 2048
+	maxOutTokens = 4096 // los modelos que razonan gastan tokens antes de responder
 )
 
 // Config es lo que el cliente necesita de config.AI.

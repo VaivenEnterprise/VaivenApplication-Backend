@@ -14,7 +14,7 @@ const (
 // Valores por defecto de la IA (spec 014; plan P-01 y P-05).
 const (
 	DefaultOpenAIBaseURL = "https://api.groq.com/openai/v1"
-	DefaultOpenAIModel   = "meta-llama/llama-4-scout-17b-16e-instruct" // texto e imagen
+	DefaultOpenAIModel   = "openai/gpt-oss-120b" // texto; Groq no ofrece hoy un modelo con visión
 	DefaultGeminiBaseURL = "https://generativelanguage.googleapis.com"
 	DefaultOllamaBaseURL = "http://localhost:11434/v1"
 	DefaultGeminiModel   = "gemini-2.5-flash"
