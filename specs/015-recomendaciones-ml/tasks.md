@@ -1,6 +1,6 @@
 # Tareas 015 — Recomendaciones con ML (backend)
 
-- **Dueño:** BE-B · **Estado:** en curso (4/11) · `[P]` = paralelizable
+- **Dueño:** BE-B · **Estado:** en curso (5/11) · `[P]` = paralelizable
 - Ventana del ROADMAP: 23 nov–1 dic (v1.1, detrás de `RECO_ENABLED`). No empieza hasta que la 014 termine su despliegue verificado (Art. XIII.5) y la spec esté aprobada (Art. I).
 - Cada tarea termina con `make fmt lint test` (y `go test -tags=integration` del paquete si tiene integración) en verde.
 
@@ -32,11 +32,12 @@
   - Refs: RF-02, RF-03, RF-04, RF-06, RF-07 · P-01, P-02, P-07, P-08, P-11
   - **Hecho (2026-11-17, BE-B):** `internal/reco/domain/model` (coseno, colaborativo objeto-objeto con índice invertido y acumulador denso, contenido one-hot por bloques de categoría y municipio, `MergeNeighbors`, `Rank`, `ColdStart`, `Diversify`, `Popular`, `LeaveLastOut` y `Evaluate`; 99,4 %) y `internal/reco/domain/synth` (semilla fija, gustos por categoría y municipio, popularidad sesgada; 100 %). Pruebas exactas calculadas a mano (p. ej. cf(A,B) = 4/√30). Prueba de control reproducible: híbrido Hit@10 = 0,257 contra 0,087 de popularidad. *Benchmark* (5 000 objetos, 50 000 interacciones): **0,5 s y 31,7 MB asignados por recálculo** (cota superior del pico; límite 5 s y 100 MB). `golangci-lint` 0; `math/rand/v2` con semilla fija justificado con `nolint:gosec` (no es para seguridad).
 
-- [ ] **T005** Tarjetas por IDs en la búsqueda (spec 006)
+- [x] **T005** Tarjetas por IDs en la búsqueda (spec 006)
   - Archivos: `internal/search/usecase` y `internal/search/adapter/mongo` (`CardsByIDs` con los mismos filtros de visibilidad que `Search`) y pruebas, `internal/reco/adapter/search/cards.go`
   - Agente: `dev-go` · Depende de: T002
   - Aceptación: devuelve tarjetas públicas en el orden pedido; excluye objetos no activos y de dueños dados de baja o suspendidos; un ID mal formado no rompe la consulta; sin copiar el *pipeline* de la búsqueda
   - Refs: RF-05, CA-03 · P-06
+  - **Hecho (2026-11-17, BE-B):** `BuildByIDsPipeline` reutiliza `ownerStages` y `projectStage` de la búsqueda (sin copiar filtros); `Repo.CardsByIDs` devuelve en el orden pedido, sin repetidos, y omite ids inválidos o no visibles; `Service.CardsByIDs` valida ids, acota a 50 y agrega la miniatura con el mismo código que `Search` (extraído a `views`); `internal/reco/adapter/search.Cards` (100 %). Integración con MongoDB real: excluye pausados, propios, cuentas dadas de baja y suspendidas. Búsqueda y asistente siguen en verde; lint 0.
 
 - [ ] **T006** Casos de uso: eventos, recomendar, historial y recálculo
   - Archivos: `internal/reco/usecase/{ports.go, events.go, recommend.go, history.go, recompute.go, eval.go}` y pruebas
