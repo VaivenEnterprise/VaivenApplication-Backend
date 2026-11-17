@@ -20,6 +20,14 @@ import (
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/handler"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/middleware"
 	adaptermongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/mongo"
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ai/adapter/gemini"
+	aimongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ai/adapter/mongo"
+	aiopenai "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ai/adapter/openai"
+	aidomain "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ai/domain"
+	assistanthttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/assistant/adapter/http"
+	assistantmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/assistant/adapter/mongo"
+	assistantsearch "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/assistant/adapter/search"
+	assistantusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/assistant/usecase"
 	authhttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/adapter/http"
 	authmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/adapter/mongo"
 	authdomain "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/domain"
@@ -72,6 +80,9 @@ import (
 	searchhttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/search/adapter/http"
 	searchmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/search/adapter/mongo"
 	searchusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/search/usecase"
+	suggesthttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/suggest/adapter/http"
+	suggestusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/suggest/usecase"
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/usecase/cache"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/usecase/ratelimit"
 )
 
@@ -162,8 +173,12 @@ func run() error {
 	notificationsRepo := notificationsmongo.NewNotificationRepo(db)
 	pushTokensRepo := notificationsmongo.NewTokenRepo(db)
 	reportsRepo := reportsmongo.NewRepo(db)
+	// Contador de uso de la IA (spec 014, T004): sus índices se crean aunque la
+	// IA esté apagada, para que `admin indexes` coincida con el catálogo.
+	aiUsageRepo := aimongo.NewUsageRepo(db)
+	aiConversationsRepo := assistantmongo.NewConversationRepo(db)
 	if err := adaptermongo.EnsureAll(ctx, userRepo, refreshRepo, itemRepo, searchmongo.NewIndexes(db), bookingRepo, convRepo, msgRepo, paymentsRepo,
-		ratingsRepo, incidentsRepo, sanctionsRepo, notificationsRepo, pushTokensRepo, reportsRepo); err != nil {
+		ratingsRepo, incidentsRepo, sanctionsRepo, notificationsRepo, pushTokensRepo, reportsRepo, aiUsageRepo, aiConversationsRepo); err != nil {
 		return fmt.Errorf("no se pudieron crear los índices: %w", err)
 	}
 
@@ -171,6 +186,9 @@ func run() error {
 	// es opcional. Sin Redis el límite es local y /readyz informa "degradado".
 	var redisPinger handler.Pinger
 	var limiter ratelimit.Limiter = redis.NewMemoryLimiter()
+	// Caché de la IA (spec 014, RF-15): solo con Redis; sin Redis el asistente
+	// llama siempre al modelo (nada se guarda en la memoria del proceso, Art. XIV.1).
+	var aiCache cache.Cache
 	if cfg.Redis.Enabled() {
 		rc, err := redis.NewClient(cfg.Redis.URL.Reveal(), cfg.AppEnv)
 		if err != nil {
@@ -183,6 +201,7 @@ func run() error {
 		}
 		redisPinger = rc
 		limiter = redis.NewLimiter(rc)
+		aiCache = redis.NewCache(rc)
 	}
 
 	// Reservas reales (spec 007, RF-14): impiden dar de baja una cuenta (003)
@@ -350,6 +369,17 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	// IA: sugerencias al publicar (spec 014, parte A); apagada por defecto.
+	suggestModule, err := newSuggestModule(cfg, log, authModule, limiter, imagesSvc, aiUsageRepo, mod)
+	if err != nil {
+		return err
+	}
+	// IA: asistente de proyectos (spec 014, parte B); apagado por defecto.
+	assistantModule, err := newAssistantModule(cfg, log, authModule, limiter, aiCache, db, imagesSvc,
+		aiUsageRepo, aiConversationsRepo, mod)
+	if err != nil {
+		return err
+	}
 	// Envío de push en segundo plano (spec 011, plan P-01); termina con ctx.
 	pushDone := make(chan struct{})
 	go func() {
@@ -388,6 +418,8 @@ func run() error {
 		Sanctions:     sanctionsModule,
 		Notifications: notificationsModule,
 		Reports:       reportsModule,
+		Suggest:       suggestModule,
+		Assistant:     assistantModule,
 		Users:         userRepo,
 	})
 	for _, m := range mods {
@@ -410,6 +442,10 @@ func run() error {
 				Name:        serviceName,
 				Version:     resolveVersion(version, cfg.AppVersion),
 				Environment: cfg.AppEnv,
+				Features: handler.MetaFeatures{
+					AISuggestions:    cfg.AI.SuggestionsEnabled,
+					ProjectAssistant: cfg.AI.AssistantEnabled,
+				},
 			},
 		}),
 		ReadTimeout:       cfg.HTTPReadTimeout,
@@ -601,4 +637,82 @@ func newNotifier(cfg config.Config, log *slog.Logger, notifications *notificatio
 	}
 	log.Info("avisos", "push_habilitado", cfg.Push.Enabled)
 	return svc, w, nil
+}
+
+// newSuggestModule arma la parte A de la spec 014. Con AI_ENABLED=false no se
+// crea el cliente del proveedor y la ruta responde service_unavailable
+// (RF-06).
+func newSuggestModule(cfg config.Config, log *slog.Logger, authModule *authhttp.Module, limiter ratelimit.Limiter,
+	imgs imgport.Service, usage *aimongo.UsageRepo, mod moderation.Checker) (*suggesthttp.Module, error) {
+	var gen suggestusecase.Describer
+	if cfg.AI.SuggestionsEnabled {
+		c, err := newAIProvider(cfg.AI.Suggest)
+		if err != nil {
+			return nil, err
+		}
+		gen = c
+	}
+	loc, err := time.LoadLocation("America/Mexico_City")
+	if err != nil {
+		return nil, fmt.Errorf("zona horaria: %w", err)
+	}
+	svc := suggestusecase.New(suggestusecase.Config{
+		Enabled: cfg.AI.SuggestionsEnabled, DailyLimit: cfg.AI.DailyLimit,
+		BaseFolder: cfg.Cloudinary.BaseFolder, Location: loc,
+	}, suggestusecase.Deps{AI: gen, Images: imgs, Usage: usage, Moderation: mod})
+	return suggesthttp.NewModule(suggesthttp.ModuleDeps{
+		Service: svc, Authenticate: authModule.Authenticate(), Log: log,
+		Limiter: limiter, LimiterFallback: redis.NewMemoryLimiter(), Location: loc,
+	})
+}
+
+// newAssistantModule arma la parte B de la spec 014. Con ASSISTANT_ENABLED=false
+// no se crea el cliente del proveedor y las rutas responden service_unavailable
+// (RF-16). La búsqueda es la de la spec 006, con sus reglas de visibilidad.
+func newAssistantModule(cfg config.Config, log *slog.Logger, authModule *authhttp.Module, limiter ratelimit.Limiter,
+	aiCache cache.Cache, db *mongo.Database, imgs imgport.Service, usage *aimongo.UsageRepo,
+	convs *assistantmongo.ConversationRepo, mod moderation.Checker) (*assistanthttp.Module, error) {
+	var planner assistantusecase.Planner
+	if cfg.AI.AssistantEnabled {
+		c, err := newAIProvider(cfg.AI.Assistant())
+		if err != nil {
+			return nil, err
+		}
+		planner = c
+	}
+	searchSvc, err := searchusecase.NewService(searchusecase.Deps{Repo: searchmongo.NewRepo(db, nil), Images: imgs})
+	if err != nil {
+		return nil, err
+	}
+	loc, err := time.LoadLocation("America/Mexico_City")
+	if err != nil {
+		return nil, fmt.Errorf("zona horaria: %w", err)
+	}
+	svc := assistantusecase.New(assistantusecase.Config{
+		Enabled: cfg.AI.AssistantEnabled, DailyLimit: cfg.AI.AssistantDailyLimit, Location: loc,
+	}, assistantusecase.Deps{
+		AI: planner, Finder: assistantsearch.New(searchSvc, cfg.AI.AssistantRadiusKm),
+		Conversations: convs, Usage: usage, Moderation: mod, Cache: aiCache,
+	})
+	return assistanthttp.NewModule(assistanthttp.ModuleDeps{
+		Service: svc, Authenticate: authModule.Authenticate(), Log: log,
+		Limiter: limiter, LimiterFallback: redis.NewMemoryLimiter(), Location: loc,
+	})
+}
+
+// aiGenerator es el método que declaran como puerto los casos de uso de la
+// spec 014 (suggest.Describer y assistant.Planner).
+type aiGenerator interface {
+	Generate(ctx context.Context, req aidomain.Request) ([]byte, error)
+}
+
+// newAIProvider crea el cliente de un proveedor (spec 014, RF-03, T016 y
+// T017): openai (Groq, OpenRouter u otro compatible) y ollama (local) usan el
+// adaptador compatible con OpenAI; gemini, el suyo. Cada parte tiene su
+// proveedor (AI_* para el asistente, SUGGEST_* para las sugerencias).
+func newAIProvider(p config.Provider) (aiGenerator, error) {
+	if p.Name == config.AIProviderGemini {
+		return gemini.New(gemini.Config{BaseURL: p.BaseURL, Model: p.Model, APIKey: p.APIKey.Reveal()})
+	}
+	return aiopenai.New(aiopenai.Config{BaseURL: p.BaseURL, Model: p.Model, APIKey: p.APIKey.Reveal()})
 }

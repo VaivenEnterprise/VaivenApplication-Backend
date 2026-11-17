@@ -90,7 +90,8 @@ func TestMeta(t *testing.T) {
 	// Hora con zona distinta de UTC: debe salir convertida a UTC.
 	local := time.FixedZone("CST", -6*60*60)
 	fixed := time.Date(2026, 11, 6, 11, 30, 15, 0, local)
-	info := MetaInfo{Name: "vaiven-backend", Version: "1.2.3", Environment: "test"}
+	info := MetaInfo{Name: "vaiven-backend", Version: "1.2.3", Environment: "test",
+		Features: MetaFeatures{AISuggestions: true}}
 
 	rec := httptest.NewRecorder()
 	meta(info, func() time.Time { return fixed })(rec, httptest.NewRequest(http.MethodGet, "/api/v1/meta", nil))
@@ -98,9 +99,24 @@ func TestMeta(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
-	var got map[string]string
-	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
 		t.Fatalf("cuerpo no es JSON: %v", err)
+	}
+	// features (spec 014): siempre presente, con las dos funciones.
+	var features map[string]bool
+	if err := json.Unmarshal(raw["features"], &features); err != nil ||
+		len(features) != 2 || !features["aiSuggestions"] || features["projectAssistant"] {
+		t.Errorf("features = %s", raw["features"])
+	}
+	delete(raw, "features")
+	got := map[string]string{}
+	for k, v := range raw {
+		var s string
+		if err := json.Unmarshal(v, &s); err != nil {
+			t.Fatalf("%s no es texto: %s", k, v)
+		}
+		got[k] = s
 	}
 	want := map[string]string{
 		"name":        "vaiven-backend",
@@ -124,15 +140,17 @@ func TestMetaUsesCurrentUTCTime(t *testing.T) {
 	Meta(MetaInfo{Name: "vaiven-backend"})(rec, httptest.NewRequest(http.MethodGet, "/api/v1/meta", nil))
 	after := time.Now().UTC()
 
-	var got map[string]string
+	var got struct {
+		ServerTime string `json:"serverTime"`
+	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	ts, err := time.Parse(time.RFC3339, got["serverTime"])
+	ts, err := time.Parse(time.RFC3339, got.ServerTime)
 	if err != nil {
 		t.Fatalf("serverTime no es RFC 3339: %v", err)
 	}
-	if !strings.HasSuffix(got["serverTime"], "Z") || ts.Before(before) || ts.After(after) {
-		t.Errorf("serverTime = %q fuera de [%v, %v] o sin Z", got["serverTime"], before, after)
+	if !strings.HasSuffix(got.ServerTime, "Z") || ts.Before(before) || ts.After(after) {
+		t.Errorf("serverTime = %q fuera de [%v, %v] o sin Z", got.ServerTime, before, after)
 	}
 }

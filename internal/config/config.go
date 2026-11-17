@@ -46,6 +46,8 @@ type Config struct {
 	Images Images
 	// Push configura el envío de notificaciones por Expo (spec 011).
 	Push Push
+	// AI configura la IA generativa (spec 014): sugerencias y asistente.
+	AI AI
 
 	// DocsEnabled sirve Swagger UI en /docs (solo development y staging).
 	DocsEnabled bool
@@ -125,6 +127,7 @@ func load(lookup lookupFunc) (Config, error) {
 	cfg.Auth = loadAuth(&r, cfg.AppEnv)
 	cfg.Images = loadImages(&r)
 	cfg.Push = loadPush(&r, cfg.AppEnv)
+	cfg.AI = loadAI(&r, cfg.AppEnv)
 	cfg.DocsEnabled = loadDocs(&r, cfg.AppEnv)
 
 	if len(r.problems) > 0 {

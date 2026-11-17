@@ -5,13 +5,15 @@
 ## 1. Archivos
 ```
 api/paths/ai.yaml                                                  (A y B)
-internal/ai/{schema.go, schema_test.go}                            (validación de la salida del modelo; sin infraestructura)
+internal/ai/domain/{schema.go, schema_test.go}                     (validación de la salida del modelo; capa domain, sin infraestructura)
 internal/ai/adapter/gemini/{client.go, client_test.go}             (HTTP a Gemini: visión y JSON con esquema)
-internal/ai/adapter/ollama/{client.go, client_test.go}             (solo desarrollo y demostración local)
+internal/ai/adapter/openai/{client.go, client_test.go}             (compatible con OpenAI: Groq en staging, Ollama en local)
+internal/ai/adapter/imagefetch/{fetch.go, fetch_test.go}          (descarga acotada de la miniatura, compartida por los adaptadores)
 internal/ai/adapter/mongo/usage.go (+ test)                        (contador diario común, TTL)
-internal/suggest/{domain.go, usecase.go, usecase_test.go}          (parte A)
+internal/suggest/usecase/{suggest.go, suggest_test.go}             (parte A; capa usecase vigilada por la prueba de arquitectura)
 internal/suggest/adapter/http/{handler.go, dto.go, routes.go}
-internal/assistant/{domain.go, prompt.go, usecase.go, usecase_test.go}   (parte B: reglas, instrucciones fijas, armado de la respuesta)
+internal/assistant/domain/{prompt.go, prompt_test.go}              (parte B: instrucciones fijas, bloque de datos, historial, clave de caché)
+internal/assistant/usecase/{assistant.go, assistant_test.go}        (parte B: caso de uso y puertos)
 internal/assistant/adapter/mongo/conversations.go (+ test)         (ai_conversations, TTL 24 h)
 internal/assistant/adapter/search/finder.go (+ test)               (usa el caso de uso de búsqueda de la 006)
 internal/assistant/adapter/http/{handler.go, dto.go, routes.go}
@@ -22,7 +24,7 @@ cmd/api/modules.go (dos líneas) · config (AI_ENABLED, AI_PROVIDER, AI_API_KEY,
 ## 2. Decisiones
 | # | Decisión | Art. |
 |---|---|---|
-| P-01 | **Cada caso de uso declara su puerto** (Art. III.3): `suggest.Describer` (foto → JSON) y `assistant.Planner` (conversación → JSON). El adaptador `internal/ai/adapter/gemini` implementa los dos; Ollama (opcional, solo local) también. Los casos de uso nunca importan el adaptador | III |
+| P-01 | **Cada caso de uso declara su puerto** (Art. III.3): `suggest.Describer` y `assistant.Planner`, ambos con el método `Generate(ctx, aidomain.Request) ([]byte, error)` sobre tipos de `internal/ai/domain` (petición, turnos y esquema de salida). Implementan `Generate` el adaptador compatible con OpenAI (`internal/ai/adapter/openai`: Groq en staging, Ollama en local) y el de Gemini (alternativa). La miniatura la descarga un paquete común (`imagefetch`), sin duplicar código. Los casos de uso nunca importan el adaptador | III |
 | P-02 | Parte A: entrada solo `publicId`; la URL de la miniatura se construye en el servidor | Seguridad |
 | P-03 | Salida del modelo en JSON con esquema, validada en `internal/ai/schema.go`: categoría ∈ POL-14, longitudes, conteos; campos extra descartados | VI |
 | P-04 | Contador común `ai_usage` `{userId, feature, day, count, createdAt, updatedAt}` con índice único y TTL de 3 días (`feature` = `suggest` o `assistant`) | §6 |

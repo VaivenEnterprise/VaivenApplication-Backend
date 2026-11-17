@@ -12,13 +12,22 @@ type MetaInfo struct {
 	Name        string
 	Version     string
 	Environment string
+	// Features son las funciones opcionales encendidas (spec 014, RF-06 y RF-16).
+	Features MetaFeatures
+}
+
+// MetaFeatures indica qué funciones opcionales están encendidas.
+type MetaFeatures struct {
+	AISuggestions    bool `json:"aiSuggestions"`
+	ProjectAssistant bool `json:"projectAssistant"`
 }
 
 type metaResponse struct {
-	Name        string `json:"name"`
-	Version     string `json:"version"`
-	Environment string `json:"environment"`
-	ServerTime  string `json:"serverTime"`
+	Name        string       `json:"name"`
+	Version     string       `json:"version"`
+	Environment string       `json:"environment"`
+	ServerTime  string       `json:"serverTime"`
+	Features    MetaFeatures `json:"features"`
 }
 
 // Meta responde 200 con el nombre, la versión y el entorno del servicio y la
@@ -36,6 +45,7 @@ func meta(info MetaInfo, now func() time.Time) http.HandlerFunc {
 			Version:     info.Version,
 			Environment: info.Environment,
 			ServerTime:  now().UTC().Format(time.RFC3339),
+			Features:    info.Features,
 		})
 	}
 }

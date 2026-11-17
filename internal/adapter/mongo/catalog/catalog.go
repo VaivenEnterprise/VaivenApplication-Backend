@@ -7,6 +7,8 @@ package catalog
 
 import (
 	adaptermongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/mongo"
+	aimongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ai/adapter/mongo"
+	assistantmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/assistant/adapter/mongo"
 	authmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/adapter/mongo"
 	bookingsmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/bookings/adapter/mongo"
 	chatmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/chat/adapter/mongo"
@@ -38,6 +40,8 @@ var sources = []func() []adaptermongo.IndexSpec{
 	notificationsmongo.NotificationIndexes,
 	notificationsmongo.PushTokenIndexes,
 	reportsmongo.ReportIndexes,
+	aimongo.UsageIndexes,
+	assistantmongo.ConversationIndexes,
 }
 
 // All devuelve todos los índices declarados, en el orden de sources.

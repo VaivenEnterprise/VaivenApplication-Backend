@@ -221,3 +221,40 @@ Ninguno es igual a los de staging (CA-02). **Sin `seed` en producción** (RF-05)
 | Disco | §3 | ✅ 12 % |
 | p95 < 800 ms (RNF-01) | dentro de la VM, solo lectura (`tests/load` se niega fuera de local porque crea datos) | ✅ p95 1,0 ms |
 | Costo cero (RNF-02) | *Cost Management* de `rg-vaiven` (2026-11-16): IP pública $1.55 (la única excepción del Art. XIII.1) y VM <$0.01 (capa gratuita) | ✅ |
+
+## 11. IA generativa (spec 014)
+
+Dos funciones, las dos **apagadas por defecto**: sugerencias al publicar (`AI_ENABLED`, parte A) y asistente de proyectos (`ASSISTANT_ENABLED`, parte B). `GET /api/v1/meta` dice cuáles están encendidas (`features`).
+
+**Proveedor (RF-03, T016).** **Groq**, con su capa gratuita y sin tarjeta (costo cero, Art. XIII.1), mediante el adaptador compatible con OpenAI (`AI_PROVIDER=openai`, `AI_BASE_URL=https://api.groq.com/openai/v1`, `AI_MODEL=openai/gpt-oss-120b`). **Groq no ofrece hoy (17 nov) un modelo con visión** para la clave del proyecto, así que **las sugerencias por foto usan su propio proveedor (T017): OpenRouter** con un modelo **gratuito con visión** (`SUGGEST_*`: `SUGGEST_BASE_URL=https://openrouter.ai/api/v1`, `SUGGEST_MODEL=nvidia/nemotron-3.5-super-vl:free`; `google/gemma-4-31b-it:free` daba 429 por saturación del proveedor el 17 nov). El asistente sigue en Groq. **Límite:** la cuenta gratuita de OpenRouter tiene un tope bajo de solicitudes por día para toda la cuenta; alcanza para la demo, no para muchos usuarios. Si faltan las `SUGGEST_*`, las sugerencias usan el mismo proveedor que el asistente. Verificado con una petición real: JSON en español, `finish_reason: stop`, ~1 060 tokens con el razonamiento (por eso el límite de salida es 4 096). Gemini queda como alternativa (`AI_PROVIDER=gemini`): el 17 nov su nivel gratuito no estaba disponible para la cuenta del proyecto y pagar no está permitido. En local se puede usar Ollama con el mismo adaptador (`AI_PROVIDER=ollama`). Cambiar de proveedor es cambiar variables.
+
+**Claves.** Groq (asistente): **console.groq.com** (*API Keys → Create API Key*). OpenRouter (sugerencias): **openrouter.ai** (*Keys → Create Key*; sin crédito, solo modelos `:free`; en *Settings → Privacy* revisar qué proveedores gratuitos se permiten). Con la cuenta del proyecto y **una por entorno**: la de producción es distinta de la de staging (CA-02). Se guarda en el gestor de contraseñas del equipo y nunca en el repositorio ni en chats. Para ponerla en la VM, desde Cloud Shell (Bash):
+
+```bash
+C=<commit que tenga el script>
+curl -fsSLO "https://raw.githubusercontent.com/VaivenEnterprise/VaivenApplication-Backend/$C/scripts/set-ai-key.sh"
+bash set-ai-key.sh staging --assistant-only  # valida con Groq, guarda la clave y enciende solo B
+PROVIDER=openrouter bash set-ai-key.sh staging --enable  # clave de OpenRouter (SUGGEST_*) y enciende solo las sugerencias
+PROVIDER=openrouter bash set-ai-key.sh staging --disable # apaga solo las sugerencias
+bash set-ai-key.sh staging --disable  # apaga las dos (la clave se conserva)
+PROVIDER=gemini bash set-ai-key.sh staging --enable   # alternativa, si hay nivel gratuito
+```
+
+El script valida la clave y hace una generación mínima con el modelo real **antes** de tocar la VM; si el proveedor pide pago (429/403) o el modelo no existe (404), se detiene. La envía como parámetro protegido, se niega si coincide con la del otro entorno y borra el run command. El cambio se aplica **al recrear la API**: en staging, con el siguiente despliegue (o «Run workflow → deploy»); en producción, con `scripts/deploy-production.sh`.
+
+**Registro.**
+
+| Fecha | Entorno | Proveedor y modelo | Estado | Vence la clave | Quién |
+|---|---|---|---|---|---|
+| 2026-11-17 | staging | Groq, `openai/gpt-oss-120b` | asistente encendido | 2027-02-15 (rotar antes) | BE-B |
+| 2026-11-17 | staging | OpenRouter, `nvidia/nemotron-3.5-super-vl:free` | sugerencias por foto encendidas (prueba con imagen OK, sin pago); privacidad: sin publicación de prompts, sin descuento por datos | 2027-02-15 11:03 CST (rotar antes) | BE-B |
+
+**Apagado de emergencia.** `bash set-ai-key.sh <entorno> --disable` y recrear la API. La app sigue sin IA (`features` en `false`; las rutas responden 503).
+
+**Privacidad (RF-07 y RF-18).**
+- Parte A: al proveedor solo viaja la **miniatura** de la foto, cuando la persona pide la sugerencia.
+- Parte B: solo viaja el **texto** de la conversación (máximo 6 turnos). La **ubicación nunca sale del backend**.
+- No se guardan fotos ni respuestas del modelo; la conversación dura 24 h y se puede borrar. Los registros no llevan fotos, mensajes ni respuestas.
+- El aviso de privacidad (landing) y «Seguridad de datos» de Play deben nombrar a los proveedores (Groq para el asistente y OpenRouter para las sugerencias por foto) y lo que hacen con los datos según sus términos vigentes; los modelos gratuitos de OpenRouter pueden registrar lo enviado según el proveedor del modelo (mobile 014-T006). La app pide no escribir datos personales en el chat.
+
+**Producción.** Según el ROADMAP, la IA sale como v1.1: se enciende en producción solo cuando el equipo lo decida y la versión de la app con IA esté publicada.
