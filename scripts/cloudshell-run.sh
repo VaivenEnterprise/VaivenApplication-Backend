@@ -28,6 +28,9 @@ curl -fsSL "https://raw.githubusercontent.com/$REPO/$ref/$path" -o "$work/script
     die "no se pudo descargar $path en $ref"
 echo "script: $path @ $ref (sha256 $(sha256sum "$work/script.sh" | cut -c1-16)…)"
 {
+    # Run Command ejecuta el archivo directamente: la primera línea debe ser
+    # el shebang de bash (sin ella corre con sh/dash y falla «set -o pipefail»).
+    echo '#!/usr/bin/env bash'
     printf 'set --'
     for a in "$@"; do printf ' %q' "$a"; done
     printf '\n'

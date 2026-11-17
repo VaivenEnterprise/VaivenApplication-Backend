@@ -32,6 +32,7 @@
   - Aceptación: Better Stack revisa `/healthz` de producción cada 3 min y avisa por correo; `restart: unless-stopped` en todos los contenedores y Docker habilitado al arranque; rotación de registros en los dos entornos (P-09); tras reiniciar la VM ambos entornos vuelven solos (CA-05)
   - Refs: RF-06, RF-13 · P-07, P-09
   - Avance (2026-11-11): rotación de registros agregada a la API y al stack base (y al de producción). **Falta:** recrear MongoDB y Redis de staging para aplicarla (`docs/produccion.md` §3), agregar en Better Stack el monitor de producción (el de staging ya está dado de alta desde 2026-11-11, `docs/produccion.md` §4) y probar el reinicio de la VM (CA-05).
+  - Hecho (2026-11-16): rotación de registros aplicada a MongoDB y Redis de staging con `scripts/update-base-stack.sh` (solo diferían las líneas de `logging`; contenedores `healthy` con `max-size 10m` y `max-file 3`; staging `ready`). La API de staging ya la tenía desde su despliegue automático. Monitor de staging dado de alta. **Falta:** monitor de producción y prueba de reinicio de la VM (CA-05), después de desplegar la API de producción.
 
 ## Fase 2 — Operación (19–22 nov)
 

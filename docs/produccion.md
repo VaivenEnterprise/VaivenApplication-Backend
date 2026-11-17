@@ -107,6 +107,8 @@ Todos los contenedores (API, MongoDB y Redis de los dos entornos) usan `json-fil
 - MongoDB y Redis de staging, con `sudo docker compose --env-file /opt/vaiven/.env -f deploy/base/docker-compose.yml up -d`. Es un corte de segundos y no borra datos (el volumen se conserva). **Nunca** usar `down -v`.
 - Producción ya nace con la rotación.
 
+**Registro:** 2026-11-16, rotación aplicada a `base-mongo-1` y `base-redis-1` con `bash cloudshell-run.sh <commit> scripts/update-base-stack.sh <commit>` (copia del compose anterior junto al de `/opt/vaiven/base/`). La API de staging la tiene desde su despliegue automático y producción nace con ella.
+
 Revisión semanal del disco (P6, 64 GiB): `df -h /` y `docker system df`.
 
 ## 4. Monitor (T004, RF-06)
