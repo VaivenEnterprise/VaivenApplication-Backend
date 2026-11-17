@@ -1,14 +1,15 @@
 # Tareas 015 — Recomendaciones con ML (backend)
 
-- **Dueño:** BE-B · **Estado:** sin ejecutar · `[P]` = paralelizable
+- **Dueño:** BE-B · **Estado:** en curso (1/11) · `[P]` = paralelizable
 - Ventana del ROADMAP: 23 nov–1 dic (v1.1, detrás de `RECO_ENABLED`). No empieza hasta que la 014 termine su despliegue verificado (Art. XIII.5) y la spec esté aprobada (Art. I).
 - Cada tarea termina con `make fmt lint test` (y `go test -tags=integration` del paquete si tiene integración) en verde.
 
-- [ ] **T001** Contrato OpenAPI
+- [x] **T001** Contrato OpenAPI
   - Archivos: `api/paths/recommendations.yaml`, `api/openapi.yaml` (referencia, esquemas `RecommendationEvent`, `Recommendation`, `RecommendationReason`, lista y `Meta.features.recommendations`), `internal/adapter/http/docs/openapi.yaml` (`make docs-bundle`)
   - Agente: `spec-writer` · Depende de: 006-T001, 014-T001
   - Aceptación: `POST events` (204, 400, 401, 404, 429, 503), `GET recommendations` (`limit`, `municipality`; lista `{items, nextCursor: null}` con `ItemCard` y `reason`), `DELETE history` (204, 401, 503); errores con el formato del Art. IV; MO-B lo consume el mismo día
   - Refs: RF-01, RF-05, RF-09, RF-10
+  - **Hecho (2026-11-17, BE-B):** `api/paths/recommendations.yaml` (tres rutas, etiqueta `recomendaciones`), esquemas `RecommendationEventRequest`, `RecommendationReason(Code)`, `Recommendation` y `RecommendationList` (tarjeta `ItemCard` de la 006), `Meta.features.recommendations` y bundle de `/docs` regenerado. `redocly lint` válido (solo las 2 advertencias que ya existían) y `go test ./...` en verde.
 
 - [ ] **T002** [P] Dominio, parámetros y configuración
   - Archivos: `internal/reco/domain/{event.go, params.go, reason.go, errors.go}` y pruebas, `internal/config/reco.go` y prueba (`RECO_ENABLED`, por defecto `false`), `TestLoadDefaults`, `.env.example` y `deploy/*/.env.example`
