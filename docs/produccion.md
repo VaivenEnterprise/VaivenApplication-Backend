@@ -235,6 +235,12 @@ PROVIDER=gemini bash set-ai-key.sh staging --enable   # alternativa, si hay nive
 
 El script valida la clave y hace una generación mínima con el modelo real **antes** de tocar la VM; si el proveedor pide pago (429/403) o el modelo no existe (404), se detiene. La envía como parámetro protegido, se niega si coincide con la del otro entorno y borra el run command. El cambio se aplica **al recrear la API**: en staging, con el siguiente despliegue (o «Run workflow → deploy»); en producción, con `scripts/deploy-production.sh`.
 
+**Registro.**
+
+| Fecha | Entorno | Proveedor y modelo | Estado | Vence la clave | Quién |
+|---|---|---|---|---|---|
+| 2026-11-17 | staging | Groq, `openai/gpt-oss-120b` | asistente encendido; sugerencias por foto apagadas (sin modelo con visión) | (anotar) | BE-B |
+
 **Apagado de emergencia.** `bash set-ai-key.sh <entorno> --disable` y recrear la API. La app sigue sin IA (`features` en `false`; las rutas responden 503).
 
 **Privacidad (RF-07 y RF-18).**
