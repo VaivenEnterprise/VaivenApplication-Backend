@@ -30,8 +30,9 @@
 | Revisión de Google (la controla Google; suele tardar ~7 días o más). Mientras tanto: correcciones, sin funcionalidad nueva en la 1.0, y desarrollo de la IA y el ML (specs 014 y 015) | 23 nov – 1 dic |
 | **Publicación de la 1.0 en Google Play (producción)** | **estimada 30 nov – 7 dic** (no antes del 28 nov aunque Google responda en 5 días) |
 | IA y ML (v1.1) a la prueba cerrada, detrás de interruptores | ~2 dic |
+| 016 Auditoría de calidad y consolidación (backend, tras la 015) | 26 nov – 1 dic |
 | Documentación final, demostración y colchón | 1 – 3 dic |
-| **ENTREGA OFICIAL: todos los specs completos (001–015 y landing)** | **1 – 4 de diciembre** |
+| **ENTREGA OFICIAL: todos los specs completos (001–016 y landing)** | **1 – 4 de diciembre** |
 
 > **Riesgo alto:** la 1.0 podría no estar aún en producción el 4 de dic (la revisión de Google no la controla el equipo). En ese caso se entrega con la prueba cerrada, el APK de demostración y el staging funcionando (ver línea de corte, §6). El calendario incluye fines de semana (7–8, 14–15 y 21–22 de nov); es ajustado.
 
@@ -87,6 +88,7 @@ Prioridad: **P0** = sin esto no hay app · **P1** = esperado · **P2** = recorta
 | 013 | Publicación en Google Play (móvil) y producción (backend) | Ficha, cumplimiento, prueba cerrada, producción; backend de producción | MO-B / BE-B + administrador | P0 | 002 (inicio), 012 (cierre) | 2 nov–7 dic |
 | 014 | **IA generativa (v1.1, después de la 1.0)** | (A) Sugerir título y categoría a partir de una foto, con revisión de quien publica; (B) **asistente de proyectos**: la persona escribe lo que quiere realizar y recibe qué objetos necesita, quién los tiene disponibles cerca (mapa, búsqueda de la 006) y los pasos para completarlo. Gemini (capa gratuita) en la VM, Ollama solo local; interruptores `AI_ENABLED` y `ASSISTANT_ENABLED` | BE-A / MO-A (+ MO-B cumplimiento) | P1 | 004, 005, 006, 007, 011, 013 | 23 nov–1 dic |
 | 015 | **ML: recomendaciones (v1.1)** | «Recomendado para ti»: recomendador híbrido propio (colaborativo objeto-objeto + contenido), evaluado con Hit@10/Recall@10/MRR contra popularidad; interruptor `RECO_ENABLED` | BE-B / MO-B | P1 | 003, 005, 006, 007, 010, 013 | 23 nov–1 dic |
+| 016 | **Auditoría de calidad y consolidación (backend)** | Evaluar todas las specs contra la constitución (inventario, matriz de conformidad, trazabilidad), corregir la deuda P0/P1 (validación en la frontera en 10 módulos, entre otras), cerrar las siete categorías de pruebas (contrato, mutación en todos los módulos, ZAP, escaneo de imagen y SBOM) y dejar staging listo para la demostración; sin funcionalidad nueva. Reutiliza el número de la antigua 016, eliminada el 1 nov | BE-B (coordina) / BE-A | P0 | 001–015, 017 | 26 nov–1 dic |
 | L001 | Landing: base y páginas legales | Sitio estático, privacidad, términos, eliminación de cuenta, publicación gratuita | MO-B | P0 | — | 2–5 nov |
 | L002 | Landing: página principal | Información de la app, cómo funciona, FAQ, botón a Google Play | MO-B | P1 | L001 | 9–16 nov |
 
@@ -274,6 +276,7 @@ Incluye la tarea final de cierre de cada spec («Despliegue» en backend, «Veri
 | 013 | 10 | 11 |
 | 014 | 15 | 8 |
 | 015 | 11 | 8 |
-| **Total** | **198** | **183** |
+| 016 | 14 | — |
+| **Total** | **212** | **183** |
 
-Landing: L001 (12 tareas) y L002 (11 tareas), ver `specs/` del repositorio `vaiven-landing-page`. **Total general: 404 tareas.** (2026-11-16: +6 en la 014 por el asistente de proyectos y +1 en la 013 por T010; la spec móvil 014 debe sumar las pantallas del asistente y el mapa.)
+Landing: L001 (12 tareas) y L002 (11 tareas), ver `specs/` del repositorio `vaiven-landing-page`. **Total general: 418 tareas.** (2026-11-17: +14 por la nueva spec 016 de backend. 2026-11-16: +6 en la 014 por el asistente de proyectos y +1 en la 013 por T010; la spec móvil 014 debe sumar las pantallas del asistente y el mapa.)
