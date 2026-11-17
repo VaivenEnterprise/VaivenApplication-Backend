@@ -2,26 +2,27 @@
 
 - **Dueño:** BE-A · **Estado:** sin ejecutar · `[P]` = paralelizable
 - Se ejecuta **después** del congelamiento de la 1.0 (22 nov); no toca el AAB en revisión.
-- Parte B (asistente, T008 a T013) agregada el 2026-11-16; pendiente de aprobación de BE-A. Si el calendario no alcanza, la parte B se entrega apagada (`ASSISTANT_ENABLED=false`) y se demuestra en staging.
+- Parte B (asistente, T008 a T013) agregada el 2026-11-16; spec aprobada por BE-B y revisada contra la constitución el mismo día. BE-A (dueño) confirma en el PR quién implementa (Art. XII.1). Si el calendario no alcanza, la parte B se entrega apagada (`ASSISTANT_ENABLED=false`) y se demuestra en staging.
 
 ## Comunes y parte A — Sugerencias al publicar
 
-- [ ] **T001** Contrato OpenAPI (A y B)
+- [x] **T001** Contrato OpenAPI (A y B)
   - Archivos: `api/paths/ai.yaml`, `api/openapi.yaml` (referencias), `/meta` con `features.aiSuggestions` y `features.projectAssistant`
   - Agente: `spec-writer` · Depende de: 005-T001, 006-T001
   - Aceptación: rutas `listing-suggestions`, `assistant/messages` y `assistant/conversations/{id}`; cuerpos; tarjeta de coincidencia reutilizando el esquema de la búsqueda; errores (`validation_failed`, `forbidden`, `not_found`, `rate_limited`, `service_unavailable`); MO-A lo consume el mismo día
   - Refs: RF-01, RF-06, RF-08, RF-09, RF-13, RF-16
+  - Hecho (2026-11-16, BE-B): `api/paths/ai.yaml` con `listing-suggestions`, `assistant/messages` y `assistant/conversations/{id}` (DELETE); esquemas en `api/openapi.yaml` (`ItemCard` reutilizada para las coincidencias); `Meta.features` opcional (compatible, Art. IV.6); etiqueta `ia`; contrato empaquetado para `/docs`. Redocly válido (solo los 2 avisos que ya existían). **Avisar a MO-A** para que lo consuma.
 
-- [ ] **T002** [P] Puerto común, validación de salida y configuración
-  - Archivos: `internal/ai/{port.go, schema.go, schema_test.go}`, `internal/config/…` (variables `AI_*` y `ASSISTANT_*`), `.env.example`
+- [ ] **T002** [P] Validación de salida y configuración
+  - Archivos: `internal/ai/{schema.go, schema_test.go}`, `internal/config/…` (variables `AI_*` y `ASSISTANT_*`), `.env.example`
   - Agente: `dev-go` · Depende de: T001
-  - Aceptación: interfaz `Provider` (`DescribeImage`, `GenerateJSON`); validación de esquemas de A y B (categoría POL-14, longitudes, conteos, campos extra fuera); valores por defecto seguros (`AI_ENABLED=false`, `ASSISTANT_ENABLED=false`); sin secretos
+  - Aceptación: validación de esquemas de A y B, sin infraestructura (Art. III) (categoría POL-14, longitudes, conteos, campos extra fuera); valores por defecto seguros (`AI_ENABLED=false`, `ASSISTANT_ENABLED=false`); sin secretos
   - Refs: RF-03, RF-04, RF-10, RF-17 · P-01, P-03
 
-- [ ] **T003** [P] Adaptadores Gemini y Ollama
+- [ ] **T003** [P] Adaptador Gemini (y Ollama opcional, P2)
   - Archivos: `internal/ai/adapter/gemini/{client.go, client_test.go}`, `internal/ai/adapter/ollama/{client.go, client_test.go}`
   - Agente: `dev-go` · Depende de: T002
-  - Aceptación: `net/http` con tiempo de espera y un reintento; JSON con esquema; maneja errores y respuestas inválidas; pruebas con `httptest`; la clave nunca se registra; Ollama solo se acepta con `APP_ENV=development`
+  - Aceptación: implementa `suggest.Describer` y `assistant.Planner` (P-01); `net/http` con tiempo de espera y un reintento; JSON con esquema; maneja errores y respuestas inválidas; pruebas con `httptest`; la clave nunca se registra. Ollama es opcional: solo con `APP_ENV=development` y se omite si el calendario no alcanza (Art. VIII.2)
   - Refs: RF-03, RF-07 · P-05, P-06
 
 - [ ] **T004** [P] Contador de uso común en MongoDB
@@ -33,7 +34,7 @@
 - [ ] **T005** Caso de uso de sugerencias (A)
   - Archivos: `internal/suggest/{domain.go, usecase.go, usecase_test.go}`
   - Agente: `dev-go` · Depende de: T003, T004, 004-T007, 011 (filtro)
-  - Aceptación: verifica que la imagen es `item_photo` de esa persona (CA-02); construye la URL; aplica el límite (CA-05) y el filtro (CA-03); apagado o caída → `service_unavailable` (CA-04)
+  - Aceptación: declara el puerto `Describer` (Art. III.3); verifica que la imagen es `item_photo` de esa persona (CA-02); construye la URL; aplica el límite (CA-05) y el filtro (CA-03); apagado o caída → `service_unavailable` (CA-04); cobertura ≥ 80 % (Art. VII.1)
   - Refs: RF-02, RF-04, RF-05, RF-06
 
 - [ ] **T006** Handler, rutas y registro (A)
@@ -59,7 +60,7 @@
 - [ ] **T009** [P] Conversaciones en MongoDB
   - Archivos: `internal/assistant/adapter/mongo/{conversations.go, conversations_test.go}`, índices en `Indexes()`
   - Agente: `modelador-mongo` · Depende de: T002
-  - Aceptación: `ai_conversations` con dueño, máximo 6 turnos (`$slice`), TTL de 24 h sobre `updatedAt` y borrado por dueño; otra persona → no encontrada; pruebas con MongoDB real
+  - Aceptación: `ai_conversations` con dueño, `createdAt` y `updatedAt` (§6.4), máximo 6 turnos de hasta 2 000 caracteres (`$slice`, §6.2), TTL de 24 h sobre `updatedAt` y borrado por dueño; otra persona → no encontrada; pruebas con MongoDB real
   - Refs: RF-13 · P-09
 
 - [ ] **T010** [P] Buscador de coincidencias sobre la spec 006
@@ -71,8 +72,8 @@
 - [ ] **T011** Caso de uso del asistente
   - Archivos: `internal/assistant/{usecase.go, usecase_test.go}`
   - Agente: `dev-go` · Depende de: T003, T004, T008, T009, T010, 011 (filtro)
-  - Aceptación: arma el contexto (máximo 6 turnos); llama al proveedor **sin ubicación** (CA-11); valida y recorta la salida (CA-12); filtro de contenido en entrada y salida; caché en Redis del primer mensaje normalizado sin cachear coincidencias (CA-14); límites diarios y por minuto (CA-05); negativas (CA-10); necesidades sin coincidencias (CA-08); apagado o caída → `service_unavailable`
-  - Refs: RF-09 a RF-18
+  - Aceptación: declara los puertos `Planner` y `Finder` (Art. III.3); arma el contexto (máximo 6 turnos); llama al proveedor **sin ubicación** (CA-11); valida y recorta la salida (CA-12); filtro de contenido en entrada y salida; caché en Redis del primer mensaje normalizado sin cachear coincidencias (CA-14); límites diarios y por minuto (CA-05); negativas (CA-10); necesidades sin coincidencias (CA-08); apagado o caída → `service_unavailable`; la ubicación no se guarda; textos en es-MX; cobertura ≥ 80 % (Art. VII.1)
+  - Refs: RF-09 a RF-19
 
 - [ ] **T012** Handler, rutas y registro (B)
   - Archivos: `internal/assistant/adapter/http/{handler.go, dto.go, routes.go}`, `cmd/api/modules.go` (una línea)
