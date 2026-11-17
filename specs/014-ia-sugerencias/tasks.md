@@ -20,11 +20,12 @@
   - Refs: RF-03, RF-04, RF-10, RF-17 · P-01, P-03
   - Hecho (2026-11-16, BE-B): `internal/ai/domain` (ParseSuggestion/ValidateSuggestion, ParsePlan/ValidatePlan: categorías de POL-14 desde `internal/policy`, recortes por runas, máximo 8 necesidades, 10 pasos y 3 avisos, campos fuera del esquema descartados, listas vacías como `[]`, negativa válida, ErrNothingValid y ErrMalformed); `internal/config/ai.go` (AI_* y ASSISTANT_*, apagadas por defecto, clave como `Secret`, Ollama solo en development, HTTPS en staging y production). Cobertura del 100 % en los dos paquetes; prueba de arquitectura y lint en verde. La ruta pasó a `internal/ai/domain` para que la prueba de arquitectura la vigile (Art. III).
 
-- [ ] **T003** [P] Adaptador Gemini (y Ollama opcional, P2)
+- [x] **T003** [P] Adaptador Gemini (y Ollama opcional, P2)
   - Archivos: `internal/ai/adapter/gemini/{client.go, client_test.go}`, `internal/ai/adapter/ollama/{client.go, client_test.go}`
   - Agente: `dev-go` · Depende de: T002
   - Aceptación: implementa `suggest.Describer` y `assistant.Planner` (P-01); `net/http` con tiempo de espera y un reintento; JSON con esquema; maneja errores y respuestas inválidas; pruebas con `httptest`; la clave nunca se registra. Ollama es opcional: solo con `APP_ENV=development` y se omite si el calendario no alcanza (Art. VIII.2)
   - Refs: RF-03, RF-07 · P-05, P-06
+  - Hecho (2026-11-16, BE-B): `internal/ai/adapter/gemini` implementa `Generate` (P-01) con `net/http`, sin SDK: clave en la cabecera `x-goog-api-key` y nunca en la URL; instrucciones fijas en `systemInstruction`; turnos con rol; salida `application/json` con `responseSchema`; miniatura descargada solo por https, como máximo 5 MB, enviada en `inlineData`; un reintento ante 429, 5xx o red; 4xx sin reintento; bloqueos de seguridad → `ErrBlocked`; errores sin el cuerpo de la petición ni de la respuesta. Tipos de petición y esquemas en `internal/ai/domain/request.go` (categorías de POL-14 tomadas del código; el plan no tiene campos de objetos ni personas). Pruebas con `httptest` y sin red: adaptador 83 %, dominio 100 %; lint 0. **Ollama (P2) no se hizo:** queda opcional (Art. VIII.2).
 
 - [ ] **T004** [P] Contador de uso común en MongoDB
   - Archivos: `internal/ai/adapter/mongo/usage.go`, `internal/ai/adapter/mongo/usage_test.go`, índice en `Indexes()` (spec 012)

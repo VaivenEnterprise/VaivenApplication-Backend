@@ -126,3 +126,23 @@ func TestPlanNothingValid(t *testing.T) {
 		t.Errorf("JSON roto: err = %v", err)
 	}
 }
+
+func TestSchemasUsePOL14AndNoItemFields(t *testing.T) {
+	s := SuggestionSchema()
+	if s.Type != TypeObject || len(s.Properties["category"].Enum) != 7 || s.Properties["title"].Type != TypeString {
+		t.Errorf("esquema de sugerencia = %+v", s)
+	}
+	p := PlanSchema()
+	for _, forbidden := range []string{"items", "itemIds", "owner", "location", "matches"} {
+		if _, ok := p.Properties[forbidden]; ok {
+			t.Errorf("el esquema del plan no debe tener %q: el modelo no decide quién tiene qué", forbidden)
+		}
+	}
+	need := p.Properties["needs"].Items
+	if need.Properties["searchTerms"].Items.Type != TypeString || need.Properties["optional"].Type != TypeBoolean {
+		t.Errorf("necesidad = %+v", need)
+	}
+	if p.Properties["steps"].Type != TypeArray || len(p.Required) != 4 {
+		t.Errorf("plan = %+v", p)
+	}
+}

@@ -22,7 +22,7 @@ cmd/api/modules.go (dos líneas) · config (AI_ENABLED, AI_PROVIDER, AI_API_KEY,
 ## 2. Decisiones
 | # | Decisión | Art. |
 |---|---|---|
-| P-01 | **Cada caso de uso declara su puerto** (Art. III.3): `suggest.Describer` (foto → JSON) y `assistant.Planner` (conversación → JSON). El adaptador `internal/ai/adapter/gemini` implementa los dos; Ollama (opcional, solo local) también. Los casos de uso nunca importan el adaptador | III |
+| P-01 | **Cada caso de uso declara su puerto** (Art. III.3): `suggest.Describer` y `assistant.Planner`, ambos con el método `Generate(ctx, aidomain.Request) ([]byte, error)` sobre tipos de `internal/ai/domain` (petición, turnos y esquema de salida). El adaptador `internal/ai/adapter/gemini` implementa `Generate` una sola vez; Ollama (opcional, solo local) igual. Los casos de uso nunca importan el adaptador | III |
 | P-02 | Parte A: entrada solo `publicId`; la URL de la miniatura se construye en el servidor | Seguridad |
 | P-03 | Salida del modelo en JSON con esquema, validada en `internal/ai/schema.go`: categoría ∈ POL-14, longitudes, conteos; campos extra descartados | VI |
 | P-04 | Contador común `ai_usage` `{userId, feature, day, count, createdAt, updatedAt}` con índice único y TTL de 3 días (`feature` = `suggest` o `assistant`) | §6 |
