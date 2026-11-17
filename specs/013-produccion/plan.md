@@ -31,7 +31,7 @@ El resto es configuración en la VM, en Cloudinary y en Better Stack, documentad
 | P-05 | Respaldos con `mongodump --archive --gzip` dentro del contenedor de MongoDB de producción; el archivo se cifra en la VM (`openssl enc -aes-256-cbc -pbkdf2`) con una frase que guarda el administrador fuera del repositorio, y se copia fuera de la VM; nunca va a git | VI |
 | P-06 | El registro estructurado ya existe (002); esta spec solo **revisa** que no aparezcan datos personales | VI |
 | P-07 | Monitor: Better Stack (gratuito, cada 3 min, aviso por correo). No se agrega código al backend | VIII |
-| P-08 | Límites de memoria de producción fijados con la medición de T001. Punto de partida: API 160 MB (`GOMEMLIMIT=120MiB`), MongoDB 300 MB (caché de WiredTiger 0,15 GB), Redis 96 MB (`maxmemory 64mb`). Con los 2 GB de swap como colchón (Art. XIV.5) | XIII.6, XIV.5 |
+| P-08 | Límites de memoria de producción fijados con la medición de T001. Punto de partida: API 160 MB (`GOMEMLIMIT=120MiB`), MongoDB 400 MB (caché de WiredTiger 0,25 GB, el mínimo que acepta MongoDB 7; con 0,15 no arranca), Redis 96 MB (`maxmemory 64mb`). Con los 2 GB de swap como colchón (Art. XIV.5) | XIII.6, XIV.5 |
 | P-09 | Rotación de registros de Docker (`logging: json-file`, `max-size: 10m`, `max-file: 3`) en todos los contenedores de los dos entornos | IX |
 | P-10 | Despliegue con `scripts/deploy.sh production` desde `origin/main`, ejecutado por `devops-mcp`; reversión con `--rollback` | XIII.4, XIII.5 |
 
