@@ -240,8 +240,8 @@ El script valida la clave y hace una generación mínima con el modelo real **an
 
 | Fecha | Entorno | Proveedor y modelo | Estado | Vence la clave | Quién |
 |---|---|---|---|---|---|
-| 2026-11-17 | staging | Groq, `openai/gpt-oss-120b` | asistente encendido | (anotar) | BE-B |
-| 2026-11-17 | staging | OpenRouter, `nvidia/nemotron-3.5-super-vl:free` | sugerencias por foto encendidas (prueba con imagen OK, sin pago); privacidad: sin publicación de prompts, sin descuento por datos | (anotar) | BE-B |
+| 2026-11-17 | staging | Groq, `openai/gpt-oss-120b` | asistente encendido | 2027-02-15 (rotar antes) | BE-B |
+| 2026-11-17 | staging | OpenRouter, `nvidia/nemotron-3.5-super-vl:free` | sugerencias por foto encendidas (prueba con imagen OK, sin pago); privacidad: sin publicación de prompts, sin descuento por datos | 2027-02-15 11:03 CST (rotar antes) | BE-B |
 
 **Apagado de emergencia.** `bash set-ai-key.sh <entorno> --disable` y recrear la API. La app sigue sin IA (`features` en `false`; las rutas responden 503).
 
