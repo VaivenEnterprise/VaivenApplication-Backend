@@ -12,7 +12,8 @@ type MetaInfo struct {
 	Name        string
 	Version     string
 	Environment string
-	// Features son las funciones opcionales encendidas (spec 014, RF-06 y RF-16).
+	// Features son las funciones opcionales encendidas (spec 014, RF-06 y RF-16;
+	// spec 015, RF-10).
 	Features MetaFeatures
 }
 
@@ -20,6 +21,7 @@ type MetaInfo struct {
 type MetaFeatures struct {
 	AISuggestions    bool `json:"aiSuggestions"`
 	ProjectAssistant bool `json:"projectAssistant"`
+	Recommendations  bool `json:"recommendations"`
 }
 
 type metaResponse struct {

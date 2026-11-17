@@ -91,7 +91,7 @@ func TestMeta(t *testing.T) {
 	local := time.FixedZone("CST", -6*60*60)
 	fixed := time.Date(2026, 11, 6, 11, 30, 15, 0, local)
 	info := MetaInfo{Name: "vaiven-backend", Version: "1.2.3", Environment: "test",
-		Features: MetaFeatures{AISuggestions: true}}
+		Features: MetaFeatures{AISuggestions: true, Recommendations: true}}
 
 	rec := httptest.NewRecorder()
 	meta(info, func() time.Time { return fixed })(rec, httptest.NewRequest(http.MethodGet, "/api/v1/meta", nil))
@@ -103,10 +103,10 @@ func TestMeta(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
 		t.Fatalf("cuerpo no es JSON: %v", err)
 	}
-	// features (spec 014): siempre presente, con las dos funciones.
+	// features (specs 014 y 015): siempre presente, con las tres funciones.
 	var features map[string]bool
 	if err := json.Unmarshal(raw["features"], &features); err != nil ||
-		len(features) != 2 || !features["aiSuggestions"] || features["projectAssistant"] {
+		len(features) != 3 || !features["aiSuggestions"] || features["projectAssistant"] || !features["recommendations"] {
 		t.Errorf("features = %s", raw["features"])
 	}
 	delete(raw, "features")
