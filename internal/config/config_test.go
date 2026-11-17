@@ -68,6 +68,7 @@ func TestLoadDefaults(t *testing.T) {
 			DailyLimit: 20, AssistantDailyLimit: 30, AssistantRadiusKm: 10,
 			Suggest: Provider{Name: AIProviderOpenAI, BaseURL: DefaultOpenAIBaseURL, Model: DefaultOpenAIModel},
 		},
+		Reco:        Reco{Enabled: false},
 		DocsEnabled: true,
 	}
 	if !reflect.DeepEqual(cfg, want) {

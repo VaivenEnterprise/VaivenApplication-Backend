@@ -1,6 +1,6 @@
 # Tareas 015 — Recomendaciones con ML (backend)
 
-- **Dueño:** BE-B · **Estado:** en curso (1/11) · `[P]` = paralelizable
+- **Dueño:** BE-B · **Estado:** en curso (2/11) · `[P]` = paralelizable
 - Ventana del ROADMAP: 23 nov–1 dic (v1.1, detrás de `RECO_ENABLED`). No empieza hasta que la 014 termine su despliegue verificado (Art. XIII.5) y la spec esté aprobada (Art. I).
 - Cada tarea termina con `make fmt lint test` (y `go test -tags=integration` del paquete si tiene integración) en verde.
 
@@ -11,11 +11,12 @@
   - Refs: RF-01, RF-05, RF-09, RF-10
   - **Hecho (2026-11-17, BE-B):** `api/paths/recommendations.yaml` (tres rutas, etiqueta `recomendaciones`), esquemas `RecommendationEventRequest`, `RecommendationReason(Code)`, `Recommendation` y `RecommendationList` (tarjeta `ItemCard` de la 006), `Meta.features.recommendations` y bundle de `/docs` regenerado. `redocly lint` válido (solo las 2 advertencias que ya existían) y `go test ./...` en verde.
 
-- [ ] **T002** [P] Dominio, parámetros y configuración
+- [x] **T002** [P] Dominio, parámetros y configuración
   - Archivos: `internal/reco/domain/{event.go, params.go, reason.go, errors.go}` y pruebas, `internal/config/reco.go` y prueba (`RECO_ENABLED`, por defecto `false`), `TestLoadDefaults`, `.env.example` y `deploy/*/.env.example`
   - Agente: `dev-go` · Depende de: T001
   - Aceptación: constantes con nombre (`WeightRequest=3`, `WeightView=1`, `Alpha=0.7`, `Neighbors=20`, `HistorySize=20`, `WindowDays=90`, `MaxPerCategory=3`, `ViewBucket=10m`, `ModelMaxAge=6h`); bandas de tarifa en centavos; validación de evento y de `limit`; cobertura ≥ 80 %
   - Refs: RF-01–RF-04, RF-10 · P-01, P-12
+  - **Hecho (2026-11-17, BE-B):** `internal/reco/domain` (`params.go`, `event.go`, `reason.go`, `errors.go`; 100 %) con las constantes del modelo, bandas de tarifa, `NewView` (valida `itemId` y `type`, bloque de 10 min en UTC), `ParseLimit`, `CleanMunicipality`, motivos y errores; `internal/config/reco.go` (`RECO_ENABLED`, apagado por defecto; 100 %), `TestLoadDefaults` y los tres `.env.example`. Las interfaces (`InteractionStore`, `ModelStore`, `RequestSource`) se declaran en `usecase` en T006, porque los puertos los declara quien los consume (Art. III.3; revisión de la spec). `gofmt`, `go vet`, `golangci-lint` (0), prueba de arquitectura y `go test ./...` en verde.
 
 - [ ] **T003** [P] Repositorios MongoDB e índices
   - Archivos: `internal/reco/adapter/mongo/{interactions.go, model_store.go, meta.go, requests_source.go, items_source.go}` y pruebas de integración; catálogo (`catalog.go`, `purpose_test.go`, conteo en `catalog_test.go`), fixture (`VAIVEN_UPDATE_INDEX_BASELINE=1`), pruebas de índices de `cmd/admin`, siembra genérica de `catalog_integration_test.go`, `EnsureAll` en `cmd/api/main.go`
