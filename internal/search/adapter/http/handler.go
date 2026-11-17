@@ -93,6 +93,14 @@ type pageResponse struct {
 	NextCursor *string        `json:"nextCursor"`
 }
 
+// CardResponse es la tarjeta pública ItemCard (api/openapi.yaml). Se exporta
+// para que otros módulos que muestran objetos (el asistente de la spec 014) la
+// respondan igual, sin copiar este código (Art. XII.6).
+type CardResponse = cardResponse
+
+// ToCard convierte una tarjeta de la búsqueda en ItemCard.
+func ToCard(v usecase.CardView) CardResponse { return toCard(v) }
+
 func toCard(v usecase.CardView) cardResponse {
 	c := v.Card
 	out := cardResponse{

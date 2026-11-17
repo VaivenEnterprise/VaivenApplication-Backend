@@ -22,7 +22,10 @@ import (
 	adaptermongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/mongo"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ai/adapter/gemini"
 	aimongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ai/adapter/mongo"
+	assistanthttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/assistant/adapter/http"
 	assistantmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/assistant/adapter/mongo"
+	assistantsearch "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/assistant/adapter/search"
+	assistantusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/assistant/usecase"
 	authhttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/adapter/http"
 	authmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/adapter/mongo"
 	authdomain "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/domain"
@@ -77,6 +80,7 @@ import (
 	searchusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/search/usecase"
 	suggesthttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/suggest/adapter/http"
 	suggestusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/suggest/usecase"
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/usecase/cache"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/usecase/ratelimit"
 )
 
@@ -180,6 +184,9 @@ func run() error {
 	// es opcional. Sin Redis el límite es local y /readyz informa "degradado".
 	var redisPinger handler.Pinger
 	var limiter ratelimit.Limiter = redis.NewMemoryLimiter()
+	// Caché de la IA (spec 014, RF-15): solo con Redis; sin Redis el asistente
+	// llama siempre al modelo (nada se guarda en la memoria del proceso, Art. XIV.1).
+	var aiCache cache.Cache
 	if cfg.Redis.Enabled() {
 		rc, err := redis.NewClient(cfg.Redis.URL.Reveal(), cfg.AppEnv)
 		if err != nil {
@@ -192,6 +199,7 @@ func run() error {
 		}
 		redisPinger = rc
 		limiter = redis.NewLimiter(rc)
+		aiCache = redis.NewCache(rc)
 	}
 
 	// Reservas reales (spec 007, RF-14): impiden dar de baja una cuenta (003)
@@ -364,6 +372,12 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	// IA: asistente de proyectos (spec 014, parte B); apagado por defecto.
+	assistantModule, err := newAssistantModule(cfg, log, authModule, limiter, aiCache, db, imagesSvc,
+		aiUsageRepo, aiConversationsRepo, mod)
+	if err != nil {
+		return err
+	}
 	// Envío de push en segundo plano (spec 011, plan P-01); termina con ctx.
 	pushDone := make(chan struct{})
 	go func() {
@@ -403,6 +417,7 @@ func run() error {
 		Notifications: notificationsModule,
 		Reports:       reportsModule,
 		Suggest:       suggestModule,
+		Assistant:     assistantModule,
 		Users:         userRepo,
 	})
 	for _, m := range mods {
@@ -647,6 +662,43 @@ func newSuggestModule(cfg config.Config, log *slog.Logger, authModule *authhttp.
 		BaseFolder: cfg.Cloudinary.BaseFolder, Location: loc,
 	}, suggestusecase.Deps{AI: gen, Images: imgs, Usage: usage, Moderation: mod})
 	return suggesthttp.NewModule(suggesthttp.ModuleDeps{
+		Service: svc, Authenticate: authModule.Authenticate(), Log: log,
+		Limiter: limiter, LimiterFallback: redis.NewMemoryLimiter(), Location: loc,
+	})
+}
+
+// newAssistantModule arma la parte B de la spec 014. Con ASSISTANT_ENABLED=false
+// no se crea el cliente del proveedor y las rutas responden service_unavailable
+// (RF-16). La búsqueda es la de la spec 006, con sus reglas de visibilidad.
+func newAssistantModule(cfg config.Config, log *slog.Logger, authModule *authhttp.Module, limiter ratelimit.Limiter,
+	aiCache cache.Cache, db *mongo.Database, imgs imgport.Service, usage *aimongo.UsageRepo,
+	convs *assistantmongo.ConversationRepo, mod moderation.Checker) (*assistanthttp.Module, error) {
+	var planner assistantusecase.Planner
+	if cfg.AI.AssistantEnabled {
+		if cfg.AI.Provider != config.AIProviderGemini {
+			return nil, fmt.Errorf("AI_PROVIDER=%s todavía no tiene adaptador; usa gemini", cfg.AI.Provider)
+		}
+		c, err := gemini.New(gemini.Config{BaseURL: cfg.AI.BaseURL, Model: cfg.AI.Model, APIKey: cfg.AI.APIKey.Reveal()})
+		if err != nil {
+			return nil, err
+		}
+		planner = c
+	}
+	searchSvc, err := searchusecase.NewService(searchusecase.Deps{Repo: searchmongo.NewRepo(db, nil), Images: imgs})
+	if err != nil {
+		return nil, err
+	}
+	loc, err := time.LoadLocation("America/Mexico_City")
+	if err != nil {
+		return nil, fmt.Errorf("zona horaria: %w", err)
+	}
+	svc := assistantusecase.New(assistantusecase.Config{
+		Enabled: cfg.AI.AssistantEnabled, DailyLimit: cfg.AI.AssistantDailyLimit, Location: loc,
+	}, assistantusecase.Deps{
+		AI: planner, Finder: assistantsearch.New(searchSvc, cfg.AI.AssistantRadiusKm),
+		Conversations: convs, Usage: usage, Moderation: mod, Cache: aiCache,
+	})
+	return assistanthttp.NewModule(assistanthttp.ModuleDeps{
 		Service: svc, Authenticate: authModule.Authenticate(), Log: log,
 		Limiter: limiter, LimiterFallback: redis.NewMemoryLimiter(), Location: loc,
 	})

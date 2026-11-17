@@ -85,11 +85,12 @@
   - Refs: RF-09 a RF-19
   - Hecho (2026-11-16, BE-B): `Send` sigue este orden: apagado → longitud medida **antes** de recortar (501 caracteres = 400; error real que encontró la prueba) → filtro de contenido de la entrada (sin gastar cupo ni llamar al proveedor) → conversación propia (CA-13) → cupo diario en hora de México → plan (caché de 1 h solo en el primer mensaje, CA-14; el proveedor nunca recibe la ubicación, CA-11; un bloqueo del proveedor da una negativa amable, CA-10; una salida inválida o una caída da 503, CA-12) → filtro de la salida (resumen bloqueado → 503; necesidades, pasos y avisos bloqueados se quitan) → búsqueda → guarda los turnos (usuario en bloque de datos y resumen del modelo) → resumen con «Por ahora nadie presta cerca de ti: …» escrito por el backend (CA-08). `Delete` para la conversación propia. Cobertura 97,3 %; arquitectura y lint en verde.
 
-- [ ] **T012** Handler, rutas y registro (B)
-  - Archivos: `internal/assistant/adapter/http/{handler.go, dto.go, routes.go}`, `cmd/api/modules.go` (una línea)
+- [x] **T012** Handler, rutas y registro (B)
+  - Archivos: `internal/assistant/adapter/http/handler.go` (DTO y rutas en el mismo archivo), `cmd/api/modules.go` (una línea), `cmd/api/main.go` (composición y caché), `internal/search/adapter/http/handler.go` (exporta `CardResponse`/`ToCard` para no copiar la tarjeta, Art. XII.6)
   - Agente: `dev-go` · Depende de: T001, T011
   - Aceptación: cumple el contrato; autenticada; 10 mensajes por minuto por ruta; `DELETE` de la conversación propia; registros sin el texto de mensajes ni respuestas (RF-18)
   - Refs: RF-09, RF-13, RF-15, RF-18
+  - Hecho (2026-11-16, BE-B): `POST /api/v1/ai/assistant/messages` y `DELETE /api/v1/ai/assistant/conversations/{id}` con sesión y 10 por minuto por persona; `validator/v10` (mensaje de 2 a 500 runas, `conversationId` de 24 hexadecimales, `lat`/`lng` en rango) y campos desconocidos rechazados; detalles de validación por campo; las coincidencias salen con la misma `ItemCard` de la búsqueda (`searchhttp.ToCard`); listas vacías como `[]`; límite diario → 429 con `Retry-After` hasta la medianoche de México. Los registros no llevan mensaje, respuesta ni ubicación. La caché usa Redis solo si está configurado (sin Redis, `nil`: nada en la memoria del proceso, Art. XIV.1). Con `ASSISTANT_ENABLED=false` no se crea el cliente de Gemini. Handler al 97 %; todas las pruebas y el lint en verde (también con `integration`).
 
 - [ ] **T013** Prueba de integración (B)
   - Archivos: `internal/assistant/integration_test.go`
