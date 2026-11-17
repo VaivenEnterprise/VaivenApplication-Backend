@@ -71,11 +71,12 @@
   - Refs: RF-13 · P-09
   - Hecho (2026-11-16, BE-B): `internal/assistant/adapter/mongo/conversations.go` (`ai_conversations`: `{_id, userId, turns[{role,text}], createdAt, updatedAt}`) con Create, Get, Append (`$push` + `$each` + `$slice: -6`) y Delete, todos filtrando por `_id` y `userId`: otra persona, un id inválido o una conversación caducada → `ErrConversationNotFound` (404, CA-13). Textos recortados a 2 000 runas; nunca guarda la ubicación. TTL `updated_ttl` de 24 h en el catálogo (37 índices), en la API y en el fixture (solo una entrada nueva). Integración con MongoDB 7 real en verde.
 
-- [ ] **T010** [P] Buscador de coincidencias sobre la spec 006
+- [x] **T010** [P] Buscador de coincidencias sobre la spec 006
   - Archivos: `internal/assistant/adapter/search/{finder.go, finder_test.go}`
   - Agente: `dev-go` · Depende de: T002, 006 (caso de uso de búsqueda)
   - Aceptación: por necesidad llama a la búsqueda con `q`, `category` y ubicación o municipio; hasta 5 resultados con la tarjeta pública (`approxLocation`, `distanceKm`); máximo 4 búsquedas simultáneas con tiempo de espera; hereda los filtros de visibilidad de la 006 (sin propios, pausados ni cuentas suspendidas)
   - Refs: RF-11, RNF-01 · P-07, P-10
+  - Hecho (2026-11-16, BE-B): puertos `Finder`, `FindRequest` y `NeedResult` en `internal/assistant/usecase/ports.go` (reutilizan `searchusecase.CardView` de la 006, sin copiarla, Art. XII.6). `internal/assistant/adapter/search`: con ubicación busca término por término (la búsqueda por cercanía exige todas las palabras) y junta resultados únicos hasta 5; sin ubicación hace una sola búsqueda de texto o filtra por municipio; como máximo 4 búsquedas simultáneas entre todas las necesidades; 3 s por búsqueda; una falla deja esa necesidad en `[]` y solo si fallan todas se devuelve error; conserva el orden y nunca devuelve `null` (CA-08, error real encontrado por la prueba). Cobertura 98,5 %; lint y arquitectura en verde.
 
 - [ ] **T011** Caso de uso del asistente
   - Archivos: `internal/assistant/{usecase.go, usecase_test.go}`
