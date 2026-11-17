@@ -43,7 +43,7 @@ case "$MODE" in key | --enable | --assistant-only | --disable) ;; *) die "opció
 PREFIX=AI
 case "$PROVIDER" in
     groq) AI_PROVIDER=openai BASE=https://api.groq.com/openai/v1 MODEL=${AI_MODEL:-openai/gpt-oss-120b} ;;
-    openrouter) AI_PROVIDER=openai BASE=https://openrouter.ai/api/v1 MODEL=${AI_MODEL:-google/gemma-4-31b-it:free} PREFIX=SUGGEST ;;
+    openrouter) AI_PROVIDER=openai BASE=https://openrouter.ai/api/v1 MODEL=${AI_MODEL:-nvidia/nemotron-3.5-super-vl:free} PREFIX=SUGGEST ;;
     gemini) AI_PROVIDER=gemini BASE=https://generativelanguage.googleapis.com MODEL=${AI_MODEL:-gemini-2.5-flash} ;;
     *) die "PROVIDER debe ser groq, openrouter o gemini" ;;
 esac
