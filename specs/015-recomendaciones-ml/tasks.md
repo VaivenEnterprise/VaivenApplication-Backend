@@ -1,6 +1,6 @@
 # Tareas 015 — Recomendaciones con ML (backend)
 
-- **Dueño:** BE-B · **Estado:** en curso (2/11) · `[P]` = paralelizable
+- **Dueño:** BE-B · **Estado:** en curso (3/11) · `[P]` = paralelizable
 - Ventana del ROADMAP: 23 nov–1 dic (v1.1, detrás de `RECO_ENABLED`). No empieza hasta que la 014 termine su despliegue verificado (Art. XIII.5) y la spec esté aprobada (Art. I).
 - Cada tarea termina con `make fmt lint test` (y `go test -tags=integration` del paquete si tiene integración) en verde.
 
@@ -18,11 +18,12 @@
   - Refs: RF-01–RF-04, RF-10 · P-01, P-12
   - **Hecho (2026-11-17, BE-B):** `internal/reco/domain` (`params.go`, `event.go`, `reason.go`, `errors.go`; 100 %) con las constantes del modelo, bandas de tarifa, `NewView` (valida `itemId` y `type`, bloque de 10 min en UTC), `ParseLimit`, `CleanMunicipality`, motivos y errores; `internal/config/reco.go` (`RECO_ENABLED`, apagado por defecto; 100 %), `TestLoadDefaults` y los tres `.env.example`. Las interfaces (`InteractionStore`, `ModelStore`, `RequestSource`) se declaran en `usecase` en T006, porque los puertos los declara quien los consume (Art. III.3; revisión de la spec). `gofmt`, `go vet`, `golangci-lint` (0), prueba de arquitectura y `go test ./...` en verde.
 
-- [ ] **T003** [P] Repositorios MongoDB e índices
+- [x] **T003** [P] Repositorios MongoDB e índices
   - Archivos: `internal/reco/adapter/mongo/{interactions.go, model_store.go, meta.go, requests_source.go, items_source.go}` y pruebas de integración; catálogo (`catalog.go`, `purpose_test.go`, conteo en `catalog_test.go`), fixture (`VAIVEN_UPDATE_INDEX_BASELINE=1`), pruebas de índices de `cmd/admin`, siembra genérica de `catalog_integration_test.go`, `EnsureAll` en `cmd/api/main.go`
   - Agente: `modelador-mongo` · Depende de: T002
   - Aceptación: TTL de 90 días; vista duplicada en el mismo bloque de 10 min ignorada por el índice único; candado con vencimiento y una sola toma entre varias concurrentes; escritura del modelo por `buildId` sin lecturas a medias; `bookings` e `items` solo lectura; arreglos acotados; catálogo en 40 índices con `go test -tags=integration ./internal/adapter/mongo/catalog/` en verde
   - Refs: RF-01, RF-06, RF-09 · P-03, P-04, P-05, P-09
+  - **Hecho (2026-11-17, BE-B):** `internal/reco/adapter/mongo`: `InteractionRepo` (vista repetida en el mismo bloque → `false` por el índice único; historial, ventana, borrado, purga de cuentas dadas de baja, demostración con `--purge`), `ModelRepo` (vecinos ≤ 20 y populares ≤ 50 por `buildId`; el nuevo convive con el anterior hasta `DeleteOtherBuilds`), `MetaRepo` (candado atómico con vencimiento: de 20 procesos a la vez gana exactamente 1; `Publish` solo si el candado sigue siendo suyo; fechas de borrado de historial), `RequestSource` (bookings) e `ItemSource` (items y users), estos dos en solo lectura comprobada. Tipos `Neighbor` e `ItemFeatures` en el dominio. Catálogo en **40** índices (`catalog.go`, propósitos, consulta representativa, siembra genérica con `type` y `bucket`, conteos de `cmd/admin`), fixture regenerado (solo +3 entradas) y `EnsureAll`. `go test -tags=integration ./...` completo en verde, lint 0, dominio 100 %, adaptador 84 % (integración).
 
 - [ ] **T004** Modelo colaborativo, de contenido, híbrido y métricas
   - Archivos: `internal/reco/domain/model/{cosine.go, cooccurrence.go, content.go, hybrid.go, popular.go, metrics.go}`, `internal/reco/domain/synth/synth.go` y pruebas

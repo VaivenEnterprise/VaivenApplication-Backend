@@ -62,6 +62,9 @@ func seedDoc(i int) bson.D {
 		// ai_usage (spec 014): su índice único es {userId, feature, day}.
 		{Key: "feature", Value: []string{"suggest", "assistant"}[i%2]},
 		{Key: "day", Value: fmt.Sprintf("2026-11-%02d", 1+i%28)},
+		// reco_interactions (spec 015): su índice único es {userId, itemId, type, bucket}.
+		{Key: "type", Value: "view"},
+		{Key: "bucket", Value: base.Add(time.Duration(i) * time.Minute)},
 		{Key: "readAt", Value: readAt},
 	}
 }
@@ -117,6 +120,8 @@ var queries = map[string]queryCase{
 	"push_tokens.user":        {filter: bson.D{{Key: "userId", Value: "u0"}}},
 
 	"reports.status_created": {filter: bson.D{{Key: "status", Value: "a"}}, sort: bson.D{{Key: "createdAt", Value: 1}}},
+
+	"reco_interactions.user_createdAt": {filter: bson.D{{Key: "userId", Value: "u0"}}, sort: bson.D{{Key: "createdAt", Value: -1}}},
 }
 
 // TestQueriesCoverEveryQueryIndex: cada índice de consulta tiene su consulta

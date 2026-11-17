@@ -71,6 +71,7 @@ import (
 	ratingshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ratings/adapter/http"
 	ratingsmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ratings/adapter/mongo"
 	ratingsusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ratings/usecase"
+	recomongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/reco/adapter/mongo"
 	reportshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/reports/adapter/http"
 	reportsmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/reports/adapter/mongo"
 	reportsusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/reports/usecase"
@@ -177,8 +178,11 @@ func run() error {
 	// IA esté apagada, para que `admin indexes` coincida con el catálogo.
 	aiUsageRepo := aimongo.NewUsageRepo(db)
 	aiConversationsRepo := assistantmongo.NewConversationRepo(db)
+	// Eventos de las recomendaciones (spec 015, T003): sus índices se crean aunque
+	// RECO_ENABLED esté apagado, por la misma razón.
+	recoInteractionsRepo := recomongo.NewInteractionRepo(db)
 	if err := adaptermongo.EnsureAll(ctx, userRepo, refreshRepo, itemRepo, searchmongo.NewIndexes(db), bookingRepo, convRepo, msgRepo, paymentsRepo,
-		ratingsRepo, incidentsRepo, sanctionsRepo, notificationsRepo, pushTokensRepo, reportsRepo, aiUsageRepo, aiConversationsRepo); err != nil {
+		ratingsRepo, incidentsRepo, sanctionsRepo, notificationsRepo, pushTokensRepo, reportsRepo, aiUsageRepo, aiConversationsRepo, recoInteractionsRepo); err != nil {
 		return fmt.Errorf("no se pudieron crear los índices: %w", err)
 	}
 
