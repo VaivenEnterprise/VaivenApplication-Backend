@@ -68,6 +68,6 @@ Al terminar la 015 habrá 16 specs de backend construidas en paralelo por varias
 Funcionalidad nueva; cambios a la constitución (si la auditoría encuentra que hace falta uno, se propone por escrito, Art. XI); pruebas de penetración activas o contra producción; servicios de pago; el repositorio móvil y la landing (tienen su propia constitución; se pueden auditar con esta misma plantilla en su repositorio).
 
 ## 6. Preguntas abiertas
-- [NEEDS CLARIFICATION: para las pruebas de contrato, ¿se acepta una dependencia **solo de pruebas** que valide respuestas contra OpenAPI 3.1 (propuesta en el plan, P-03), o se prefiere una validación propia más limitada con la biblioteca estándar?]
+- Resuelto (2026-11-17, BE-B): para las pruebas de contrato se acepta una dependencia **solo de pruebas** que valide respuestas contra OpenAPI 3.1 (`github.com/pb33f/libopenapi-validator`, plan P-03). Se registra en `memoria.md` al instalarse (T008), con su versión y la comprobación de que no entra al binario de la API.
 - [NEEDS CLARIFICATION: reparto final de las correcciones entre BE-A y BE-B; propuesta: cada dueño corrige sus módulos según `ROADMAP.md` §2.]
 - Pendiente del equipo: confirmar o ajustar POL-06 (QR de 15 min) y POL-07 (tolerancia de 2 h).
