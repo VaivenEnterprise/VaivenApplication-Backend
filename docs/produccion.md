@@ -193,6 +193,12 @@ Ninguno es igual a los de staging (CA-02). **Sin `seed` en producción** (RF-05)
 ## 9. Operación diaria, registros y reversión (T008)
 
 - **Despliegue:** §5. **Reversión:** `bash deploy-production.sh --rollback`; termina con `Resultado: rolled_back` y `/api/v1/meta` vuelve a la versión anterior. Luego se vuelve a desplegar la buena.
+- **Prueba de reversión en staging (T008, la hace otra persona del equipo):**
+  1. Anotar la versión actual: `curl -s https://vaiven-staging.westus2.cloudapp.azure.com:8443/api/v1/meta` (campo `version`).
+  2. GitHub → **Actions → Deploy staging → Run workflow**, rama `develop`, `action: rollback`. Debe terminar en verde con «Resultado en la VM: `rolled_back`».
+  3. Repetir el `curl`: `version` ahora es la anterior y `/readyz` sigue en `ready`.
+  4. **Run workflow** otra vez con `action: deploy`: vuelve a la versión del paso 1.
+  5. Anotar en `memoria.md` quién lo hizo, la fecha y las dos versiones.
 - **Registros sin datos personales (CA-06):** tras una sesión completa (registro, publicar, buscar, chat), contar en `docker logs --since 2h vaiven-production-api-1` las apariciones de `password`, `Bearer `, `refreshToken`, `api_secret` y correos: todas deben ser 0.
 - **Límite de tasa en Redis (RF-11):** 130 peticiones seguidas a `/api/v1/meta` desde una IP empiezan a dar 429 pasadas las 120 por minuto, y `/readyz` sigue con `redis: ok`.
 - **Memoria y disco:** `free -m`, `docker stats --no-stream` y `df -h /` cada semana; límites en §2.8.

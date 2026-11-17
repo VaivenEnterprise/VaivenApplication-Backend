@@ -63,9 +63,9 @@
 - [ ] **T008** Guía de operación y revisión de registros
   - Archivos: `docs/produccion.md` (despliegue, reversión, registros, memoria y disco, reinicio, rotación de secretos, vencimiento del crédito)
   - Agente: `spec-writer` · Depende de: T004, T006, T007
-  - Aceptación: otra persona del equipo ejecuta una reversión (`deploy.sh production --rollback`) siguiendo la guía; registros de una sesión completa sin datos personales (CA-06); límite de tasa en Redis verificado en producción (RF-11)
+  - Aceptación: otra persona del equipo ejecuta una reversión siguiendo la guía (**ajuste del 2026-11-16, aprobado por BE-B:** en **staging**, con el mismo `deploy/remote-deploy.sh`, desde *Actions → Deploy staging → Run workflow → rollback* y un nuevo despliegue después; en producción, con `deploy-production.sh --rollback` en el primer despliegue que tenga versión anterior, porque el primero no la tiene); registros de una sesión completa sin datos personales (CA-06); límite de tasa en Redis verificado en producción (RF-11)
   - Refs: RF-09, RF-10, RF-11
-  - Avance (2026-11-16): guía en `docs/produccion.md` §5 y §9. Registros de producción sin datos personales (CA-06): 0 apariciones de contraseñas, tokens, secretos o correos en 167 líneas. Límite de tasa en Redis verificado en producción (RF-11): 120 respuestas 200 y luego `429 rate_limited` con `Retry-After: 60`. **Falta:** que **otra persona del equipo** ejecute una reversión (`deploy-production.sh --rollback`) siguiendo la guía.
+  - Avance (2026-11-16): guía en `docs/produccion.md` §5 y §9. Registros de producción sin datos personales (CA-06): 0 apariciones de contraseñas, tokens, secretos o correos en 167 líneas. Límite de tasa en Redis verificado en producción (RF-11): 120 respuestas 200 y luego `429 rate_limited` con `Retry-After: 60`. **Falta:** que **otra persona del equipo** ejecute la reversión en staging siguiendo `docs/produccion.md` §9 (ajuste de la aceptación del 2026-11-16).
 
 - [ ] **T009** Lista de comprobación de producción y conformidad
   - Archivos: `docs/produccion.md` (lista firmada), `memoria.md` (solo anexar)
