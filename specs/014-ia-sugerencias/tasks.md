@@ -27,11 +27,12 @@
   - Refs: RF-03, RF-07 · P-05, P-06
   - Hecho (2026-11-16, BE-B): `internal/ai/adapter/gemini` implementa `Generate` (P-01) con `net/http`, sin SDK: clave en la cabecera `x-goog-api-key` y nunca en la URL; instrucciones fijas en `systemInstruction`; turnos con rol; salida `application/json` con `responseSchema`; miniatura descargada solo por https, como máximo 5 MB, enviada en `inlineData`; un reintento ante 429, 5xx o red; 4xx sin reintento; bloqueos de seguridad → `ErrBlocked`; errores sin el cuerpo de la petición ni de la respuesta. Tipos de petición y esquemas en `internal/ai/domain/request.go` (categorías de POL-14 tomadas del código; el plan no tiene campos de objetos ni personas). Pruebas con `httptest` y sin red: adaptador 83 %, dominio 100 %; lint 0. **Ollama (P2) no se hizo:** queda opcional (Art. VIII.2).
 
-- [ ] **T004** [P] Contador de uso común en MongoDB
+- [x] **T004** [P] Contador de uso común en MongoDB
   - Archivos: `internal/ai/adapter/mongo/usage.go`, `internal/ai/adapter/mongo/usage_test.go`, índice en `Indexes()` (spec 012)
   - Agente: `modelador-mongo` · Depende de: T002
   - Aceptación: incremento atómico por persona, función y día; índice único `{userId, feature, day}` y TTL; prueba de concurrencia
   - Refs: RF-05, RF-15 · P-04
+  - Hecho (2026-11-16, BE-B): `internal/ai/adapter/mongo/usage.go` (`ai_usage`: `{userId, feature, day, count, createdAt, updatedAt}`). `Take` es atómico con un solo FindOneAndUpdate con upsert y filtro `count < limit`; la clave duplicada del índice único significa «sin cupo». Índices `user_feature_day_unique` y `created_ttl` (3 días) en el catálogo (36 índices) y creados al arrancar la API (`cmd/api/main.go`), para que `admin indexes` coincida aunque la IA esté apagada. Integración con MongoDB 7 real: 50 peticiones simultáneas con límite 20 → exactamente 20 pasan. Se actualizaron las pruebas de la 012 que fijaban 34 índices y el fixture (solo se agregaron las 2 entradas de `ai_usage`).
 
 - [ ] **T005** Caso de uso de sugerencias (A)
   - Archivos: `internal/suggest/{domain.go, usecase.go, usecase_test.go}`

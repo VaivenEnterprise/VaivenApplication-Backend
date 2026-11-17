@@ -204,10 +204,10 @@ func TestCatalogCoversEveryEnsureIndexes(t *testing.T) {
 	}
 }
 
-func TestAllHas34UniqueIndexes(t *testing.T) {
+func TestAllHas36UniqueIndexes(t *testing.T) {
 	all := All()
-	if len(all) != 34 {
-		t.Errorf("catálogo con %d índices, want 34 (plan 012 §7.3)", len(all))
+	if len(all) != 36 {
+		t.Errorf("catálogo con %d índices, want 36 (34 del plan 012 §7.3 + 2 de ai_usage, spec 014)", len(all))
 	}
 	seen := map[string]bool{}
 	for _, s := range all {

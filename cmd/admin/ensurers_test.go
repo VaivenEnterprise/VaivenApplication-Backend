@@ -10,6 +10,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	adaptermongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/mongo"
+	aimongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ai/adapter/mongo"
 	authmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/adapter/mongo"
 	bookingsmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/bookings/adapter/mongo"
 	chatmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/chat/adapter/mongo"
@@ -48,6 +49,7 @@ func ensurersWithPrefix(db *drv.Database) []namedEnsurer {
 		{notificationsmongo.NewNotificationRepo(db), "notifications: crear índices: "},
 		{notificationsmongo.NewTokenRepo(db), "push_tokens: crear índices: "},
 		{reportsmongo.NewRepo(db), "reports: crear índices: "},
+		{aimongo.NewUsageRepo(db), "ai_usage: crear índices: "},
 	}
 }
 

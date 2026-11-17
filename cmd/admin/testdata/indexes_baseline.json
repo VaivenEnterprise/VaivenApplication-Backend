@@ -1,5 +1,39 @@
 [
   {
+    "collection": "ai_usage",
+    "name": "created_ttl",
+    "spec": {
+      "key": {
+        "createdAt": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "created_ttl",
+      "expireAfterSeconds": {
+        "$numberInt": "259200"
+      }
+    }
+  },
+  {
+    "collection": "ai_usage",
+    "name": "user_feature_day_unique",
+    "spec": {
+      "key": {
+        "userId": {
+          "$numberInt": "1"
+        },
+        "feature": {
+          "$numberInt": "1"
+        },
+        "day": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "user_feature_day_unique",
+      "unique": true
+    }
+  },
+  {
     "collection": "bookings",
     "name": "item_status_dates",
     "spec": {

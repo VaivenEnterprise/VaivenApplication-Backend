@@ -20,6 +20,7 @@ import (
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/handler"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/middleware"
 	adaptermongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/mongo"
+	aimongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ai/adapter/mongo"
 	authhttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/adapter/http"
 	authmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/adapter/mongo"
 	authdomain "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/domain"
@@ -162,8 +163,11 @@ func run() error {
 	notificationsRepo := notificationsmongo.NewNotificationRepo(db)
 	pushTokensRepo := notificationsmongo.NewTokenRepo(db)
 	reportsRepo := reportsmongo.NewRepo(db)
+	// Contador de uso de la IA (spec 014, T004): sus índices se crean aunque la
+	// IA esté apagada, para que `admin indexes` coincida con el catálogo.
+	aiUsageRepo := aimongo.NewUsageRepo(db)
 	if err := adaptermongo.EnsureAll(ctx, userRepo, refreshRepo, itemRepo, searchmongo.NewIndexes(db), bookingRepo, convRepo, msgRepo, paymentsRepo,
-		ratingsRepo, incidentsRepo, sanctionsRepo, notificationsRepo, pushTokensRepo, reportsRepo); err != nil {
+		ratingsRepo, incidentsRepo, sanctionsRepo, notificationsRepo, pushTokensRepo, reportsRepo, aiUsageRepo); err != nil {
 		return fmt.Errorf("no se pudieron crear los índices: %w", err)
 	}
 
