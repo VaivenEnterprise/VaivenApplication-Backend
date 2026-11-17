@@ -92,16 +92,17 @@ func (s *ItemSource) ActiveFeatures(ctx context.Context) ([]domain.ItemFeatures,
 	return out, nil
 }
 
-// Titles devuelve el título de cada objeto pedido (motivo similar_to). Los
-// ids inválidos o inexistentes no aparecen.
-func (s *ItemSource) Titles(ctx context.Context, itemIDs []string) (map[string]string, error) {
-	out := map[string]string{}
+// Briefs devuelve el título y la categoría de cada objeto pedido (motivo
+// similar_to y categorías vistas). Los ids inválidos o inexistentes no
+// aparecen.
+func (s *ItemSource) Briefs(ctx context.Context, itemIDs []string) (map[string]domain.ItemBrief, error) {
+	out := map[string]domain.ItemBrief{}
 	oids := toObjectIDs(itemIDs)
 	if len(oids) == 0 {
 		return out, nil
 	}
 	cur, err := s.items.Find(ctx, bson.D{{Key: "_id", Value: bson.D{{Key: "$in", Value: oids}}}},
-		options.Find().SetProjection(bson.D{{Key: "title", Value: 1}}))
+		options.Find().SetProjection(bson.D{{Key: "title", Value: 1}, {Key: "category", Value: 1}}))
 	if err != nil {
 		return nil, fmt.Errorf("items: leer títulos: %w", err)
 	}
@@ -110,7 +111,7 @@ func (s *ItemSource) Titles(ctx context.Context, itemIDs []string) (map[string]s
 		return nil, fmt.Errorf("items: leer títulos: %w", err)
 	}
 	for _, d := range docs {
-		out[d.ID.Hex()] = d.Title
+		out[d.ID.Hex()] = domain.ItemBrief{Title: d.Title, Category: d.Category}
 	}
 	return out, nil
 }

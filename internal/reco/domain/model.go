@@ -22,6 +22,13 @@ type ItemFeatures struct {
 	Municipality     string
 }
 
+// ItemBrief es el título y la categoría de un objeto, para el motivo
+// similar_to y para el arranque en frío (RF-04 y RF-05).
+type ItemBrief struct {
+	Title    string
+	Category string
+}
+
 // PopularAll es la clave de la lista de populares de todos los objetos (RF-04).
 const PopularAll = "all"
 
