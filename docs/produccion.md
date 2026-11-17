@@ -214,4 +214,4 @@ Ninguno es igual a los de staging (CA-02). **Sin `seed` en producción** (RF-05)
 | Capacidad (CA-08) | §2.8 | ✅ 534 MB libres |
 | Disco | §3 | ✅ 12 % |
 | p95 < 800 ms (RNF-01) | dentro de la VM, solo lectura (`tests/load` se niega fuera de local porque crea datos) | ✅ p95 1,0 ms |
-| Costo cero (RNF-02) | *Cost Management* | pendiente (persona) |
+| Costo cero (RNF-02) | *Cost Management* de `rg-vaiven` (2026-11-16): IP pública $1.55 (la única excepción del Art. XIII.1) y VM <$0.01 (capa gratuita) | ✅ |

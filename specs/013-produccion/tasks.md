@@ -72,7 +72,7 @@
   - Agente: `revisor-constitucion` · Depende de: T008, T010, 012-T011
   - Aceptación: lista completa (secretos, índices, sin seed, monitor, respaldo, humo, registros, HTTPS, capacidad, disco); p95 < 800 ms en producción (RNF-01); costo adicional cero en *Cost Management* (RNF-02); veredicto **CONFORME**; hito H5 (producción) marcado
   - Refs: RNF-01, RNF-02
-  - Avance (2026-11-16): lista de `docs/produccion.md` §10 llena. p95 del servidor en producción 1,0 ms (`/readyz`, que consulta MongoDB y Redis, y `/meta`; medido dentro de la VM, RNF-01). **Falta:** *Cost Management* sin costo adicional (RNF-02, lo revisa una persona en el portal), T005 y T008 cerrados, 012-T011 (BE-A) y el veredicto **CONFORME**.
+  - Avance (2026-11-16): lista de `docs/produccion.md` §10 llena. p95 del servidor en producción 1,0 ms (`/readyz`, que consulta MongoDB y Redis, y `/meta`; medido dentro de la VM, RNF-01). RNF-02 verificado en *Cost Management* (2026-11-16): solo la IP pública ($1.55) y la VM en capa gratuita (<$0.01). **Falta:** T005 y T008 cerrados, 012-T011 (BE-A) y el veredicto **CONFORME**.
 
 - [x] **T010** API de producción y paso a `main` (al final)
   - Archivos: `docs/produccion.md` (paso 6 y mediciones), `memoria.md` (solo anexar); y, si se aprueba, el mecanismo de despliegue de producción sin SSH (`deploy/remote-deploy.sh` o equivalente)
