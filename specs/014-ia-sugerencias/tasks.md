@@ -101,11 +101,14 @@
 
 ## Cierre
 
-- [ ] **T014** Variables en producción y revisión
+- [x] **T014** Variables en producción y revisión
   - Archivos: `docs/produccion.md` (sección IA), `memoria.md` (solo anexar)
   - Agente: `revisor-constitucion` · Depende de: T007, T013, 013-T008
   - Aceptación: pasos para definir `AI_API_KEY`, `AI_ENABLED` y `ASSISTANT_ENABLED` en el `.env` de la VM, sin valores; procedimiento de apagado; privacidad revisada (RF-07, RF-18); **CONFORME**
   - Refs: RF-06, RF-16, CA-06
+  - Hecho (2026-11-17, BE-B): `docs/produccion.md` §11 (clave por entorno, encendido, apagado de emergencia, privacidad y producción como v1.1); `scripts/set-ai-key.sh` (valida la clave con Google antes de tocar la VM, la envía como parámetro protegido, se niega si coincide con la del otro entorno y borra el run command; probado con archivos de prueba); variables de IA en `deploy/.env.example` y `deploy/production/.env.example` (apagadas, sin valores).
+  - **Revisión de conformidad (revisor-constitucion, 2026-11-17): CONFORME**, con evidencia: I (spec, plan y tasks aprobados por BE-B; revisados contra la constitución el 16 nov) · III (puertos declarados por cada caso de uso; prueba de arquitectura en verde) · IV (contrato `ai.yaml` antes del código; las 3 rutas registradas coinciden con el contrato; envoltorio de errores) · V (textos en es-MX; centavos en la tarjeta) · VI (`validator/v10`; clave como `Secret`, en cabecera; gitleaks sin fugas en la rama; los registros solo llevan la causa del error, nunca fotos, mensajes, respuestas ni ubicación) · VII (dominio y casos de uso: 100 %, 96,5 %, 97,3 % y 96,8 %; integración con MongoDB y Redis reales; 90 paquetes en verde) · VIII (`go.mod` sin cambios; sin SDK) · XII (una línea por módulo; la tarjeta de la 006 se reutiliza, no se copia) · XIII.1 (Gemini en capa gratuita) · XIV (Redis solo para caché y límites; sin Redis, sin caché en el proceso).
+  - Observaciones (no bloquean): (1) BE-A, dueño de la 014, debe confirmar en el PR (Art. XII.1); (2) revisar *Cost Management* después de encender la IA en staging; (3) Ollama (P2) no se hizo, es opcional; (4) el aviso de privacidad y «Seguridad de datos» de Play son de la app (mobile 014-T006); (5) depende de 013-T008, que solo espera la reversión hecha por otra persona.
 
 - [ ] **T015** Despliegue de la spec en Azure (staging)
   - Archivos: `memoria.md` (solo anexar)
