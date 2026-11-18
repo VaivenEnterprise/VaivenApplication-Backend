@@ -20,6 +20,7 @@ import (
 	tcmongo "github.com/testcontainers/testcontainers-go/modules/mongodb"
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/contract"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/respond"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth"
 	authhttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/adapter/http"
@@ -219,7 +220,8 @@ func newTrust(t *testing.T) *trust {
 	r.With(itAuth, authhttp.RequireActive(userRepo.ByID, clock)).Post("/items-probe", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusCreated)
 	})
-	tr.h = r
+	// Spec 016, T008: cada respuesta se valida contra el contrato OpenAPI.
+	tr.h = contract.Wrap(t, r, "/api/v1", "/api/v1/items-probe")
 	return tr
 }
 

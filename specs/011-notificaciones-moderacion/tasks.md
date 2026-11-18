@@ -1,6 +1,6 @@
 # Tareas 011 — Notificaciones y moderación (backend)
 
-- **Dueño:** BE-B · **Estado:** sin ejecutar · `[P]` = paralelizable
+- **Dueño:** BE-B · **Estado:** todas las tareas cerradas; desplegada en staging (actualizado en la spec 016, T007: DT-d) · `[P]` = paralelizable
 - **Línea de corte:** si no hay tiempo, se recorta primero el push (T007–T008). **No se recortan** el filtro de contenido (T009) ni los reportes (T010–T012): Google Play los exige para apps con contenido de usuarios. Los avisos dentro de la app (T002–T006) son P1.
 
 - [x] **T001** Contrato OpenAPI de avisos y reportes

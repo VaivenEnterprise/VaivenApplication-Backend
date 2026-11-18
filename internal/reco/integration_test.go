@@ -31,6 +31,7 @@ import (
 	drv "go.mongodb.org/mongo-driver/v2/mongo"
 
 	apihttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http"
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/contract"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/handler"
 	authhttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/adapter/http"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/images"
@@ -185,10 +186,11 @@ func newWorld(t *testing.T, enabled bool) *world {
 	if err != nil {
 		t.Fatal(err)
 	}
-	w.api = httptest.NewServer(apihttp.NewRouter(apihttp.Deps{
+	// Spec 016, T008: cada respuesta se valida contra el contrato OpenAPI.
+	w.api = httptest.NewServer(contract.Wrap(t, apihttp.NewRouter(apihttp.Deps{
 		Log: log, Modules: []apihttp.Module{m},
 		Meta: handler.MetaInfo{Name: "vaiven", Version: "test", Environment: "test", Features: handler.MetaFeatures{Recommendations: enabled}},
-	}))
+	}), ""))
 	t.Cleanup(w.api.Close)
 	w.seed()
 	return w

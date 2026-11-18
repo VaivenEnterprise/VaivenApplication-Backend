@@ -1,6 +1,7 @@
 # Pruebas de mutación de Go con gremlins (spec 017, T010).
 # Mide si las pruebas detectan cambios en el código de domain, usecase y
-# platform/security. Reporte en el resumen del job y como artefacto.
+# platform/security, y desde la spec 016 (T009) en el domain y el usecase de
+# cada módulo. Reporte en el resumen del job y como artefacto.
 name: Mutation
 
 on:
@@ -28,7 +29,7 @@ jobs:
   mutation:
     name: Gremlins
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 180 # spec 016, T009: todos los módulos
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

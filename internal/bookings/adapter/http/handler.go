@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/respond"
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/validate"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/bookings/domain"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/bookings/usecase"
@@ -45,6 +46,7 @@ type Module struct {
 	log           *slog.Logger
 	authenticate  func(http.Handler) http.Handler
 	requireActive func(http.Handler) http.Handler
+	v             *validate.Validator
 }
 
 // NewModule crea el módulo. Falla si falta una dependencia obligatoria.
@@ -52,7 +54,7 @@ func NewModule(d ModuleDeps) (*Module, error) {
 	if d.Service == nil || d.Authenticate == nil || d.RequireActive == nil || d.Log == nil {
 		return nil, errors.New("bookings: faltan dependencias del módulo HTTP")
 	}
-	return &Module{svc: d.Service, log: d.Log, authenticate: d.Authenticate, requireActive: d.RequireActive}, nil
+	return &Module{svc: d.Service, log: d.Log, authenticate: d.Authenticate, requireActive: d.RequireActive, v: validate.New()}, nil
 }
 
 // Name identifica el módulo.
@@ -127,16 +129,11 @@ func (m *Module) quote(w http.ResponseWriter, r *http.Request) {
 
 func (m *Module) create(w http.ResponseWriter, r *http.Request) {
 	var req createRequest
-	if err := decode(r, &req, false); err != nil {
+	if err := m.decode(r, &req, false); err != nil {
 		m.fail(w, r, err)
 		return
 	}
-	in, err := req.input()
-	if err != nil {
-		m.fail(w, r, err)
-		return
-	}
-	v, err := m.svc.Create(r.Context(), viewer(r), in)
+	v, err := m.svc.Create(r.Context(), viewer(r), req.input())
 	m.reply(w, r, http.StatusCreated, v, err)
 }
 
@@ -165,16 +162,12 @@ func (m *Module) list(w http.ResponseWriter, r *http.Request) {
 
 func (m *Module) accept(w http.ResponseWriter, r *http.Request) {
 	var req acceptRequest
-	if err := decode(r, &req, true); err != nil {
+	if err := m.decode(r, &req, true); err != nil {
 		m.fail(w, r, err)
 		return
 	}
 	var mp *string
 	if req.MeetingPoint != nil {
-		if req.MeetingPoint.Description == nil {
-			m.fail(w, r, invalid("meetingPoint.description", "es obligatorio"))
-			return
-		}
 		mp = req.MeetingPoint.Description
 	}
 	v, err := m.svc.Accept(r.Context(), viewer(r), chi.URLParam(r, "id"), mp)
@@ -183,7 +176,7 @@ func (m *Module) accept(w http.ResponseWriter, r *http.Request) {
 
 func (m *Module) reject(w http.ResponseWriter, r *http.Request) {
 	var req reasonRequest
-	if err := decode(r, &req, true); err != nil {
+	if err := m.decode(r, &req, true); err != nil {
 		m.fail(w, r, err)
 		return
 	}
@@ -193,7 +186,7 @@ func (m *Module) reject(w http.ResponseWriter, r *http.Request) {
 
 func (m *Module) cancel(w http.ResponseWriter, r *http.Request) {
 	var req reasonRequest
-	if err := decode(r, &req, true); err != nil {
+	if err := m.decode(r, &req, true); err != nil {
 		m.fail(w, r, err)
 		return
 	}
@@ -203,14 +196,18 @@ func (m *Module) cancel(w http.ResponseWriter, r *http.Request) {
 
 func (m *Module) meetingPoint(w http.ResponseWriter, r *http.Request) {
 	var req meetingPointJSON
-	if err := decode(r, &req, false); err != nil {
+	if err := m.decode(r, &req, false); err != nil {
 		m.fail(w, r, err)
-		return
-	}
-	if req.Description == nil {
-		m.fail(w, r, invalid("description", "es obligatorio"))
 		return
 	}
 	v, err := m.svc.SetMeetingPoint(r.Context(), viewer(r), chi.URLParam(r, "id"), *req.Description)
 	m.reply(w, r, http.StatusOK, v, err)
+}
+
+// decode lee el cuerpo y lo valida en la frontera con validator/v10 (Art. VI.2).
+func (m *Module) decode(r *http.Request, dst any, optional bool) error {
+	if err := decode(r, dst, optional); err != nil {
+		return err
+	}
+	return m.v.Struct(dst, domain.MessageInvalidData)
 }

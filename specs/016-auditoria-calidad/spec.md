@@ -1,7 +1,7 @@
 # Spec 016 — Auditoría de calidad y consolidación (backend)
 
 - **Dueño:** BE-B (coordina) con BE-A (corrige lo de sus specs) · **Prioridad:** P0 para la entrega · **Ventana:** 26 nov–1 dic · **Depende de:** 001–015 y 017 (las audita); empieza cuando la 015 termine su despliegue verificado (Art. XIII.5)
-- **Constitución:** v2.0.0 · **Estado:** Borrador (2026-11-17), pendiente de aprobación (Art. I y X.5)
+- **Constitución:** v2.0.0 · **Estado:** Aprobada por BE-B (2026-11-17). El reparto de correcciones entre BE-A y BE-B (§6) y la relación con la spec 018 (sus tareas T010 y T011) siguen pendientes y no bloquean la fase de evaluación
 - **Antecedente:** la antigua spec 016 (siete categorías de pruebas y pipeline DevSecOps, D-113) se eliminó el 2026-11-01 (D-115). El pipeline quedó en la 017 y la integración en la 012. Esta 016 es **nueva**: reutiliza el número para cerrar lo que ninguna spec cubre y no repite lo que ya hacen la 012 y la 017.
 
 ## 1. Objetivo y por qué
