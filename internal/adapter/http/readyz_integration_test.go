@@ -14,6 +14,7 @@ import (
 
 	tcmongo "github.com/testcontainers/testcontainers-go/modules/mongodb"
 
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/contract"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/handler"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/platform/mongodb"
 )
@@ -43,11 +44,12 @@ func TestIntegrationReadyz(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = client.Disconnect(context.Background()) })
 
-	srv := httptest.NewServer(NewRouter(Deps{
+	// Spec 016, T008: cada respuesta se valida contra el contrato OpenAPI.
+	srv := httptest.NewServer(contract.Wrap(t, NewRouter(Deps{
 		Log:    slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Pinger: client,
 		Meta:   handler.MetaInfo{Name: "vaiven-api", Version: "test", Environment: "test"},
-	}))
+	}), ""))
 	t.Cleanup(srv.Close)
 
 	// CA-04: con MongoDB activo, 200.

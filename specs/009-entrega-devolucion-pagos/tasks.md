@@ -1,6 +1,6 @@
 # Tareas 009 — Entrega, devolución y pagos (backend)
 
-- **Dueño:** BE-A · **Estado:** sin ejecutar · `[P]` = paralelizable
+- **Dueño:** BE-A · **Estado:** todas las tareas cerradas; desplegada en staging (actualizado en la spec 016, T007: DT-d) · `[P]` = paralelizable
 - **T001 se integra el primer día.** Si el calendario se atrasa, ver línea de corte (ROADMAP §6): primero se entregan T001–T009 (evidencia + QR); pagos y retrasos son T010–T013.
 
 - [x] **T001** Contrato OpenAPI de entrega, devolución y pagos

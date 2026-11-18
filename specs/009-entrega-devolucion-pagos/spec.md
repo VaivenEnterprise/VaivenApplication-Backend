@@ -1,7 +1,7 @@
 # Spec 009 — Entrega, devolución y pagos registrados (backend)
 
 - **Dueño:** BE-A · **Prioridad:** P0 · **Ventana:** 13–17 nov · **Depende de:** 004, 007
-- **Constitución:** v2.0.0 · **Políticas:** POL-05, 06, 07, 08, 13 · **Estado:** Borrador
+- **Constitución:** v2.0.0 · **Políticas:** POL-05, 06, 07, 08, 13 · **Estado:** Implementada y desplegada en staging (tareas T001–T015 cerradas; T015 verificada en staging). Se implementó antes de su aprobación (desviación del Art. I.1 registrada en `memoria.md`); la aprobación formal la registra su dueño, BE-A (actualizado en la spec 016, T007: DT-d)
 
 ## 1. Objetivo y por qué
 Documentar el momento más delicado: la entrega y la devolución **presenciales**, con estado del objeto, fotografías y confirmación de ambas partes mediante QR, y registrar el pago acordado. El QR confirma una etapa; **no** confirma el pago, la identidad ni el estado por sí solo.

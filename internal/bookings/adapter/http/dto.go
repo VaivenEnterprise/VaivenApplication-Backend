@@ -19,42 +19,28 @@ import (
 
 // --- peticiones ---
 
+// createRequest se valida en la frontera con validator/v10 (Art. VI.2; spec
+// 016, T005): forma y presencia aquí, reglas de negocio en el dominio.
 type createRequest struct {
-	ItemID             *string `json:"itemId"`
-	StartDate          *string `json:"startDate"`
-	EndDate            *string `json:"endDate"`
-	PaymentMode        *string `json:"paymentMode"`
-	AcceptedTotalCents *int64  `json:"acceptedTotalCents"`
+	ItemID             *string `json:"itemId" validate:"required,nonempty"`
+	StartDate          *string `json:"startDate" validate:"required"`
+	EndDate            *string `json:"endDate" validate:"required"`
+	PaymentMode        *string `json:"paymentMode" validate:"required"`
+	AcceptedTotalCents *int64  `json:"acceptedTotalCents" validate:"required,nonnegative"`
 }
 
-func (r createRequest) input() (usecase.CreateInput, error) {
-	var d []shared.Detail
-	req := func(field string, ok bool) {
-		if !ok {
-			d = append(d, shared.Detail{Field: field, Issue: "es obligatorio"})
-		}
-	}
-	req("itemId", r.ItemID != nil && *r.ItemID != "")
-	req("startDate", r.StartDate != nil)
-	req("endDate", r.EndDate != nil)
-	req("paymentMode", r.PaymentMode != nil)
-	req("acceptedTotalCents", r.AcceptedTotalCents != nil)
-	if r.AcceptedTotalCents != nil && *r.AcceptedTotalCents < 0 {
-		d = append(d, shared.Detail{Field: "acceptedTotalCents", Issue: "no puede ser negativo"})
-	}
-	if len(d) > 0 {
-		return usecase.CreateInput{}, shared.NewValidation(domain.MessageInvalidData, d...)
-	}
+// input convierte una petición ya validada (Module.decode).
+func (r createRequest) input() usecase.CreateInput {
 	return usecase.CreateInput{
 		QuoteInput: usecase.QuoteInput{
 			ItemID: *r.ItemID, Start: *r.StartDate, End: *r.EndDate, PaymentMode: domain.PaymentMode(*r.PaymentMode),
 		},
 		AcceptedTotalCents: *r.AcceptedTotalCents,
-	}, nil
+	}
 }
 
 type meetingPointJSON struct {
-	Description *string `json:"description"`
+	Description *string `json:"description" validate:"required"`
 }
 
 type acceptRequest struct {

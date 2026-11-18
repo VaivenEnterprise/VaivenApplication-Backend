@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/respond"
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/validate"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth"
 	bookings "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/bookings/domain"
 	shared "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/domain"
@@ -42,6 +43,7 @@ type Module struct {
 	log          *slog.Logger
 	authenticate func(http.Handler) http.Handler
 	writeBooking WriteBooking
+	v            *validate.Validator
 }
 
 // NewModule crea el módulo. Falla si falta una dependencia obligatoria.
@@ -49,7 +51,7 @@ func NewModule(d ModuleDeps) (*Module, error) {
 	if d.Service == nil || d.Authenticate == nil || d.WriteBooking == nil || d.Log == nil {
 		return nil, errors.New("payments: faltan dependencias del módulo HTTP")
 	}
-	return &Module{svc: d.Service, log: d.Log, authenticate: d.Authenticate, writeBooking: d.WriteBooking}, nil
+	return &Module{svc: d.Service, log: d.Log, authenticate: d.Authenticate, writeBooking: d.WriteBooking, v: validate.New()}, nil
 }
 
 // Name identifica el módulo.
@@ -70,7 +72,7 @@ func (m *Module) fail(w http.ResponseWriter, r *http.Request, err error) {
 
 func (m *Module) report(w http.ResponseWriter, r *http.Request) {
 	var req reportRequest
-	if err := decode(r, &req); err != nil {
+	if err := m.decode(r, &req); err != nil {
 		m.fail(w, r, err)
 		return
 	}
@@ -89,4 +91,12 @@ func (m *Module) confirm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	m.writeBooking(w, r, id)
+}
+
+// decode lee el cuerpo y lo valida en la frontera con validator/v10 (Art. VI.2).
+func (m *Module) decode(r *http.Request, dst any) error {
+	if err := decode(r, dst); err != nil {
+		return err
+	}
+	return m.v.Struct(dst, bookings.MessageInvalidData)
 }

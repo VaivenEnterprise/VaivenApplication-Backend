@@ -17,6 +17,7 @@ import (
 	tcmongo "github.com/testcontainers/testcontainers-go/modules/mongodb"
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/contract"
 	bookingsmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/bookings/adapter/mongo"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/bookings/usecase"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/chat"
@@ -136,7 +137,8 @@ func router(t *testing.T) (http.Handler, map[string]string, *itNotifier) {
 	for _, m := range []interface{ Register(chi.Router) }{itemsMod, searchMod, bookMod} {
 		m.Register(r)
 	}
-	return r, ids, not
+	// Spec 016, T008: cada respuesta se valida contra el contrato OpenAPI.
+	return contract.Wrap(t, r, "/api/v1"), ids, not
 }
 
 func call(t *testing.T, h http.Handler, user, method, path, body string) (int, map[string]any) {
@@ -230,6 +232,13 @@ func TestIntegrationBookingFlow(t *testing.T) {
 	if searchHas(t, h, r3, s, e, itemID) {
 		t.Error("aceptada: no debe aparecer en esas fechas")
 	}
+	// Cambiar el punto de encuentro de la aceptada (spec 016, T008: ruta ejercida).
+	if code, mp := call(t, h, own, "POST", "/bookings/"+b1["id"].(string)+"/meeting-point", `{"description":"Metro Viveros"}`); code != 200 || mp["meetingPoint"].(map[string]any)["description"] != "Metro Viveros" {
+		t.Errorf("punto de encuentro = %d %v", code, mp)
+	}
+	if code, _ := call(t, h, own, "POST", "/bookings/"+b1["id"].(string)+"/meeting-point", `{}`); code != 400 {
+		t.Errorf("punto de encuentro sin descripción = %d", code)
+	}
 	if !searchHas(t, h, r3, day(8), day(9), itemID) {
 		t.Error("otras fechas siguen disponibles")
 	}
@@ -252,14 +261,22 @@ func TestIntegrationBookingFlow(t *testing.T) {
 	if !searchHas(t, h, r3, s, e, itemID) {
 		t.Error("CA-08: debe volver a estar disponible")
 	}
+	// Rechazar una pendiente (spec 016, T008: ruta ejercida).
+	code, b3 := call(t, h, r3, "POST", "/bookings", body(day(10), day(10), 3500))
+	if code != 201 {
+		t.Fatalf("tercera solicitud = %d %v", code, b3)
+	}
+	if code, rej := call(t, h, own, "POST", "/bookings/"+b3["id"].(string)+"/reject", `{"reason":"No me queda"}`); code != 200 || rej["status"] != "rejected" {
+		t.Errorf("rechazar = %d %v", code, rej)
+	}
 	code, page := call(t, h, own, "GET", "/me/bookings?role=owner", "")
-	if code != 200 || len(page["items"].([]any)) != 2 {
+	if code != 200 || len(page["items"].([]any)) != 3 {
 		t.Errorf("mis reservas = %d %v", code, page)
 	}
 	if code, _ := call(t, h, own, "DELETE", "/items/"+itemID, ""); code != 204 {
 		t.Errorf("eliminar sin reservas activas = %d", code)
 	}
-	want := []string{"booking.requested", "booking.requested", "booking.accepted", "booking.rejected", "booking.cancelled"}
+	want := []string{"booking.requested", "booking.requested", "booking.accepted", "booking.rejected", "booking.meeting_point", "booking.cancelled", "booking.requested", "booking.rejected"}
 	if fmt.Sprint(not.types) != fmt.Sprint(want) {
 		t.Errorf("avisos = %v", not.types)
 	}

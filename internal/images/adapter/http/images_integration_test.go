@@ -21,6 +21,7 @@ import (
 	"time"
 
 	apihttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http"
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/contract"
 	authhttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/adapter/http"
 	shared "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/domain"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/images"
@@ -188,7 +189,8 @@ func newITEnv(t *testing.T) *itEnv {
 		t.Fatal(err)
 	}
 	router := apihttp.NewRouter(apihttp.Deps{Log: log, Modules: []apihttp.Module{mod}})
-	api := httptest.NewServer(router)
+	// Spec 016, T008: cada respuesta se valida contra el contrato OpenAPI.
+	api := httptest.NewServer(contract.Wrap(t, router, ""))
 	t.Cleanup(api.Close)
 	return &itEnv{t: t, api: api, fake: fake, fakeTS: fakeTS, svc: svc, jwt: jwt}
 }

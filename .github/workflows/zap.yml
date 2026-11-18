@@ -1,0 +1,54 @@
+# Seguridad dinámica: ZAP baseline contra staging (spec 016, T010; RF-10,
+# CA-06; plan P-06). Solo análisis pasivo (spider y reglas pasivas), solo a
+# mano y solo contra staging: nunca producción (Art. XIII.1). El informe
+# queda como artefacto; las alertas Medias o Altas pasan al registro de deuda
+# (docs/calidad/deuda.md) con su corrección o su justificación.
+name: ZAP baseline
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Escribe "staging" para confirmar que el destino es staging'
+        required: true
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zap-staging
+  cancel-in-progress: false
+
+jobs:
+  zap:
+    name: ZAP baseline (staging)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      # Solo staging: la URL es pública (smoke.yml usa la misma variable).
+      TARGET: ${{ vars.STAGING_URL || 'https://vaiven-staging.westus2.cloudapp.azure.com:8443' }}
+    steps:
+      - name: Refuse anything but staging
+        shell: bash
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          set -euo pipefail
+          test "$CONFIRM" = staging || { echo "::error::Confirma escribiendo staging." >&2; exit 1; }
+          case "$TARGET" in
+            https://*staging*) ;;
+            *) echo "::error::El destino no es staging: $TARGET" >&2; exit 1 ;;
+          esac
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: ZAP baseline scan
+        uses: zaproxy/action-baseline@41aee98ebc7cf2802c3beae4e7d4336413a21e43 # v0.9.0
+        with:
+          target: ${{ env.TARGET }}/api/v1/meta
+          rules_file_name: .zap/rules.tsv
+          cmd_options: '-a -j'
+          allow_issue_writing: false
+          fail_action: false
+          artifact_name: zap-baseline-staging
