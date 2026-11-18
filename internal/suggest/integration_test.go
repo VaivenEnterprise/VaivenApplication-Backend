@@ -24,6 +24,7 @@ import (
 	tcmongo "github.com/testcontainers/testcontainers-go/modules/mongodb"
 
 	apihttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http"
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/contract"
 	aimongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ai/adapter/mongo"
 	aidomain "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ai/domain"
 	authhttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/adapter/http"
@@ -160,7 +161,8 @@ func newEnv(t *testing.T, client *mongodb.Client, dbName string, enabled bool, m
 	if err != nil {
 		t.Fatal(err)
 	}
-	api := httptest.NewServer(apihttp.NewRouter(apihttp.Deps{Log: log, Modules: []apihttp.Module{m}}))
+	// Spec 016, T008: cada respuesta se valida contra el contrato OpenAPI.
+	api := httptest.NewServer(contract.Wrap(t, apihttp.NewRouter(apihttp.Deps{Log: log, Modules: []apihttp.Module{m}}), ""))
 	t.Cleanup(api.Close)
 	return &env{t: t, api: api, cloud: cloud, ai: ai, jwt: jwt}
 }
@@ -281,9 +283,13 @@ func TestIntegrationListingSuggestions(t *testing.T) {
 // CA-06: el repositorio no contiene la clave del proveedor. Busca en lo
 // versionado y en lo nuevo (sin lo ignorado por .gitignore) cualquier
 // asignación de AI_API_KEY con valor. Se excluye este archivo, porque la
-// expresión de búsqueda coincidiría consigo misma.
+// expresión de búsqueda coincidiría consigo misma. La clase usa un tabulador
+// y un retorno de carro reales (cadena interpretada): en una expresión POSIX,
+// «\t» dentro de corchetes son dos caracteres, y sin excluir «\r» un
+// AI_API_KEY= vacío en un archivo con finales CRLF daba un falso positivo en
+// Windows (spec 016, T007: DT-l).
 func TestIntegrationNoProviderKeyInRepo(t *testing.T) {
-	out, err := exec.Command("git", "grep", "--untracked", "-n", "-E", `AI_API_KEY=[^ \t$"'{]+`,
+	out, err := exec.Command("git", "grep", "--untracked", "-n", "-E", "AI_API_KEY=[^ \t\r$\"'{]+",
 		"--", ":(top)", ":(top,exclude,glob)**/*.md", ":(top,exclude)internal/suggest/integration_test.go").Output()
 	var exitErr *exec.ExitError
 	if err != nil && (!errors.As(err, &exitErr) || exitErr.ExitCode() != 1) {

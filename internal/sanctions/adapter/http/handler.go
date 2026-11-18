@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/respond"
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/validate"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth"
 	shared "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/domain"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/sanctions/domain"
@@ -40,6 +41,7 @@ type Module struct {
 	log   *slog.Logger
 	auth  func(http.Handler) http.Handler
 	admin func(http.Handler) http.Handler
+	v     *validate.Validator
 }
 
 // NewModule crea el módulo. Falla si falta una dependencia obligatoria.
@@ -47,7 +49,7 @@ func NewModule(d ModuleDeps) (*Module, error) {
 	if d.Service == nil || d.Authenticate == nil || d.RequireAdmin == nil || d.Log == nil {
 		return nil, errors.New("sanctions: faltan dependencias del módulo HTTP")
 	}
-	return &Module{svc: d.Service, log: d.Log, auth: d.Authenticate, admin: d.RequireAdmin}, nil
+	return &Module{svc: d.Service, log: d.Log, auth: d.Authenticate, admin: d.RequireAdmin, v: validate.New()}, nil
 }
 
 // Name identifica el módulo.
@@ -97,6 +99,13 @@ func (m *Module) apply(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		m.fail(w, r, shared.NewValidation("El cuerpo de la petición no es un JSON válido."))
+		return
+	}
+	// Validación en la frontera con validator/v10 (Art. VI.2; spec 016, T006):
+	// los campos son de texto y sus reglas (tipo, motivo, fechas) las aplica
+	// el dominio con sus propios mensajes.
+	if err := m.v.Struct(&req, domain.MessageInvalidData); err != nil {
+		m.fail(w, r, err)
 		return
 	}
 	adminID, _ := auth.UserID(r.Context())

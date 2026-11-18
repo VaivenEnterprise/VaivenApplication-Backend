@@ -19,6 +19,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	tcmongo "github.com/testcontainers/testcontainers-go/modules/mongodb"
 
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/contract"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/respond"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth"
 	bookingshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/bookings/adapter/http"
@@ -192,7 +193,8 @@ func newFlow(t *testing.T) *flow {
 	bookMod.Register(r)
 	hoMod.Register(r)
 	mod.Register(r)
-	f.h = r
+	// Spec 016, T008: cada respuesta se valida contra el contrato OpenAPI.
+	f.h = contract.Wrap(t, r, "/api/v1")
 	return f
 }
 

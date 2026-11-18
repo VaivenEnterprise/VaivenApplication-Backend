@@ -16,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	tcmongo "github.com/testcontainers/testcontainers-go/modules/mongodb"
 
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/contract"
 	images "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/images/domain"
 	itemsmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/items/adapter/mongo"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/items/usecase"
@@ -119,7 +120,8 @@ func newIntegrationRouter(t *testing.T) (http.Handler, *string) {
 	}
 	r := chi.NewRouter()
 	m.Register(r)
-	return r, busy
+	// Spec 016, T008: cada respuesta se valida contra el contrato OpenAPI.
+	return contract.Wrap(t, r, "/api/v1"), busy
 }
 
 func call(t *testing.T, h http.Handler, user, method, path, body string) (int, map[string]any) {
@@ -132,6 +134,12 @@ func call(t *testing.T, h http.Handler, user, method, path, body string) (int, m
 func TestIntegrationItemLifecycle(t *testing.T) {
 	h, busy := newIntegrationRouter(t)
 	const ana, beto = "ana", "beto"
+
+	// Catálogo de categorías (spec 016, T008: ruta ejercida contra el contrato).
+	// La respuesta es un arreglo; su forma la valida el contrato.
+	if code, _ := call(t, h, ana, "GET", "/categories", ""); code != 200 {
+		t.Fatalf("categorías = %d", code)
+	}
 
 	// CA-01: préstamo con precio → 400 en pricePerDayCents.
 	loan := strings.NewReplacer(`"modality": "rent"`, `"modality": "loan"`, `"priceSource": "suggested"`, `"priceSource": "manual"`).Replace(validCreate)

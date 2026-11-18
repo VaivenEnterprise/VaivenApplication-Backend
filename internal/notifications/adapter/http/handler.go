@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/respond"
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/validate"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth"
 	shared "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/domain"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/notifications/domain"
@@ -43,6 +44,7 @@ type Module struct {
 	svc  Service
 	log  *slog.Logger
 	auth func(http.Handler) http.Handler
+	v    *validate.Validator
 }
 
 // NewModule crea el módulo. Falla si falta una dependencia obligatoria.
@@ -50,7 +52,7 @@ func NewModule(d ModuleDeps) (*Module, error) {
 	if d.Service == nil || d.Authenticate == nil || d.Log == nil {
 		return nil, errors.New("notifications: faltan dependencias del módulo HTTP")
 	}
-	return &Module{svc: d.Service, log: d.Log, auth: d.Authenticate}, nil
+	return &Module{svc: d.Service, log: d.Log, auth: d.Authenticate, v: validate.New()}, nil
 }
 
 // Name identifica el módulo.
@@ -92,6 +94,11 @@ func (m *Module) decode(w http.ResponseWriter, r *http.Request, v any) bool {
 			return false
 		}
 		m.fail(w, r, shared.NewValidation("El cuerpo de la petición no es un JSON válido."))
+		return false
+	}
+	// Validación en la frontera con validator/v10 (Art. VI.2; spec 016, T006).
+	if err := m.v.Struct(v, domain.MessageInvalidData); err != nil {
+		m.fail(w, r, err)
 		return false
 	}
 	return true
@@ -216,21 +223,13 @@ func (m *Module) markRead(w http.ResponseWriter, r *http.Request) {
 }
 
 type tokenRequest struct {
-	Token    *string `json:"token"`
-	Platform *string `json:"platform"`
+	Token    *string `json:"token" validate:"required"`
+	Platform *string `json:"platform" validate:"required"`
 }
 
 func (m *Module) registerToken(w http.ResponseWriter, r *http.Request) {
 	var req tokenRequest
 	if !m.decode(w, r, &req) {
-		return
-	}
-	if req.Token == nil {
-		m.fail(w, r, invalid("token", "es obligatorio"))
-		return
-	}
-	if req.Platform == nil {
-		m.fail(w, r, invalid("platform", "es obligatorio"))
 		return
 	}
 	if err := m.svc.RegisterToken(r.Context(), userID(r), *req.Token, *req.Platform); err != nil {
@@ -242,13 +241,9 @@ func (m *Module) registerToken(w http.ResponseWriter, r *http.Request) {
 
 func (m *Module) deleteToken(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Token *string `json:"token"`
+		Token *string `json:"token" validate:"required"`
 	}
 	if !m.decode(w, r, &req) {
-		return
-	}
-	if req.Token == nil {
-		m.fail(w, r, invalid("token", "es obligatorio"))
 		return
 	}
 	if err := m.svc.UnregisterToken(r.Context(), userID(r), *req.Token); err != nil {

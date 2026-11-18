@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"strconv"
 	"time"
 
 	bookings "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/bookings/domain"
@@ -17,36 +16,23 @@ import (
 // --- peticiones ---
 
 type photoRefJSON struct {
-	PublicID *string `json:"publicId"`
+	PublicID *string `json:"publicId" validate:"required,nonempty"`
 }
 
+// evidenceRequest se valida en la frontera con validator/v10 (Art. VI.2; spec
+// 016, T005); los límites (3–500, 1–5 fotos) los aplica el dominio.
 type evidenceRequest struct {
-	ConditionNotes *string        `json:"conditionNotes"`
-	Photos         []photoRefJSON `json:"photos"`
+	ConditionNotes *string        `json:"conditionNotes" validate:"required"`
+	Photos         []photoRefJSON `json:"photos" validate:"required,dive"`
 }
 
-// input valida la forma del cuerpo; los límites (3–500, 1–5 fotos) los aplica
-// el dominio.
-func (r evidenceRequest) input() (string, []images.Ref, error) {
-	var d []shared.Detail
-	if r.ConditionNotes == nil {
-		d = append(d, shared.Detail{Field: "conditionNotes", Issue: "es obligatorio"})
-	}
-	if r.Photos == nil {
-		d = append(d, shared.Detail{Field: "photos", Issue: "es obligatorio"})
-	}
+// input convierte una petición ya validada (Module.decode).
+func (r evidenceRequest) input() (string, []images.Ref) {
 	refs := make([]images.Ref, 0, len(r.Photos))
-	for i, p := range r.Photos {
-		if p.PublicID == nil || *p.PublicID == "" {
-			d = append(d, shared.Detail{Field: "photos[" + strconv.Itoa(i) + "].publicId", Issue: "es obligatorio"})
-			continue
-		}
+	for _, p := range r.Photos {
 		refs = append(refs, images.Ref{PublicID: *p.PublicID})
 	}
-	if len(d) > 0 {
-		return "", nil, shared.NewValidation(bookings.MessageInvalidData, d...)
-	}
-	return *r.ConditionNotes, refs, nil
+	return *r.ConditionNotes, refs
 }
 
 type confirmRequest struct {

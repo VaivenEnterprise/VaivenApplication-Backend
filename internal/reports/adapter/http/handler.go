@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/respond"
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/validate"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth"
 	shared "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/domain"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/reports/domain"
@@ -44,6 +45,7 @@ type Module struct {
 	log   *slog.Logger
 	auth  func(http.Handler) http.Handler
 	admin func(http.Handler) http.Handler
+	v     *validate.Validator
 }
 
 // NewModule crea el módulo. Falla si falta una dependencia obligatoria.
@@ -51,7 +53,7 @@ func NewModule(d ModuleDeps) (*Module, error) {
 	if d.Service == nil || d.Authenticate == nil || d.RequireAdmin == nil || d.Log == nil {
 		return nil, errors.New("reports: faltan dependencias del módulo HTTP")
 	}
-	return &Module{svc: d.Service, log: d.Log, auth: d.Authenticate, admin: d.RequireAdmin}, nil
+	return &Module{svc: d.Service, log: d.Log, auth: d.Authenticate, admin: d.RequireAdmin, v: validate.New()}, nil
 }
 
 // Name identifica el módulo.
@@ -98,6 +100,11 @@ func (m *Module) decode(w http.ResponseWriter, r *http.Request, v any) bool {
 			return false
 		}
 		m.fail(w, r, shared.NewValidation("El cuerpo de la petición no es un JSON válido."))
+		return false
+	}
+	// Validación en la frontera con validator/v10 (Art. VI.2; spec 016, T006).
+	if err := m.v.Struct(v, domain.MessageInvalidData); err != nil {
+		m.fail(w, r, err)
 		return false
 	}
 	return true
@@ -195,9 +202,9 @@ func isObjectID(s string) bool {
 // --- handlers ---
 
 type createRequest struct {
-	TargetType *string `json:"targetType"`
-	TargetID   *string `json:"targetId"`
-	Reason     *string `json:"reason"`
+	TargetType *string `json:"targetType" validate:"required"`
+	TargetID   *string `json:"targetId" validate:"required"`
+	Reason     *string `json:"reason" validate:"required"`
 	Details    *string `json:"details"`
 }
 
@@ -205,15 +212,6 @@ func (m *Module) create(w http.ResponseWriter, r *http.Request) {
 	var req createRequest
 	if !m.decode(w, r, &req) {
 		return
-	}
-	for _, f := range []struct {
-		name string
-		v    *string
-	}{{"targetType", req.TargetType}, {"targetId", req.TargetID}, {"reason", req.Reason}} {
-		if f.v == nil {
-			m.fail(w, r, invalid(f.name, "es obligatorio"))
-			return
-		}
 	}
 	rep, created, err := m.svc.Create(r.Context(), userID(r), usecase.Input{
 		TargetType: *req.TargetType, TargetID: *req.TargetID, Reason: *req.Reason, Details: req.Details,
@@ -266,21 +264,13 @@ func (m *Module) list(w http.ResponseWriter, r *http.Request) {
 }
 
 type resolveRequest struct {
-	Action *string `json:"action"`
-	Note   *string `json:"note"`
+	Action *string `json:"action" validate:"required"`
+	Note   *string `json:"note" validate:"required"`
 }
 
 func (m *Module) resolve(w http.ResponseWriter, r *http.Request) {
 	var req resolveRequest
 	if !m.decode(w, r, &req) {
-		return
-	}
-	if req.Action == nil {
-		m.fail(w, r, invalid("action", "es obligatorio"))
-		return
-	}
-	if req.Note == nil {
-		m.fail(w, r, invalid("note", "es obligatorio"))
 		return
 	}
 	v, err := m.svc.Resolve(r.Context(), userID(r), chi.URLParam(r, "id"), *req.Action, *req.Note)

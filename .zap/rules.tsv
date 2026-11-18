@@ -1,0 +1,3 @@
+# Reglas de ZAP baseline (spec 016, T010). Formato: id<TAB>IGNORE|WARN|FAIL<TAB>motivo.
+# Vacío a propósito: todas las alertas se reportan con su nivel por defecto y
+# se clasifican a mano en docs/calidad/deuda.md tras cada corrida.
