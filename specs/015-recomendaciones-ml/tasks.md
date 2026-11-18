@@ -1,6 +1,6 @@
 # Tareas 015 — Recomendaciones con ML (backend)
 
-- **Dueño:** BE-B · **Estado:** en curso (10/11) · `[P]` = paralelizable
+- **Dueño:** BE-B · **Estado:** completa (11/11), desplegada y verificada en staging el 2026-11-17 · `[P]` = paralelizable
 - Ventana del ROADMAP: 23 nov–1 dic (v1.1, detrás de `RECO_ENABLED`). No empieza hasta que la 014 termine su despliegue verificado (Art. XIII.5) y la spec esté aprobada (Art. I).
 - Cada tarea termina con `make fmt lint test` (y `go test -tags=integration` del paquete si tiene integración) en verde.
 
@@ -74,11 +74,12 @@
   - Refs: RF-07, RF-11, DoD
   - **Hecho (2026-11-17, BE-B):** `docs/ml/evaluacion.md` (resultados reales; híbrido Hit@10 0,263 frente a 0,087 de popularidad; barrido de α con el pipeline real), `docs/ml/modelo.md` (datos, fórmulas, supuestos, límites y por qué no una red neuronal) y `docs/produccion.md` §12. **α pasa de 0.7 a 0.6** (mejor por poco en Hit@10 y MRR) y los pesos 3/1 se mantienen (los datos sintéticos no pueden medirlos). Colecciones renombradas en plural (§6.1). Revisión de conformidad en `spec.md` §8: **CONFORME CON OBSERVACIONES**. BE-A confirmó la lectura en solo lectura de `bookings`, `items` y `users` (el responsable lo informó el 2026-11-17: «Sí, ya confirmó»).
 
-- [ ] **T011** Despliegue de la spec en Azure (staging)
+- [x] **T011** Despliegue de la spec en Azure (staging)
   - Archivos: `memoria.md` (solo anexar), `docs/produccion.md` (registro)
   - Agente: `devops-mcp` · Depende de: T010 (y todas las anteriores `[x]`)
   - Aceptación: `make fmt lint test` en verde; PR `spec/SPEC-15` → `develop` fusionado y `deploy-staging.yml` en verde (Art. XIII.5, enmienda 2.0.0); `RECO_ENABLED=true` en el `.env` de staging; `seed-interactions` y `recompute-recommendations` en staging; `/healthz` y `/readyz` responden 200 por HTTPS sin `-k`; cada endpoint de `api/paths/recommendations.yaml` responde con una petición correcta y una inválida en el formato del Art. IV; p95 de `GET /recommendations` < 400 ms (RNF-01); registros sin secretos ni datos personales; cuenta de prueba borrada al terminar; resultado anotado en `memoria.md`. **La spec siguiente no empieza hasta que esta tarea pase.**
   - Refs: Art. XIII.5, RNF-01
+  - **Hecho (2026-11-17, BE-B):** PR #101 (`spec/SPEC-15` → `develop`); CI, Smoke, Mutation y `deploy-staging.yml` en verde para `d699a05`. En staging (Cloud Shell): `set-reco.sh staging --enable` (nuevo; solo cambia `RECO_ENABLED`, recrea la API con la misma imagen y espera `/meta`), `seed-interactions` (1 517 interacciones de 300 personas sintéticas sobre los 3 objetos activos) y `recompute-recommendations` (1 524 interacciones, 3 objetos, 4 cuentas dadas de baja purgadas). Verificación por HTTPS sin `-k`: `/healthz` y `/readyz` 200 (Redis `ok`); `/meta` con `recommendations: true`; `GET` 200 (arranque en frío, `nextCursor: null`) y 400 con `limit=0`; `POST events` 204, 400 y 404; `DELETE history` 204 y 401 sin sesión. **p95 de `GET /recommendations` = 205 ms** con conexión reutilizada (p50 149 ms; la red sola, medida con `/meta`, da p50 126 ms: el servidor tarda unos 20 ms). Registros (`check-logs.sh staging 1h`): 190 líneas, 0 contraseñas, tokens, claves, correos de prueba ni ids de objeto. Cuentas de prueba dadas de baja.
 
 | Total | 11 tareas |
 |---|---|

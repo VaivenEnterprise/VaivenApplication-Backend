@@ -1,7 +1,7 @@
 # Spec 015 — Recomendaciones con machine learning (backend)
 
 - **Dueño:** BE-B (con BE-A en revisión) · **Prioridad:** P1 · **Ventana:** 23 nov–1 dic · **Depende de:** 003, 005, 006, 007, 010, 013 (y del `Meta.features` que agrega la 014)
-- **Constitución:** v2.0.0 · **Estado:** Aprobada por BE-B (2026-11-17) tras la revisión contra la constitución; BE-A confirmó la lectura de `bookings`, `items` y `users` (P-05)
+- **Constitución:** v2.0.0 · **Estado:** Implementada, desplegada y verificada en staging (T011, 2026-11-17); aprobada por BE-B tras la revisión contra la constitución; BE-A confirmó la lectura de `bookings`, `items` y `users` (P-05)
 
 ## 1. Objetivo y por qué
 La entrega oficial (1–4 dic) exige integrar **ML** además de IA generativa (spec 014). El ML de VAIVÉN son las **recomendaciones de objetos**: «Recomendado para ti» en Explorar. Se implementa un **recomendador híbrido propio** (filtrado colaborativo objeto-objeto + contenido) en Go y MongoDB, **sin servicios externos ni costo**, explicable en una defensa y **evaluado con métricas** contra una línea base de popularidad. Nunca reemplaza la búsqueda; solo sugiere.
@@ -93,7 +93,7 @@ Protocolo de `revisor-constitucion` sobre T001–T009. La hizo Claude a pedido d
 | VIII | ✅ | Sin dependencias nuevas (`go.mod` sin cambios); álgebra con `map` y `slice` |
 | IX | ✅ | `slog`; el recálculo registra solo conteos |
 | XII | ✅ | Un módulo y una línea en `modules.go`; las tarjetas salen de la búsqueda (006, de BE-B) sin copiar filtros. BE-A confirmó la lectura en solo lectura de `bookings` (007), `items` (005) y `users` (003) el 2026-11-17 |
-| XIII.5 | ⏳ | Pendiente: T011 (despliegue a staging) |
+| XIII.5 | ✅ | T011: desplegada (`d699a05`) y verificada en staging por HTTPS el 2026-11-17 |
 | XIV | ✅ | Sin estado compartido en memoria; candado en MongoDB con vencimiento (CA-08); límite de tasa en Redis (CA-09); recálculo en 0,5 s y unos 32 MB |
 | XV | ✅ | Rama `spec/SPEC-15` y una rama por tarea |
 | §6 | ✅ | Colecciones `snake_case` en plural (se renombraron `reco_model`, `reco_popular` y `reco_meta` en T010); `createdAt`/`updatedAt`; arreglos acotados (20 y 50); índices en el catálogo (40) |
