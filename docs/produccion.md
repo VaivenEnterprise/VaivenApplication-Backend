@@ -263,10 +263,12 @@ El script valida la clave y hace una generación mínima con el modelo real **an
 
 «Recomendado para ti», **apagado por defecto** (`RECO_ENABLED=false`). `GET /api/v1/meta` dice si está encendido (`features.recommendations`). No usa servicios externos ni claves: el modelo es propio (Go y MongoDB) y se describe en `docs/ml/modelo.md`.
 
-**Encender en staging.** Poner `RECO_ENABLED=true` en el `.env` del entorno y recrear la API (en staging, con el siguiente despliegue). Luego, desde Cloud Shell (Bash):
+**Encender en staging**, desde Cloud Shell (Bash). `set-reco.sh` cambia solo `RECO_ENABLED` en el `.env`, recrea la API con la misma imagen y espera a que `/meta` lo refleje:
 
 ```bash
-C=<commit desplegado>
+C=<commit que tenga los scripts>
+curl -fsSLO "https://raw.githubusercontent.com/VaivenEnterprise/VaivenApplication-Backend/$C/scripts/cloudshell-run.sh"
+bash cloudshell-run.sh "$C" scripts/set-reco.sh staging --enable
 bash cloudshell-run.sh "$C" scripts/vm-admin.sh staging seed-interactions        # datos de demostración (nunca en production)
 bash cloudshell-run.sh "$C" scripts/vm-admin.sh staging recompute-recommendations
 ```
@@ -278,6 +280,6 @@ bash cloudshell-run.sh "$C" scripts/vm-admin.sh staging recompute-recommendation
 - Los eventos duran 90 días (TTL) y cada persona puede borrar su historial.
 - Los registros solo llevan conteos, nunca personas ni objetos.
 
-**Apagado de emergencia.** `RECO_ENABLED=false` y recrear la API: las rutas responden 503 y la app oculta la sección.
+**Apagado de emergencia.** `bash cloudshell-run.sh "$C" scripts/set-reco.sh <entorno> --disable`: las rutas responden 503 y la app oculta la sección. En production, encender exige además `--yes-production` (decisión del equipo).
 
 **Producción.** Igual que la IA (spec 014): sale como v1.1 cuando el equipo lo decida y la versión de la app con la pantalla esté publicada. En producción nunca se corren `seed-interactions` ni `eval-recommendations --source db` (los dos se niegan).
