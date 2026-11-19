@@ -15,7 +15,7 @@
 # `toolchain` de go.mod.
 
 # --- Etapa 1: compilación ---------------------------------------------------
-FROM golang:1.26.11@sha256:957952ae74dc010608717144399a59a2c6e82ea03d63be1c7ff6577c5a135f93 AS build
+FROM golang:1.27.3@sha256:e519d3b0a5b285e5aa53ab9eef02bc6bbb9cb04608389b743a136a9ce75f0d1e AS build
 WORKDIR /src
 
 # Dependencias primero, para aprovechar la caché de capas.
