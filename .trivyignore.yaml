@@ -1,0 +1,15 @@
+# Excepciones de Trivy (spec 018, C-03). Política:
+#   - CRITICAL y HIGH con corrección disponible bloquean la CI y el despliegue.
+#   - Solo se admite una excepción por CVE concreto (nunca por severidad ni por
+#     paquete completo), con:
+#       statement: motivo, «Responsable: <rol>» y la medida que lo mitiga;
+#       expired_at: fecha de vencimiento, como máximo 90 días después de crearla.
+#   - Una excepción vencida deja de aplicarse sola y la CI vuelve a fallar.
+#   - scripts/check-trivyignore.mjs valida estas reglas en la CI.
+#
+# Ejemplo (no activo):
+#   vulnerabilities:
+#     - id: CVE-0000-00000
+#       statement: "Sin explotación en la API (no usa la función afectada). Responsable: BE-B. Se actualiza al publicar la corrección."
+#       expired_at: 2027-01-31
+vulnerabilities: []

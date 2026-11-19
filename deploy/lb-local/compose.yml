@@ -1,0 +1,94 @@
+# Prototipo LOCAL de balanceo (spec 018, propuesta no aprobada). NO es para
+# staging ni producción: el Art. XIV.4 prohíbe un proxy delante de la API
+# hasta aprobar la enmienda. Solo datos sintéticos; nada se publica fuera de
+# 127.0.0.1.
+#
+#   JWT_ACCESS_SECRET=$(openssl rand -hex 32) podman compose -f deploy/lb-local/compose.yml -p vaiven-lb up -d
+#   go test -tags=lbproto -count=1 -v ./tests/lb/
+#   podman compose -f deploy/lb-local/compose.yml -p vaiven-lb down -v
+#
+# Topología: Caddy (único puerto publicado) → api1 y api2 (sin puertos
+# publicados: no se puede llegar a ellas sin pasar por el balanceador) →
+# MongoDB y Redis compartidos.
+name: vaiven-lb
+
+x-api: &api
+  image: localhost/vaiven-api:lb-proto
+  restart: unless-stopped
+  depends_on:
+    mongo: { condition: service_healthy }
+    redis: { condition: service_healthy }
+  environment:
+    APP_ENV: development
+    MONGO_URI: mongodb://mongo:27017/?replicaSet=rs0
+    MONGO_DB: vaiven_lb
+    REDIS_URL: redis://redis:6379/0
+    # Secreto efímero que genera quien levanta el prototipo; nunca se guarda.
+    JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?define JWT_ACCESS_SECRET (openssl rand -hex 32)}
+    # Valores ficticios: el prototipo no sube imágenes ni llama a Cloudinary.
+    CLOUDINARY_CLOUD_NAME: prototipo
+    CLOUDINARY_API_KEY: "000000"
+    CLOUDINARY_API_SECRET: prototipo-sin-uso
+    AI_ENABLED: "false"
+    ASSISTANT_ENABLED: "false"
+    RECO_ENABLED: "false"
+    PUSH_ENABLED: "false"
+    DOCS_ENABLED: "false"
+    # Solo se confía en el X-Forwarded-For que pone Caddy (IP fija).
+    TRUSTED_PROXIES: 172.31.250.10/32
+    HTTP_COMPRESSION_ENABLED: "true"
+    LOG_LEVEL: info
+  networks: [lb]
+  mem_limit: 160m
+  cpus: 0.5
+
+services:
+  mongo:
+    image: docker.io/library/mongo:7
+    command: ["--replSet", "rs0", "--bind_ip_all", "--wiredTigerCacheSizeGB", "0.25"]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "try { rs.status().ok } catch (e) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'mongo:27017'}]}).ok }"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+    networks: [lb]
+    mem_limit: 400m
+
+  redis:
+    image: docker.io/library/redis:7
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "64mb", "--maxmemory-policy", "noeviction"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    networks: [lb]
+    mem_limit: 96m
+
+  api1:
+    <<: *api
+    container_name: vaiven-lb-api1
+  api2:
+    <<: *api
+    container_name: vaiven-lb-api2
+
+  caddy:
+    image: docker.io/library/caddy:2
+    container_name: vaiven-lb-caddy
+    depends_on: [api1, api2]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    ports:
+      # Solo en 127.0.0.1. En Podman sobre WSL ese puerto queda dentro de la
+      # VM de Podman: las pruebas corren ahí (ver tests/lb/run.sh).
+      - "127.0.0.1:18080:80"
+    networks:
+      lb:
+        ipv4_address: 172.31.250.10
+    mem_limit: 96m
+
+networks:
+  lb:
+    ipam:
+      config:
+        - subnet: 172.31.250.0/24

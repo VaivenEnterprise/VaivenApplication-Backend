@@ -1,0 +1,3 @@
+# Reglas del análisis ZAP activo y aislado (spec 018, C-09). Formato:
+# id<TAB>IGNORE|WARN|FAIL<TAB>motivo. Vacío a propósito: la puerta
+# scripts/zap-gate.mjs decide con .zap/exceptions.json (excepciones con vencimiento).

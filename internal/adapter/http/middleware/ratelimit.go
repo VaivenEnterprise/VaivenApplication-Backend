@@ -40,7 +40,8 @@ func RateLimit(primary, fallback ratelimit.Limiter, cfg RateLimitConfig, log *sl
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			key := cfg.KeyPrefix + limitKey(r, cfg.UserID)
+			subject := limitKey(r, cfg.UserID)
+			key := cfg.KeyPrefix + subject
 
 			allowed, err := primary.Allow(r.Context(), key, cfg.Limit, cfg.Window)
 			if err != nil {
@@ -59,6 +60,7 @@ func RateLimit(primary, fallback ratelimit.Limiter, cfg RateLimitConfig, log *sl
 			}
 
 			if !allowed {
+				securityEvent(r, log, "ratelimit.blocked", "blocked", "medium", limitCategory(cfg.KeyPrefix), subject)
 				w.Header().Set("Retry-After", retryAfter)
 				respond.Failure(w, r, http.StatusTooManyRequests, codeRateLimited, messageRateLimited)
 				return
@@ -69,8 +71,8 @@ func RateLimit(primary, fallback ratelimit.Limiter, cfg RateLimitConfig, log *sl
 }
 
 // limitKey usa el usuario autenticado o, si no hay, la IP de la conexión.
-// No se confía en X-Forwarded-For: la API recibe el tráfico directamente (sin
-// proxy), así que ese encabezado lo controla el cliente.
+// No se lee X-Forwarded-For aquí: si hay un proxy de confianza, ClientIP ya
+// corrigió RemoteAddr; si no, ese encabezado lo controla el cliente.
 func limitKey(r *http.Request, userID func(*http.Request) (string, bool)) string {
 	if userID != nil {
 		if id, ok := userID(r); ok && id != "" {

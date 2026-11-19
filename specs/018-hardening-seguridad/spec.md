@@ -2,7 +2,7 @@
 
 - **Dueño propuesto:** BE-B (coordina) · **Con:** BE-A (specs 003 y 012-T003), MO-A y MO-B (app móvil) · **Prioridad:** P1
 - **Depende de:** 002, 003, 012, 013, 016 y 017 · **Ventana:** por decidir, después de la 016
-- **Constitución:** v2.0.0 · **Estado:** **PROPUESTA, borrador local del 2026-11-17, NO aprobada** (Art. I y X.5); preguntas cerradas con propuesta el mismo día (§8). Este documento no autoriza implementar código ni cambiar infraestructura.
+- **Constitución:** v2.0.0 · **Estado:** **APROBADA**. El responsable confirmó la aprobación el 2026-11-18 (B-2). Las tareas conservan las dependencias y autorizaciones del §9.
 - **Fuente:** Diagnóstico interno del 17 de noviembre de 2026, disponible a solicitud del equipo. Los hallazgos concretos no se publican en este repositorio; cuando un control los necesita para aprobarse, se indica que se revisa por canal privado.
 
 ## 1. Objetivo y por qué
@@ -121,7 +121,7 @@ C-12, C-13 y C-14 **suman pero no son requisito**; sus riesgos residuales se doc
 
 ## 8. Preguntas: resueltas con propuesta y pendientes
 
-**Resueltas con una propuesta** (se aplican si el equipo aprueba la spec):
+**Resueltas para la spec aprobada**, sujetas a los permisos de cada tarea:
 
 | # | Pregunta | Propuesta |
 |---|---|---|
@@ -133,7 +133,6 @@ C-12, C-13 y C-14 **suman pero no son requisito**; sus riesgos residuales se doc
 
 **Pendientes de aprobación** (nadie las da por aprobadas):
 
-- [NEEDS CLARIFICATION: aprobación de la spec 018 por el equipo (Art. I y X.5).]
 - [NEEDS CLARIFICATION: BE-A acepta los criterios complementarios de C-01 en la 012-T003.]
 - [NEEDS CLARIFICATION: el equipo decide si la 016-T011 y la 016-T010 se amplían con los criterios de C-03, C-04 y C-09, o si la 018 ejecuta solo la diferencia (T005 y T009).]
 - [NEEDS CLARIFICATION: BE-A aprueba el objetivo de ≤ 60 s y elige la alternativa de C-12.]
@@ -144,13 +143,15 @@ C-12, C-13 y C-14 **suman pero no son requisito**; sus riesgos residuales se doc
 | # | Qué | Quién decide | Tareas que desbloquea |
 |---|---|---|---|
 | B-1 | Enmienda del Art. XIV.4 para un reverse proxy | Equipo (Art. XI) | T017 |
-| B-2 | Aprobar esta spec | Equipo (Art. I) | T001–T010 |
+| B-2 | Aprobación de la spec confirmada el 2026-11-18 | Equipo (Art. I), confirmación comunicada por el responsable | T001–T010, según sus dependencias |
 | B-3 | Cambios en la sesión: emisor y audiencia, revocación | **BE-A** (spec 003) | T011, T012 |
 | B-4 | DAST pasivo contra staging | Responsable | T013 |
 | B-5 | Lectura de Azure (configuración de red, permisos y exportación) | Responsable (MFA) | T015, T016 |
 | B-6 | Cualquier recurso con costo | Equipo (Art. XIII.1) | Partes con costo de T015 y T018 |
 | B-7 | Prueba en la app móvil | **MO-A y MO-B** | T014 |
 | B-8 | Commit, push, despliegue y cambios en producción (incluido HSTS en producción) | Responsable | T019, T021 y HSTS en producción |
+
+El responsable autorizó además la preparación local de un piloto de segunda VM y Azure Standard Load Balancer. El límite incremental propuesto de USD 15 es condición de presupuesto. El piloto remoto requiere enmienda aplicable, B-5, B-6 y aprobación de la operación concreta. Ver `docs/seguridad/piloto-dos-vm-azure.md`.
 
 ## 10. Matriz de responsabilidades
 

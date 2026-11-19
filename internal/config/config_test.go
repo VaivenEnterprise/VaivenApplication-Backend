@@ -70,6 +70,7 @@ func TestLoadDefaults(t *testing.T) {
 		},
 		Reco:        Reco{Enabled: false},
 		DocsEnabled: true,
+		Edge:        Edge{GlobalRateLimitPerMin: DefaultGlobalRateLimitPerMin},
 	}
 	if !reflect.DeepEqual(cfg, want) {
 		t.Errorf("load:\n got %+v\nwant %+v", cfg, want)

@@ -145,3 +145,41 @@ func TestCoverageReport(t *testing.T) {
 		t.Logf("sin ejercer: %s", op)
 	}
 }
+
+func TestCompressModeDecompressesAndValidates(t *testing.T) {
+	t.Setenv(CompressEnv, "1")
+	stats := filepath.Join(t.TempDir(), "gz.tsv")
+	t.Setenv(CompressStatsEnv, stats)
+	tb := &fakeTB{}
+	// Respuesta de error grande (> 1 KiB) que cumple el contrato.
+	big := `{"error":{"code":"not_found","message":"` + strings.Repeat("x", 2000) + `","requestId":"r1"}}`
+	rec := serve(t, Wrap(tb, jsonHandler(404, big), "/api/v1"), http.MethodGet, "/incidents/abc")
+	if len(tb.errs) != 0 {
+		t.Fatalf("errores: %v", tb.errs)
+	}
+	if rec.Body.String() != big || rec.Header().Get("Content-Encoding") != "" || rec.Header().Get("Vary") != "Accept-Encoding" {
+		t.Fatalf("la prueba debe recibir el JSON original: %q %v", rec.Body.String()[:20], rec.Header())
+	}
+	// Respuesta pequeña: sale en claro.
+	serve(t, Wrap(tb, jsonHandler(200, `{"status":"ok"}`), ""), http.MethodGet, "/healthz")
+	raw, _ := os.ReadFile(stats)
+	lines := strings.Split(strings.TrimSpace(string(raw)), "\n")
+	if len(lines) != 2 || !strings.HasSuffix(lines[0], "\tgzip") || !strings.HasSuffix(lines[1], "\tidentity") {
+		t.Errorf("estadísticas = %q", raw)
+	}
+}
+
+func TestDecompressRejectsBadGzip(t *testing.T) {
+	rec := httptest.NewRecorder()
+	rec.Header().Set("Content-Encoding", "gzip")
+	rec.Header().Set("Vary", "Accept-Encoding")
+	rec.Body.WriteString("no es gzip")
+	if _, msg := decompress(rec, "GET /x"); !strings.Contains(msg, "gzip inválido") {
+		t.Errorf("msg = %q", msg)
+	}
+	rec2 := httptest.NewRecorder()
+	rec2.Header().Set("Content-Encoding", "gzip")
+	if _, msg := decompress(rec2, "GET /x"); !strings.Contains(msg, "cabeceras") {
+		t.Errorf("msg = %q", msg)
+	}
+}

@@ -5,6 +5,7 @@ package http
 import (
 	"log/slog"
 	"net/http"
+	"net/netip"
 
 	"github.com/go-chi/chi/v5"
 
@@ -51,6 +52,13 @@ type Deps struct {
 	// Docs sirve Swagger UI en /docs, fuera de /api/v1 y sin autenticación.
 	// nil (production) no lo monta.
 	Docs http.Handler
+
+	// TrustedProxies son las redes de los proxies cuyo X-Forwarded-For se
+	// acepta; vacío (hoy) ignora esa cabecera (spec 018, propuesta).
+	TrustedProxies []netip.Prefix
+	// Compress activa gzip en las respuestas elegibles; nil (hoy) no
+	// comprime (spec 018, C-08, propuesta).
+	Compress *middleware.CompressConfig
 }
 
 // NewRouter devuelve el handler raíz de la API.
@@ -64,11 +72,15 @@ func NewRouter(d Deps) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(
+		middleware.ClientIP(d.TrustedProxies),
 		middleware.RequestID,
 		middleware.Logging(d.Log),
 		middleware.Recover(d.Log),
 		middleware.CORS(d.AllowedOrigins),
 	)
+	if d.Compress != nil {
+		r.Use(middleware.Compress(*d.Compress))
+	}
 	if d.Limiter != nil {
 		r.Use(middleware.RateLimit(d.Limiter, d.LimiterFallback, d.RateLimit, d.Log))
 	}

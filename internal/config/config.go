@@ -53,6 +53,8 @@ type Config struct {
 
 	// DocsEnabled sirve Swagger UI en /docs (solo development y staging).
 	DocsEnabled bool
+	// Edge: compresión y proxies de confianza (spec 018, propuesta).
+	Edge Edge
 }
 
 // IsProduction indica si el servicio corre en producción (logs en JSON, plan P-04).
@@ -132,6 +134,7 @@ func load(lookup lookupFunc) (Config, error) {
 	cfg.AI = loadAI(&r, cfg.AppEnv)
 	cfg.Reco = loadReco(&r)
 	cfg.DocsEnabled = loadDocs(&r, cfg.AppEnv)
+	cfg.Edge = loadEdge(&r, cfg.AppEnv)
 
 	if len(r.problems) > 0 {
 		return Config{}, &Error{Problems: r.problems}

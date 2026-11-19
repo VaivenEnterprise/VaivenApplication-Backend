@@ -9,11 +9,13 @@
 # arm64 si se usara B2pts_v2, Art. XIII.1).
 # =============================================================================
 
-# Debe coincidir con la línea `toolchain` de go.mod.
-ARG GO_VERSION=1.26.11
+# Imágenes base fijadas por DIGEST del índice multiplataforma (spec 018, C-03):
+# la etiqueta es informativa y el digest manda. Dependabot (ecosistema docker)
+# propone las actualizaciones. La versión de Go debe coincidir con la línea
+# `toolchain` de go.mod.
 
 # --- Etapa 1: compilación ---------------------------------------------------
-FROM golang:${GO_VERSION} AS build
+FROM golang:1.26.11@sha256:957952ae74dc010608717144399a59a2c6e82ea03d63be1c7ff6577c5a135f93 AS build
 WORKDIR /src
 
 # Dependencias primero, para aprovechar la caché de capas.
@@ -40,7 +42,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
     -o /out/admin ./cmd/admin
 
 # --- Etapa 2: ejecución -----------------------------------------------------
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
 COPY --from=build /out/api /api
 COPY --from=build /out/admin /admin
 USER nonroot:nonroot

@@ -7,6 +7,13 @@
 # commit corto -> az vm run-command (OIDC, sin SSH ni secretos guardados) ejecuta
 # deploy/remote-deploy.sh en la VM (pull, current/previous-tag, compose up,
 # /healthz por HTTPS y rollback automático) -> humo desde el runner.
+#
+# Cadena de suministro (spec 018, C-03 a C-07): la imagen se identifica por su
+# DIGEST, se firma sin llaves (Sigstore, identidad OIDC de este workflow), se
+# escanea con Trivy y su SBOM CycloneDX se adjunta como atestado firmado. El job
+# de despliegue VERIFICA firma, identidad y atestado antes de tocar la VM y
+# despliega por digest; una imagen sin firma o firmada por otra identidad no
+# se despliega.
 name: Deploy staging
 
 on:
@@ -34,6 +41,11 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  COSIGN_VERSION: v3.1.4
+  # Identidad que debe tener la firma: solo este workflow de este repositorio,
+  # desde develop o main.
+  SIGNER_IDENTITY_REGEXP: '^https://github\.com/VaivenEnterprise/VaivenApplication-Backend/\.github/workflows/deploy-staging\.yml@refs/heads/(develop|main)$'
+  SIGNER_ISSUER: https://token.actions.githubusercontent.com
   AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP || 'rg-vaiven' }}
   AZURE_VM_NAME: ${{ vars.AZURE_VM_NAME || 'vm-vaiven' }}
   AZURE_HOST: vaiven-staging.westus2.cloudapp.azure.com
@@ -116,10 +128,13 @@ jobs:
     needs: prepare
     if: needs.prepare.outputs.action == 'deploy' && needs.prepare.outputs.skip == 'false'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     permissions:
       contents: read
       packages: write
+      id-token: write # firma sin llaves (Sigstore)
+    outputs:
+      digest: ${{ steps.digest.outputs.digest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -150,6 +165,70 @@ jobs:
             -t "$IMAGE:$TAG" .
           docker push "$IMAGE:$TAG"
           echo "Imagen: \`$IMAGE:$TAG\`" >>"$GITHUB_STEP_SUMMARY"
+      - id: digest
+        name: Resolve immutable digest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACTOR: ${{ github.actor }}
+          IMAGE: ${{ needs.prepare.outputs.image }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin >/dev/null
+          trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
+          digest=$(docker buildx imagetools inspect "$IMAGE:$TAG" --format '{{.Manifest.Digest}}')
+          case "$digest" in sha256:[0-9a-f]*) ;; *) echo "::error::digest inválido: $digest"; exit 1 ;; esac
+          echo "digest=$digest" >>"$GITHUB_OUTPUT"
+          echo "Digest: \`$IMAGE@$digest\`" >>"$GITHUB_STEP_SUMMARY"
+      - name: Scan image by digest (critical and high with fix)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ github.token }}
+        with:
+          version: v0.70.0
+          image-ref: ${{ needs.prepare.outputs.image }}@${{ steps.digest.outputs.digest }}
+          scan-type: image
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          trivyignores: .trivyignore.yaml
+          exit-code: '1'
+          format: table
+      - name: Generate SBOM (CycloneDX) by digest
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ github.token }}
+        with:
+          version: v0.70.0
+          skip-setup-trivy: true
+          image-ref: ${{ needs.prepare.outputs.image }}@${{ steps.digest.outputs.digest }}
+          scan-type: image
+          format: cyclonedx
+          output: sbom.cdx.json
+          exit-code: '0'
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+        with:
+          cosign-release: ${{ env.COSIGN_VERSION }}
+      - name: Sign image and attest SBOM (keyless, by digest)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACTOR: ${{ github.actor }}
+          REF: ${{ needs.prepare.outputs.image }}@${{ steps.digest.outputs.digest }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$GH_TOKEN" | cosign login ghcr.io -u "$ACTOR" --password-stdin >/dev/null
+          cosign sign --yes "$REF"
+          cosign attest --yes --type cyclonedx --predicate sbom.cdx.json "$REF"
+          echo "Firmada y con SBOM atestado: \`$REF\`" >>"$GITHUB_STEP_SUMMARY"
+      - name: Upload SBOM
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom-${{ needs.prepare.outputs.tag }}
+          path: sbom.cdx.json
+          retention-days: 30
 
   deploy:
     name: Deploy to VM
@@ -171,6 +250,44 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.action == 'deploy' && needs.prepare.outputs.sha || github.sha }}
           persist-credentials: false
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+        if: needs.prepare.outputs.action == 'deploy'
+        with:
+          cosign-release: ${{ env.COSIGN_VERSION }}
+      - name: Verify signature, signer identity and SBOM attestation
+        if: needs.prepare.outputs.action == 'deploy'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACTOR: ${{ github.actor }}
+          REF: ${{ needs.prepare.outputs.image }}@${{ needs.build.outputs.digest }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$REF" in *@sha256:[0-9a-f]*) ;; *) echo "::error::sin digest: no se despliega por etiqueta"; exit 1 ;; esac
+          printf '%s' "$GH_TOKEN" | cosign login ghcr.io -u "$ACTOR" --password-stdin >/dev/null
+          cosign verify "$REF" \
+            --certificate-identity-regexp "$SIGNER_IDENTITY_REGEXP" \
+            --certificate-oidc-issuer "$SIGNER_ISSUER" >/dev/null
+          cosign verify-attestation "$REF" --type cyclonedx \
+            --certificate-identity-regexp "$SIGNER_IDENTITY_REGEXP" \
+            --certificate-oidc-issuer "$SIGNER_ISSUER" >/dev/null
+          # Prueba negativa: la misma imagen con OTRA identidad debe rechazarse.
+          if cosign verify "$REF" --certificate-identity "https://github.com/otra-org/otro-repo/.github/workflows/x.yml@refs/heads/main" \
+            --certificate-oidc-issuer "$SIGNER_ISSUER" >/dev/null 2>&1; then
+            echo "::error::la verificación aceptó otra identidad"; exit 1
+          fi
+          # Prueba negativa: una imagen pública que NO firmó este workflow debe rechazarse.
+          if cosign verify docker.io/library/busybox:1.37 \
+            --certificate-identity-regexp "$SIGNER_IDENTITY_REGEXP" \
+            --certificate-oidc-issuer "$SIGNER_ISSUER" >/dev/null 2>&1; then
+            echo "::error::la verificación aceptó una imagen sin nuestra firma"; exit 1
+          fi
+          echo "Firma verificada (identidad de este workflow) y SBOM atestado: \`$REF\`" >>"$GITHUB_STEP_SUMMARY"
+      - name: Signature verification failed (alert A6)
+        if: failure() && needs.prepare.outputs.action == 'deploy'
+        run: |
+          echo "msg=security_event event=supply_chain.signature_failed severity=critical result=blocked" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "::error::Alerta A6: la imagen no pasó la verificación de firma; no se desplegó (docs/seguridad/respuesta-incidentes.md)"
       - name: Azure login (OIDC, sin secreto)
         uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
@@ -182,6 +299,7 @@ jobs:
           MODE: ${{ needs.prepare.outputs.action }}
           TAG: ${{ needs.prepare.outputs.tag }}
           IMAGE: ${{ needs.prepare.outputs.image }}
+          DIGEST: ${{ needs.build.outputs.digest }}
           ACTOR: ${{ github.actor }}
           # Token del job (packages: read): caduca al terminar el job. Viaja dentro
           # del script (archivo 600, @archivo), nunca como argumento.
@@ -197,7 +315,7 @@ jobs:
             printf 'export MODE=%q ENV_NAME=staging API_PORT=%q AZURE_HOST=%q\n' "$MODE" "$API_PORT" "$AZURE_HOST"
             if [ "$MODE" = deploy ]; then
               printf 'export TAG=%q PULL_IMAGE=%q REGISTRY_USER=%q REGISTRY_TOKEN=%q\n' \
-                "$TAG" "$IMAGE:$TAG" "$ACTOR" "$PULL_TOKEN"
+                "$TAG" "$IMAGE@$DIGEST" "$ACTOR" "$PULL_TOKEN"
               printf 'export COMPOSE_B64=%q HOOK_B64=%q\n' \
                 "$(base64 -w0 deploy/docker-compose.yml)" "$(base64 -w0 deploy/certbot-deploy-hook.sh)"
             fi

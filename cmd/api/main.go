@@ -96,8 +96,7 @@ const (
 
 	// Límite global por IP (Art. XIV.2). Provisional: las specs funcionales
 	// fijarán límites por política (POL-11, intentos de inicio de sesión).
-	rateLimitPerWindow = 120
-	rateLimitWindow    = time.Minute
+	rateLimitWindow = time.Minute
 )
 
 // version la inyecta el build con -ldflags "-X main.version=..." (make build).
@@ -448,9 +447,11 @@ func run() error {
 			Redis:           redisPinger,
 			Limiter:         limiter,
 			LimiterFallback: redis.NewMemoryLimiter(),
-			RateLimit:       middleware.RateLimitConfig{Limit: rateLimitPerWindow, Window: rateLimitWindow},
+			RateLimit:       middleware.RateLimitConfig{Limit: cfg.Edge.GlobalRateLimitPerMin, Window: rateLimitWindow},
 			Modules:         mods,
 			Docs:            docsHandler(cfg.DocsEnabled),
+			TrustedProxies:  cfg.Edge.TrustedProxies,
+			Compress:        compressConfig(cfg.Edge.CompressionEnabled),
 			Meta: handler.MetaInfo{
 				Name:        serviceName,
 				Version:     resolveVersion(version, cfg.AppVersion),
@@ -757,4 +758,14 @@ func newAIProvider(p config.Provider) (aiGenerator, error) {
 		return gemini.New(gemini.Config{BaseURL: p.BaseURL, Model: p.Model, APIKey: p.APIKey.Reveal()})
 	}
 	return aiopenai.New(aiopenai.Config{BaseURL: p.BaseURL, Model: p.Model, APIKey: p.APIKey.Reveal()})
+}
+
+// compressConfig devuelve la configuración de gzip si está activada
+// (HTTP_COMPRESSION_ENABLED; spec 018, C-08, propuesta).
+func compressConfig(enabled bool) *middleware.CompressConfig {
+	if !enabled {
+		return nil
+	}
+	c := middleware.DefaultCompressConfig()
+	return &c
 }

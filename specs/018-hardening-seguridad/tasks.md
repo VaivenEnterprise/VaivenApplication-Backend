@@ -1,6 +1,6 @@
 # Tareas 018 — Hardening de seguridad (backend)
 
-- **Dueño propuesto:** BE-B · **Estado:** PROPUESTA, borrador local (preguntas cerradas con propuesta el 2026-11-17), **ninguna tarea se ejecuta hasta aprobar la spec** (Art. I) · `[P]` = paralelizable
+- **Dueño propuesto:** BE-B · **Estado:** aprobada el 2026-11-18 (B-2, Art. I) · `[P]` = paralelizable
 - Las tareas del **grupo B** están **BLOQUEADAS** hasta que se cumpla su condición. Aprobar la spec **no** las desbloquea.
 - Cada tarea con código termina con `make fmt lint test` y la integración del paquete en verde.
 
