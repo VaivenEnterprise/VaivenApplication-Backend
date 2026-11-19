@@ -1,0 +1,5 @@
+# Copiar a terraform.tfvars (ignorado por Git) y ajustar. Sin secretos: el
+# token va en la variable de entorno BETTERUPTIME_API_TOKEN.
+staging_base_url        = "https://vaiven-staging.westus2.cloudapp.azure.com:8443"
+production_base_url     = "" # se llena cuando producción esté publicada
+check_frequency_seconds = 180

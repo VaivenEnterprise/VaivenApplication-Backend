@@ -149,3 +149,45 @@ Consultas de solo lectura ejecutadas por el responsable. No se creó ni modific�
 **Riesgo operativo ajeno al piloto:** cuando el crédito venza (≈ 2026-12-02), **todos** los servicios de la suscripción se pausan, incluidas VM1 (staging y producción). Hay que decidir antes de esa fecha si se actualiza la suscripción a pago por uso o se migra. Es una decisión del responsable y del equipo.
 
 **Estado de B-6:** datos verificados. Falta la **aprobación** del presupuesto por el equipo.
+
+## What-if del piloto (2026-11-19, aprobado por el equipo; lo ejecuta el responsable)
+
+El what-if **no crea nada**: muestra lo que haría el despliegue. Se ejecuta en Azure Cloud Shell (Bash). Los parámetros se guardan **fuera del repositorio**, en el `$HOME` de Cloud Shell.
+
+```bash
+# 1. Código del piloto (develop, público)
+git clone --depth 1 --branch develop https://github.com/VaivenEnterprise/VaivenApplication-Backend.git ~/vaiven && cd ~/vaiven
+
+# 2. Inventario que hace falta
+VM1_IP=$(az vm list-ip-addresses -g rg-vaiven -n vm-vaiven --query "[0].virtualMachine.network.privateIpAddresses[0]" -o tsv); echo "$VM1_IP"
+az network vnet check-ip-address -g rg-vaiven -n vm-vaivenVNET --ip-address 10.0.0.10 --query available
+az network vnet check-ip-address -g rg-vaiven -n vm-vaivenVNET --ip-address 10.0.0.20 --query available
+IMG=$(az vm image list --publisher Canonical --offer ubuntu-24_04-lts --sku server --location westus2 --all --query "[-1].version" -o tsv); echo "$IMG"
+
+# 3. Llave SSH solo para VM2 (la privada nunca sale de Cloud Shell)
+[ -f ~/.ssh/vaiven_pilot ] || ssh-keygen -t ed25519 -N '' -f ~/.ssh/vaiven_pilot -C vaiven-pilot
+
+# 4. Parámetros (fuera del repositorio)
+jq -n --arg ip "$VM1_IP" --arg img "$IMG" --arg key "$(cat ~/.ssh/vaiven_pilot.pub)" \
+  --arg exp "$(date -u -d '+4 hours' +%Y-%m-%dT%H:%M:%SZ)" \
+  '{suffix:"p1", location:"westus2", expiresAtUtc:$exp, vnetName:"vm-vaivenVNET", subnetName:"vm-vaivenSubnet",
+    existingVmPrivateIp:$ip, pilotVmPrivateIp:"10.0.0.10", frontendPrivateIp:"10.0.0.20",
+    clientSourceCidr:"10.0.0.0/24", mongoPrivateIp:$ip, redisPrivateIp:$ip,
+    vmSize:"Standard_B2ats_v2", osDiskSizeGb:32, osDiskSku:"StandardSSD_LRS",
+    imageSku:"server", imageVersion:$img, adminUsername:"vaivenadmin", sshPublicKey:$key}' > ~/pilot.json
+
+# 5. What-if (solo muestra cambios)
+az deployment group what-if -g rg-vaiven --mode Incremental -f infra/pilot.bicep \
+  --parameters environment=staging enablePilot=true inventoryAndBudgetConfirmed=true pilot=@$HOME/pilot.json
+```
+
+**Criterio de aceptación del what-if:**
+- solo aparecen **creaciones** (`+ Create`) de recursos `vaiven-pilot-p1-*`: NSG, NIC, VM, disco y balanceador interno;
+- **cero** `Modify`, `Delete` o `Replace` sobre `vm-vaiven`, su NIC, NSG, IP pública, disco, VNet o subred;
+- si aparece cualquier otra cosa, se detiene.
+
+**Antes de crear (cambios en VM1, aprobación aparte):** VM2 solo podrá ejecutar la API si:
+1. VM1 publica MongoDB y Redis **solo en su IP privada**, con autenticación, y su NSG solo admite a `10.0.0.10`. MongoDB se conecta con `directConnection=true`, porque el replica set anuncia el nombre interno `mongo:27017`.
+2. VM2 tiene de dónde instalar Docker y descargar la imagen firmada. Su NSG niega toda salida salvo MongoDB, Redis y DNS, así que hace falta un relevo de artefactos en VM1 (`artifactRelayPrivateIp`) o abrir la salida de forma temporal.
+
+Los dos cambios tocan la VM que también aloja producción: se presentan y se aprueban por separado. Sin ellos, el balanceador puede crearse, pero la sonda `/healthz` de VM2 fallará y **no** habrá dos réplicas reales.
