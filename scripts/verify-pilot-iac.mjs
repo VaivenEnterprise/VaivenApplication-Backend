@@ -45,9 +45,11 @@ function verifyPilot(arm, defaults) {
     // Spec 018: VM2 solo llega a la pasarela mTLS de VM1, nunca a las bases.
     ['Outbound', 'Allow', privateIp, "[parameters('mongoPrivateIp')]", "[string(parameters('mongoGatewayPort'))]"],
     ['Outbound', 'Allow', privateIp, "[parameters('redisPrivateIp')]", "[string(parameters('redisGatewayPort'))]"],
-    ['Outbound', 'Allow', privateIp, 'AzurePlatformDNS', '53'],
     ['Outbound', 'Deny', '*', '*', '*'],
   ]);
+  // Las etiquetas AzurePlatform* solo admiten Deny: un Allow rompe el despliegue.
+  assert.ok(!network.variables.baseRules.some(({ properties: r }) => r.access === 'Allow' && String(r.destinationAddressPrefix).startsWith('AzurePlatform')),
+    'una regla Allow usa una etiqueta AzurePlatform*');
   assert.match(network.variables.adminRules, /parameters\('adminSourceCidr'\).+'destinationPortRange', '22'/);
   assert.match(network.variables.relayRules, /parameters\('artifactRelayPrivateIp'\).+'destinationPortRange', string\(parameters\('relayPort'\)\)/);
   assert.equal(network.parameters.mongoGatewayPort.defaultValue, 27018);
