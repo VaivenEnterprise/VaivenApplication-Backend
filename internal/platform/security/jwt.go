@@ -17,20 +17,33 @@ const MinSecretLen = 32
 // algoritmo incorrectos o vencido. No distingue el motivo a propósito.
 var ErrInvalidToken = errors.New("security: token de acceso inválido")
 
+// Issuer y Audience identifican los tokens de VAIVÉN (spec 018, C-11): un
+// token sin ellos, o con otros valores, se rechaza aunque la firma sea válida.
+const (
+	Issuer   = "vaiven-api"
+	Audience = "vaiven-mobile"
+)
+
 // AccessClaims es la identidad que lleva un token de acceso válido.
 type AccessClaims struct {
 	UserID    string
 	Role      string
 	ExpiresAt time.Time
+	// TokenID (jti), SessionID (sid: familia de refresh) e IssuedAt (iat)
+	// sirven para revocar el token antes de que venza (spec 018, C-12).
+	TokenID   string
+	SessionID string
+	IssuedAt  time.Time
 }
 
 type claims struct {
-	Role string `json:"role"`
+	Role      string `json:"role"`
+	SessionID string `json:"sid,omitempty"`
 	jwt.RegisteredClaims
 }
 
-// JWT emite y valida tokens de acceso HS256 (plan P-02) con los claims sub,
-// role, exp, iat y jti.
+// JWT emite y valida tokens de acceso HS256 (plan P-02) con los claims iss,
+// aud, sub, role, sid, exp, iat y jti.
 type JWT struct {
 	secret []byte
 	ttl    time.Duration
@@ -51,16 +64,25 @@ func NewJWT(secret string, ttl time.Duration) (*JWT, error) {
 // TTL es la vida de los tokens de acceso.
 func (j *JWT) TTL() time.Duration { return j.ttl }
 
-// Issue firma un token de acceso para userID con su rol.
+// Issue firma un token de acceso para userID con su rol, sin sesión.
 func (j *JWT) Issue(userID, role string) (string, error) {
+	return j.IssueSession(userID, role, "")
+}
+
+// IssueSession firma un token de acceso ligado a la sesión (familia de
+// refresh) sessionID, para poder revocarlo al cerrar esa sesión.
+func (j *JWT) IssueSession(userID, role, sessionID string) (string, error) {
 	jti := make([]byte, 16)
 	if _, err := rand.Read(jti); err != nil {
 		return "", fmt.Errorf("security: generar jti: %w", err)
 	}
 	now := j.now().UTC()
 	c := claims{
-		Role: role,
+		Role:      role,
+		SessionID: sessionID,
 		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    Issuer,
+			Audience:  jwt.ClaimStrings{Audience},
 			Subject:   userID,
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(j.ttl)),
@@ -74,8 +96,9 @@ func (j *JWT) Issue(userID, role string) (string, error) {
 	return s, nil
 }
 
-// Parse valida firma, algoritmo (solo HS256) y vencimiento, y devuelve la
-// identidad. Cualquier problema devuelve ErrInvalidToken.
+// Parse valida firma, algoritmo (solo HS256), emisor, audiencia y
+// vencimiento, y devuelve la identidad. Cualquier problema devuelve
+// ErrInvalidToken.
 func (j *JWT) Parse(token string) (AccessClaims, error) {
 	var c claims
 	_, err := jwt.ParseWithClaims(token, &c,
@@ -83,10 +106,15 @@ func (j *JWT) Parse(token string) (AccessClaims, error) {
 		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
 		jwt.WithExpirationRequired(),
 		jwt.WithIssuedAt(),
+		jwt.WithIssuer(Issuer),
+		jwt.WithAudience(Audience),
 		jwt.WithTimeFunc(j.now),
 	)
-	if err != nil || c.Subject == "" || c.Role == "" {
+	if err != nil || c.Subject == "" || c.Role == "" || c.ID == "" || c.IssuedAt == nil {
 		return AccessClaims{}, ErrInvalidToken
 	}
-	return AccessClaims{UserID: c.Subject, Role: c.Role, ExpiresAt: c.ExpiresAt.Time}, nil
+	return AccessClaims{
+		UserID: c.Subject, Role: c.Role, ExpiresAt: c.ExpiresAt.Time,
+		TokenID: c.ID, SessionID: c.SessionID, IssuedAt: c.IssuedAt.Time,
+	}, nil
 }

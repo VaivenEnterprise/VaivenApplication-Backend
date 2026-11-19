@@ -99,7 +99,7 @@ func (m *Module) decode(w http.ResponseWriter, r *http.Request, v any) bool {
 			m.fail(w, r, invalid(typeErr.Field, "tipo de dato inválido"))
 			return false
 		}
-		m.fail(w, r, shared.NewValidation("El cuerpo de la petición no es un JSON válido."))
+		m.fail(w, r, respond.InvalidBody(err))
 		return false
 	}
 	// Validación en la frontera con validator/v10 (Art. VI.2; spec 016, T006).

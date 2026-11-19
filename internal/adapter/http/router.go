@@ -59,6 +59,9 @@ type Deps struct {
 	// Compress activa gzip en las respuestas elegibles; nil (hoy) no
 	// comprime (spec 018, C-08, propuesta).
 	Compress *middleware.CompressConfig
+	// SecurityHeaders configura nosniff, marcos, Referrer-Policy, CSP,
+	// no-store y HSTS (spec 012-T003; spec 018, C-01).
+	SecurityHeaders middleware.SecurityHeadersConfig
 }
 
 // NewRouter devuelve el handler raíz de la API.
@@ -73,6 +76,7 @@ func NewRouter(d Deps) http.Handler {
 
 	r.Use(
 		middleware.ClientIP(d.TrustedProxies),
+		middleware.SecurityHeaders(d.SecurityHeaders),
 		middleware.RequestID,
 		middleware.Logging(d.Log),
 		middleware.Recover(d.Log),

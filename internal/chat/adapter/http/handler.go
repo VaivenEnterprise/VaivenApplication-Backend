@@ -301,7 +301,7 @@ func (m *Module) send(w http.ResponseWriter, r *http.Request) {
 			m.fail(w, r, invalid(typeErr.Field, "tipo de dato inválido"))
 			return
 		}
-		m.fail(w, r, shared.NewValidation("El cuerpo de la petición no es un JSON válido."))
+		m.fail(w, r, respond.InvalidBody(err))
 		return
 	}
 	if err := m.v.Struct(&req, domain.MessageInvalidData); err != nil {

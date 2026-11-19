@@ -1,7 +1,9 @@
 package middleware
 
 import (
+	"context"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/netip"
 	"strings"
@@ -15,17 +17,33 @@ import (
 // cabeceras Authorization ni cookies; las IP salen truncadas (/24 en IPv4,
 // /48 en IPv6). La marca temporal la pone slog.
 func securityEvent(r *http.Request, log *slog.Logger, event, result, severity, category, key string) {
+	LogSecurityEvent(r.Context(), log, event, result, severity, category, pseudonymize(key))
+}
+
+// LogSecurityEvent registra un evento de seguridad con el mismo formato en
+// toda la API. subject debe ser ya un seudónimo («user:<id>», IP truncada o
+// «unknown»); nunca un correo, un token ni una cabecera.
+func LogSecurityEvent(ctx context.Context, log *slog.Logger, event, result, severity, category, subject string) {
 	if log == nil {
 		return
 	}
-	log.LogAttrs(r.Context(), slog.LevelWarn, "security_event",
+	log.LogAttrs(ctx, slog.LevelWarn, "security_event",
 		slog.String("event", event),
 		slog.String("result", result),
 		slog.String("severity", severity),
 		slog.String("category", category),
-		slog.String("requestId", respond.RequestID(r.Context())),
-		slog.String("subject", pseudonymize(key)),
+		slog.String("requestId", respond.RequestID(ctx)),
+		slog.String("subject", subject),
 	)
+}
+
+// ClientSubject es el seudónimo del cliente de la petición: IP truncada.
+func ClientSubject(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	return pseudonymize("ip:" + host)
 }
 
 // limitCategory nombra el límite por su prefijo («global» si no tiene).

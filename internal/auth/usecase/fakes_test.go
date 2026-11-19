@@ -258,7 +258,7 @@ func (h *fakeHasher) Verify(ctx context.Context, pw, encoded string) (bool, erro
 // fakeAccess emite tokens de acceso legibles.
 type fakeAccess struct{ fail error }
 
-func (a fakeAccess) Issue(userID, role string) (string, error) {
+func (a fakeAccess) IssueSession(userID, role, _ string) (string, error) {
 	if a.fail != nil {
 		return "", a.fail
 	}

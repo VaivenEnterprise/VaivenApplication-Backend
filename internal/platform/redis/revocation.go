@@ -9,6 +9,8 @@ import (
 	"time"
 
 	goredis "github.com/redis/go-redis/v9"
+
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/usecase/revocation"
 )
 
 // Claves (con el prefijo vaiven:<APP_ENV>: del cliente):
@@ -21,6 +23,7 @@ import (
 const (
 	revokeJTIPrefix  = "revoke:jti:"
 	revokeUserPrefix = "revoke:user:"
+	revokeSIDPrefix  = "revoke:sid:"
 )
 
 // raiseCutoff sube el corte solo si el nuevo es mayor y renueva el TTL.
@@ -73,13 +76,36 @@ func (r *Revocations) RevokeUserBefore(ctx context.Context, userID string, cutof
 	return nil
 }
 
-// IsRevoked consulta las dos claves en una sola ida y vuelta (MGET).
+// RevokeSession revoca la sesión durante ttl.
+func (r *Revocations) RevokeSession(ctx context.Context, sessionID string, ttl time.Duration) error {
+	if sessionID == "" || ttl <= 0 {
+		return errors.New("redis: revoke session: sesión vacía o TTL no positivo")
+	}
+	if err := r.c.rdb.Set(ctx, r.c.key(revokeSIDPrefix+sessionID), "1", ttl).Err(); err != nil {
+		return fmt.Errorf("redis: revoke session: %w", err)
+	}
+	return nil
+}
+
+// IsRevoked consulta jti y corte del usuario en una sola ida y vuelta.
 func (r *Revocations) IsRevoked(ctx context.Context, userID, jti string, issuedAt time.Time) (bool, error) {
-	vals, err := r.c.rdb.MGet(ctx, r.c.key(revokeJTIPrefix+jti), r.c.key(revokeUserPrefix+userID)).Result()
+	return r.IsAccessRevoked(ctx, revocation.Access{UserID: userID, TokenID: jti, IssuedAt: issuedAt})
+}
+
+// IsAccessRevoked consulta jti, sesión y corte del usuario en un solo MGET.
+func (r *Revocations) IsAccessRevoked(ctx context.Context, a revocation.Access) (bool, error) {
+	keys := []string{r.c.key(revokeJTIPrefix + a.TokenID), r.c.key(revokeUserPrefix + a.UserID)}
+	if a.SessionID != "" {
+		keys = append(keys, r.c.key(revokeSIDPrefix+a.SessionID))
+	}
+	vals, err := r.c.rdb.MGet(ctx, keys...).Result()
 	if err != nil {
 		return false, fmt.Errorf("redis: is revoked: %w", err)
 	}
-	return revokedFrom(vals[0] != nil, vals[1], issuedAt)
+	if len(vals) == 3 && vals[2] != nil {
+		return true, nil
+	}
+	return revokedFrom(vals[0] != nil, vals[1], a.IssuedAt)
 }
 
 // revokedFrom decide con lo leído: jti revocado, o emitido en o antes del corte.
@@ -106,6 +132,7 @@ func revokedFrom(jtiRevoked bool, cutoff any, issuedAt time.Time) (bool, error) 
 type MemoryRevocations struct {
 	mu   sync.Mutex
 	jti  map[string]time.Time
+	sid  map[string]time.Time
 	user map[string]memCutoff
 	now  func() time.Time
 }
@@ -117,7 +144,7 @@ type memCutoff struct {
 
 // NewMemoryRevocations crea el almacén en memoria.
 func NewMemoryRevocations() *MemoryRevocations {
-	return &MemoryRevocations{jti: map[string]time.Time{}, user: map[string]memCutoff{}, now: time.Now}
+	return &MemoryRevocations{jti: map[string]time.Time{}, sid: map[string]time.Time{}, user: map[string]memCutoff{}, now: time.Now}
 }
 
 // RevokeToken guarda el jti hasta expiresAt.
@@ -151,11 +178,36 @@ func (m *MemoryRevocations) RevokeUserBefore(_ context.Context, userID string, c
 	return nil
 }
 
+// RevokeSession revoca la sesión durante ttl.
+func (m *MemoryRevocations) RevokeSession(_ context.Context, sessionID string, ttl time.Duration) error {
+	if sessionID == "" || ttl <= 0 {
+		return errors.New("memoria: revoke session: sesión vacía o TTL no positivo")
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.sid[sessionID] = m.now().Add(ttl)
+	return nil
+}
+
 // IsRevoked consulta y limpia lo vencido.
-func (m *MemoryRevocations) IsRevoked(_ context.Context, userID, jti string, issuedAt time.Time) (bool, error) {
+func (m *MemoryRevocations) IsRevoked(ctx context.Context, userID, jti string, issuedAt time.Time) (bool, error) {
+	return m.IsAccessRevoked(ctx, revocation.Access{UserID: userID, TokenID: jti, IssuedAt: issuedAt})
+}
+
+// IsAccessRevoked consulta jti, sesión y corte, y limpia lo vencido.
+func (m *MemoryRevocations) IsAccessRevoked(_ context.Context, a revocation.Access) (bool, error) {
+	userID, jti, issuedAt := a.UserID, a.TokenID, a.IssuedAt
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	now := m.now()
+	if a.SessionID != "" {
+		if exp, ok := m.sid[a.SessionID]; ok {
+			if exp.After(now) {
+				return true, nil
+			}
+			delete(m.sid, a.SessionID)
+		}
+	}
 	if exp, ok := m.jti[jti]; ok {
 		if exp.After(now) {
 			return true, nil

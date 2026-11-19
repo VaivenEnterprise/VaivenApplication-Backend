@@ -8,8 +8,8 @@
 
 | ID | Qué detecta | Fuente | Umbral | Severidad | Estado de la fuente |
 |---|---|---|---|---|---|
-| A1 | Reutilización de un refresh token | Evento `auth.refresh_reuse` | **La primera** confirmada ya alerta; 3 o más en la ventana escalan a crítica | Alta → crítica | **Pendiente de BE-A**: el evento vive en `internal/auth` (C-02). Hoy la reutilización ya revoca la familia (probado en el balanceador local) pero no emite evento |
-| A2 | Fallos de login anómalos | `POST /api/v1/auth/login` con 401 en los registros de petición (o el evento `auth.login_failed` cuando exista) | 20 en la ventana (15 min) | Media | **Disponible** en los registros actuales |
+| A1 | Reutilización de un refresh token | Evento `auth.refresh_reuse` | **La primera** confirmada ya alerta; 3 o más en la ventana escalan a crítica | Alta → crítica | **Disponible** desde el 2026-11-18: `internal/auth` emite el evento (visto bueno de BE-A) y la reutilización revoca la familia y el acceso de esa sesión |
+| A2 | Fallos de login anómalos | Evento `auth.login_failed` (o `POST /api/v1/auth/login` con 401 en los registros de petición) | 20 en la ventana (15 min) | Media | **Disponible** en los registros actuales |
 | A3 | Aumento de 5xx | Registros de petición (`status`) | ≥ 5 % con al menos 50 peticiones en la ventana | Alta | **Disponible** |
 | A4 | Reinicios anómalos del contenedor | `docker inspect -f '{{.RestartCount}}'` de la API en la VM | 2 o más desde la revisión anterior | Alta | **Disponible** (lectura en la VM con `cloudshell-run.sh`) |
 | A5 | Vulnerabilidad crítica | Trivy en la CI y en el despliegue (por digest) | Cualquier crítica o alta con corrección | Crítica | **Disponible**: el workflow falla y no se despliega |

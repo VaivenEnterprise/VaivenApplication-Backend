@@ -4,6 +4,8 @@ package redis
 
 import (
 	"context"
+
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/usecase/revocation"
 	"os"
 	"sort"
 	"sync"
@@ -179,5 +181,36 @@ func TestIntegrationRevocationFailsClosedWhenRedisDown(t *testing.T) {
 	}
 	if r.RevokeToken(ctx, "j1", time.Now().Add(time.Minute)) == nil || r.RevokeUserBefore(ctx, "u1", time.Now(), time.Minute) == nil {
 		t.Error("revocar sin Redis debe fallar")
+	}
+}
+
+func TestIntegrationRevocationSession(t *testing.T) {
+	ctx := context.Background()
+	base := revocationRedis(t)
+	a := NewRevocations(base)
+	b := newReplica(t, "redis://"+base.rdb.Options().Addr)
+	now := time.Now()
+	acc := revocation.Access{UserID: "u1", SessionID: "fam-1", TokenID: "j1", IssuedAt: now}
+	if rev, err := b.IsAccessRevoked(ctx, acc); err != nil || rev {
+		t.Fatalf("válido = %v %v", rev, err)
+	}
+	start := time.Now()
+	if err := a.RevokeSession(ctx, "fam-1", 15*time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if rev, _ := b.IsAccessRevoked(ctx, acc); !rev {
+		t.Fatal("la otra réplica debe ver la sesión revocada")
+	}
+	t.Logf("revocación de sesión vista por otra réplica en %v", time.Since(start))
+	other := acc
+	other.SessionID, other.TokenID = "fam-2", "j2"
+	if rev, _ := b.IsAccessRevoked(ctx, other); rev {
+		t.Error("otra sesión sigue válida")
+	}
+	if ttl, _ := base.rdb.PTTL(ctx, base.key(revokeSIDPrefix+"fam-1")).Result(); ttl <= 0 || ttl > 15*time.Minute {
+		t.Errorf("TTL = %v", ttl)
+	}
+	if a.RevokeSession(ctx, "", time.Minute) == nil {
+		t.Error("sesión vacía")
 	}
 }

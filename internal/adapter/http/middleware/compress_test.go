@@ -141,10 +141,11 @@ func TestCompressSecurityExclusions(t *testing.T) {
 			t.Errorf("%s no debe comprimirse", path)
 		}
 	}
-	// no-store en cualquier ruta: nunca se comprime.
+	// Una lista autenticada lleva no-store (012-T003) y sí se comprime: la
+	// exclusión es por ruta.
 	rec := do(jsonOut(200, body, map[string]string{"Cache-Control": "no-store"}), "GET", "/api/v1/items", "gzip")
-	if rec.Header().Get("Content-Encoding") != "" {
-		t.Error("no-store no debe comprimirse")
+	if rec.Header().Get("Content-Encoding") != "gzip" || rec.Header().Get("Cache-Control") != "no-store" {
+		t.Errorf("lista autenticada = %v", rec.Header())
 	}
 	// /me/bookings no es /me: sí se comprime (listas propias, sin secretos).
 	rec = do(jsonOut(200, body, nil), "GET", "/api/v1/me/bookings", "gzip")

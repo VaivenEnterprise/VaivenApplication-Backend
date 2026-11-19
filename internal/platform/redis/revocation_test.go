@@ -86,3 +86,30 @@ func TestRevokedFrom(t *testing.T) {
 		}
 	}
 }
+
+func TestMemoryRevocationsSession(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 11, 18, 12, 0, 0, 0, time.UTC)
+	m := NewMemoryRevocations()
+	m.now = func() time.Time { return now }
+	a := revocation.Access{UserID: "u1", SessionID: "fam-1", TokenID: "j1", IssuedAt: now}
+	if r, _ := m.IsAccessRevoked(ctx, a); r {
+		t.Fatal("sesión nueva válida")
+	}
+	_ = m.RevokeSession(ctx, "fam-1", 15*time.Minute)
+	if r, _ := m.IsAccessRevoked(ctx, a); !r {
+		t.Error("sesión revocada")
+	}
+	other := a
+	other.SessionID, other.TokenID = "fam-2", "j2"
+	if r, _ := m.IsAccessRevoked(ctx, other); r {
+		t.Error("otra sesión del mismo usuario sigue válida")
+	}
+	now = now.Add(16 * time.Minute)
+	if r, _ := m.IsAccessRevoked(ctx, a); r {
+		t.Error("la revocación de sesión vence con el token")
+	}
+	if m.RevokeSession(ctx, "", time.Minute) == nil || m.RevokeSession(ctx, "x", 0) == nil {
+		t.Error("entradas inválidas")
+	}
+}

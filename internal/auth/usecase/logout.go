@@ -20,5 +20,6 @@ func (s *Service) Logout(ctx context.Context, token string) error {
 	if err := s.d.Refresh.RevokeFamily(ctx, rt.FamilyID, s.now()); err != nil {
 		return fmt.Errorf("auth: logout: %w", err)
 	}
-	return nil
+	// El token de acceso de esta sesión deja de valer ya, no al vencer.
+	return s.revokeSessionAccess(ctx, rt.FamilyID)
 }

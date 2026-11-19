@@ -19,6 +19,7 @@ type LoginInput struct {
 func (s *Service) Login(ctx context.Context, in LoginInput) (AuthResult, error) {
 	email := domain.NormalizeEmail(in.Email)
 	if email == "" || in.Password == "" || len(in.Password) > 4*domain.MaxPasswordLen {
+		s.event(ctx, "auth.login_failed", "denied", "low", "unknown")
 		return AuthResult{}, domain.ErrInvalidCredentials
 	}
 
@@ -37,6 +38,11 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (AuthResult, error) 
 		return AuthResult{}, fmt.Errorf("auth: login: %w", err)
 	}
 	if !ok || !found.IsActive() {
+		subject := "unknown"
+		if found != nil {
+			subject = "user:" + found.ID
+		}
+		s.event(ctx, "auth.login_failed", "denied", "low", subject)
 		return AuthResult{}, domain.ErrInvalidCredentials
 	}
 

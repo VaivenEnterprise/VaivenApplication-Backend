@@ -38,8 +38,9 @@ type CompressConfig struct {
 //   - /delivery/qr y /return/qr: token de un solo uso del QR.
 //   - /docs y /docs/*: documentación y recursos asociados.
 //
-// Además, nunca se comprime una respuesta con Cache-Control: no-store, que es
-// como la API marca las respuestas sensibles.
+// La exclusión es por ruta, no por Cache-Control: desde la spec 012-T003 toda
+// respuesta autenticada lleva no-store (privacidad de cachés), y eso no la
+// vuelve sensible a BREACH. Las rutas que sí llevan secretos están arriba.
 func DefaultCompressConfig() CompressConfig {
 	return CompressConfig{
 		MinBytes:        1024,
@@ -181,14 +182,10 @@ func (c *compressWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// eligible decide por cabeceras: tipo comprimible, sin codificación previa y
-// sin no-store.
+// eligible decide por cabeceras: tipo comprimible y sin codificación previa.
 func (c *compressWriter) eligible() bool {
 	h := c.Header()
 	if h.Get("Content-Encoding") != "" {
-		return false
-	}
-	if strings.Contains(strings.ToLower(h.Get("Cache-Control")), "no-store") {
 		return false
 	}
 	ct, _, err := mime.ParseMediaType(h.Get("Content-Type"))

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: VAIVÉN API
-  version: 0.11.0
+  version: 0.12.0
   summary: API REST del backend de VAIVÉN (préstamo y renta de objetos en México).
   description: |
     Contrato de la spec 002 (arquitectura base): endpoints de infraestructura y
@@ -2011,9 +2011,11 @@ components:
               requestId: 43d4c7dbb802d8b3711c8f4163ffc823
     ServiceUnavailable:
       description: |
-        Una dependencia obligatoria no responde (MongoDB, Cloudinary) o hay
+        Una dependencia obligatoria no responde (MongoDB, Cloudinary), hay
         demasiadas solicitudes de contraseña en curso (espera de turno de
-        argon2id agotada, 2 s). Se puede reintentar.
+        argon2id agotada, 2 s) o, en una ruta con sesión, no se puede
+        comprobar si el token fue revocado (Redis; la ruta falla cerrada,
+        spec 018, C-12). Se puede reintentar.
       headers:
         X-Request-Id:
           $ref: '#/components/headers/X-Request-Id'

@@ -92,6 +92,8 @@ incidentById:
         $ref: '../openapi.yaml#/components/responses/RateLimited'
       '500':
         $ref: '../openapi.yaml#/components/responses/InternalError'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'
 
 myIncidents:
   get:
@@ -129,3 +131,5 @@ myIncidents:
         $ref: '../openapi.yaml#/components/responses/RateLimited'
       '500':
         $ref: '../openapi.yaml#/components/responses/InternalError'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'

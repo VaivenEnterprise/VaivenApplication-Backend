@@ -36,6 +36,8 @@ type Deps struct {
 	RefreshTTL  time.Duration
 	Now         func() time.Time // nil = time.Now
 	NewFamilyID func() (string, error)
+	Revocations Revocations    // nil = sin revocación inmediata
+	Events      SecurityEvents // nil = sin eventos
 }
 
 // Service implementa los casos de uso de la cuenta.
@@ -81,7 +83,7 @@ func (s *Service) issueSession(ctx context.Context, u domain.User, familyID stri
 		}
 		familyID = id
 	}
-	access, err := s.d.Access.Issue(u.ID, string(u.Role))
+	access, err := s.d.Access.IssueSession(u.ID, string(u.Role), familyID)
 	if err != nil {
 		return Tokens{}, fmt.Errorf("auth: emitir token de acceso: %w", err)
 	}
@@ -127,4 +129,22 @@ func randomID() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(b), nil
+}
+
+// event registra un evento de seguridad si hay quien lo reciba.
+func (s *Service) event(ctx context.Context, name, result, severity, subject string) {
+	if s.d.Events != nil {
+		s.d.Events.Record(ctx, SecurityEvent{Name: name, Result: result, Severity: severity, Subject: subject})
+	}
+}
+
+// revokeSessionAccess corta al instante los tokens de acceso de la sesión.
+func (s *Service) revokeSessionAccess(ctx context.Context, familyID string) error {
+	if s.d.Revocations == nil || familyID == "" {
+		return nil
+	}
+	if err := s.d.Revocations.RevokeSession(ctx, familyID, s.d.Access.TTL()); err != nil {
+		return fmt.Errorf("auth: revocar acceso de la sesión: %w", err)
+	}
+	return nil
 }

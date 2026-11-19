@@ -1,10 +1,10 @@
 // Package revocation declara el puerto de revocación de tokens de acceso
-// (spec 018, C-12; propuesta no aprobada). Las implementaciones viven en
+// (spec 018, C-12). Las implementaciones viven en
 // internal/platform/redis.
 //
-// Estado: PREPARADO. Ningún módulo lo usa todavía: conectarlo al middleware
-// de autenticación toca internal/auth y requiere el visto bueno de BE-A
-// (Art. XII.1). Ver docs/seguridad/revocacion-jwt.md.
+// Lo usan el middleware de autenticación y el caso de uso de sesiones
+// (internal/auth), con el visto bueno de BE-A comunicado por el responsable
+// el 2026-11-18.
 //
 // Política de fallo: si el almacén no responde, IsRevoked devuelve error y
 // quien lo usa debe FALLAR CERRADO en las rutas protegidas (401 o 503), nunca
@@ -26,7 +26,20 @@ type Store interface {
 	// de cutoff, durante ttl (la vida máxima de un token de acceso). Solo sube
 	// el corte: una revocación vieja no deshace una nueva.
 	RevokeUserBefore(ctx context.Context, userID string, cutoff time.Time, ttl time.Duration) error
+	// RevokeSession revoca, durante ttl, todos los tokens de acceso de una
+	// sesión (familia de refresh): logout y reutilización de refresh.
+	RevokeSession(ctx context.Context, sessionID string, ttl time.Duration) error
 	// IsRevoked dice si el token (usuario, jti, emitido en issuedAt) está
 	// revocado, en una sola consulta.
 	IsRevoked(ctx context.Context, userID, jti string, issuedAt time.Time) (bool, error)
+	// IsAccessRevoked es IsRevoked más la sesión del token.
+	IsAccessRevoked(ctx context.Context, a Access) (bool, error)
+}
+
+// Access identifica un token de acceso para consultar su revocación.
+type Access struct {
+	UserID    string
+	SessionID string // vacío: token sin sesión
+	TokenID   string
+	IssuedAt  time.Time
 }
