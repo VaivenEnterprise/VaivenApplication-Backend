@@ -42,13 +42,17 @@ function verifyPilot(arm, defaults) {
     ['Inbound', 'Allow', "[parameters('clientSourceCidr')]", privateIp, '8443'],
     ['Inbound', 'Allow', 'AzureLoadBalancer', privateIp, '8443'],
     ['Inbound', 'Deny', '*', '*', '*'],
-    ['Outbound', 'Allow', privateIp, "[parameters('mongoPrivateIp')]", '27017'],
-    ['Outbound', 'Allow', privateIp, "[parameters('redisPrivateIp')]", '6379'],
+    // Spec 018: VM2 solo llega a la pasarela mTLS de VM1, nunca a las bases.
+    ['Outbound', 'Allow', privateIp, "[parameters('mongoPrivateIp')]", "[string(parameters('mongoGatewayPort'))]"],
+    ['Outbound', 'Allow', privateIp, "[parameters('redisPrivateIp')]", "[string(parameters('redisGatewayPort'))]"],
     ['Outbound', 'Allow', privateIp, 'AzurePlatformDNS', '53'],
     ['Outbound', 'Deny', '*', '*', '*'],
   ]);
   assert.match(network.variables.adminRules, /parameters\('adminSourceCidr'\).+'destinationPortRange', '22'/);
-  assert.match(network.variables.relayRules, /parameters\('artifactRelayPrivateIp'\).+'destinationPortRange', '443'/);
+  assert.match(network.variables.relayRules, /parameters\('artifactRelayPrivateIp'\).+'destinationPortRange', string\(parameters\('relayPort'\)\)/);
+  assert.equal(network.parameters.mongoGatewayPort.defaultValue, 27018);
+  assert.equal(network.parameters.redisGatewayPort.defaultValue, 6380);
+  assert.equal(network.parameters.relayPort.defaultValue, 8444);
 
   const [vm] = Object.values(pilotVm.properties.template.resources);
   assert.equal(Object.values(pilotVm.properties.template.resources).length, 1);

@@ -1,0 +1,46 @@
+# API en VM2 del piloto (spec 018). Red del host: los túneles cliente escuchan
+# solo en 127.0.0.1 y la API en :8443 (la sonda del balanceador y la subred).
+# VM2 no tiene salida a internet: todo llega por la pasarela mTLS de VM1.
+# Variables: PILOT_IMAGE (cargada por digest desde el relevo), VM1_PRIVATE_IP.
+name: vaiven-pilot
+
+x-hardening: &hardening
+  image: ${PILOT_IMAGE:?falta PILOT_IMAGE}
+  network_mode: host
+  restart: unless-stopped
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+services:
+  tun-mongo:
+    <<: *hardening
+    entrypoint: ["/tlstunnel"]
+    command: [client, --listen, "127.0.0.1:27017", --target, "${VM1_PRIVATE_IP:?falta VM1_PRIVATE_IP}:27018",
+              --cert, /certs/vm2.pem, --key, /certs/vm2.key, --ca, /certs/ca.pem, --server-name, vaiven-pilot-gw]
+    volumes: ["/opt/vaiven/pilot/certs:/certs:ro"]
+    deploy: { resources: { limits: { memory: 32M, cpus: "0.2" } } }
+
+  tun-redis:
+    <<: *hardening
+    entrypoint: ["/tlstunnel"]
+    command: [client, --listen, "127.0.0.1:6379", --target, "${VM1_PRIVATE_IP:?falta VM1_PRIVATE_IP}:6380",
+              --cert, /certs/vm2.pem, --key, /certs/vm2.key, --ca, /certs/ca.pem, --server-name, vaiven-pilot-gw]
+    volumes: ["/opt/vaiven/pilot/certs:/certs:ro"]
+    deploy: { resources: { limits: { memory: 32M, cpus: "0.2" } } }
+
+  api:
+    <<: *hardening
+    depends_on: [tun-mongo, tun-redis]
+    env_file: [/opt/vaiven/pilot/api.env]
+    environment:
+      APP_ENV: staging
+      HTTP_ADDR: ":8443"
+      TLS_CERT_FILE: /certs/api.pem
+      TLS_KEY_FILE: /certs/api.key
+      GOMEMLIMIT: 120MiB
+    volumes: ["/opt/vaiven/pilot/certs:/certs:ro"]
+    deploy: { resources: { limits: { memory: 160M, cpus: "0.5" } } }

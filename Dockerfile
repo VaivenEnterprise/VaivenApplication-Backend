@@ -40,11 +40,18 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
     go build -trimpath -ldflags "-s -w" \
     -o /out/admin ./cmd/admin
+# Túnel TLS mutuo del piloto de dos VMs (spec 018): solo biblioteca estándar.
+# Viaja en la imagen firmada para heredar Trivy, el SBOM y la firma. La API no
+# lo usa; se ejecuta con `--entrypoint /tlstunnel`.
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
+    go build -trimpath -ldflags "-s -w" \
+    -o /out/tlstunnel ./cmd/tlstunnel
 
 # --- Etapa 2: ejecución -----------------------------------------------------
 FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
 COPY --from=build /out/api /api
 COPY --from=build /out/admin /admin
+COPY --from=build /out/tlstunnel /tlstunnel
 USER nonroot:nonroot
 EXPOSE 8080
 ENTRYPOINT ["/api"]
