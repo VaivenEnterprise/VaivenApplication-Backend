@@ -86,19 +86,9 @@ var baseRules = [
       destinationPortRange: string(redisGatewayPort)
     }
   }
-  {
-    name: 'platform-dns'
-    properties: {
-      priority: 120
-      direction: 'Outbound'
-      access: 'Allow'
-      protocol: '*'
-      sourceAddressPrefix: pilotVmPrivateIp
-      sourcePortRange: '*'
-      destinationAddressPrefix: 'AzurePlatformDNS'
-      destinationPortRange: '53'
-    }
-  }
+  // Sin regla de DNS: la etiqueta AzurePlatformDNS solo admite Deny (Azure
+  // rechazó el despliegue del 2026-11-19 con SecurityRuleInvalidAccessType) y
+  // VM2 no necesita DNS: usa la IP privada de VM1 y --resolve.
   {
     name: 'deny-other-egress'
     properties: {

@@ -238,7 +238,7 @@ EOF
   rm -rf "$PILOT_DIR"
   echo "CA del piloto borrada de Cloud Shell."
   echo "Recursos de Azure del piloto (borrar por ID tras confirmar):"
-  az resource list -g "$RG" --tag purpose=spec-018-pilot --query "[].{name:name, type:type, id:id}" -o table
+  az resource list -g "$RG" --query "[?tags.purpose=='spec-018-pilot'].{name:name, type:type, id:id}" -o table
 }
 
 case "${1:-}" in
