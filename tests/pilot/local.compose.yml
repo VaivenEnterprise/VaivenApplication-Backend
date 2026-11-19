@@ -1,0 +1,85 @@
+# Emulación LOCAL del piloto de dos VMs (spec 018). Dos redes:
+#   vm1 = red interna de staging (MongoDB, Redis y la pasarela);
+#   lan = la subred de Azure (pasarela en 172.31.252.4, «VM2» e «intruso»).
+# MongoDB y Redis solo están en vm1: desde lan únicamente se llega al túnel.
+#   bash tests/pilot/run-local.sh
+name: vaiven-pilot-local
+
+x-tunnel: &tunnel
+  image: localhost/vaiven-api:pilot
+  entrypoint: ["/tlstunnel"]
+  volumes: ["${PKI_DIR:?falta PKI_DIR}:/certs:ro"]
+
+services:
+  mongo:
+    image: docker.io/library/mongo:7
+    command: ["--replSet", "rs0", "--bind_ip_all", "--wiredTigerCacheSizeGB", "0.25"]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "try { rs.status().ok } catch (e) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'mongo:27017'}]}).ok }"]
+      interval: 3s
+      retries: 20
+    networks: [vm1]
+
+  redis:
+    image: docker.io/library/redis:7
+    command: ["redis-server", "--requirepass", "local-pilot-pass", "--save", ""]
+    networks: [vm1]
+
+  gw-mongo:
+    <<: *tunnel
+    container_name: pilot-gw-mongo
+    command: [server, --listen, "0.0.0.0:27018", --target, "mongo:27017", --cert, /certs/gw.pem, --key, /certs/gw.key, --ca, /certs/ca.pem, --allow-cn, vaiven-pilot-vm2]
+    depends_on: { mongo: { condition: service_healthy } }
+    networks:
+      vm1: {}
+      lan: { ipv4_address: 172.31.252.4 }
+
+  gw-redis:
+    <<: *tunnel
+    container_name: pilot-gw-redis
+    command: [server, --listen, "0.0.0.0:6380", --target, "redis:6379", --cert, /certs/gw.pem, --key, /certs/gw.key, --ca, /certs/ca.pem, --allow-cn, vaiven-pilot-vm2]
+    networks:
+      vm1: {}
+      lan: { ipv4_address: 172.31.252.5 }
+
+  tun-mongo:
+    <<: *tunnel
+    container_name: pilot-vm2
+    command: [client, --listen, "127.0.0.1:27017", --target, "172.31.252.4:27018", --cert, /certs/vm2.pem, --key, /certs/vm2.key, --ca, /certs/ca.pem, --server-name, vaiven-pilot-gw]
+    networks:
+      lan: { ipv4_address: 172.31.252.10 }
+
+  tun-redis:
+    <<: *tunnel
+    network_mode: "service:tun-mongo"
+    command: [client, --listen, "127.0.0.1:6379", --target, "172.31.252.5:6380", --cert, /certs/vm2.pem, --key, /certs/vm2.key, --ca, /certs/ca.pem, --server-name, vaiven-pilot-gw]
+
+  api:
+    image: localhost/vaiven-api:pilot
+    container_name: pilot-vm2-api
+    network_mode: "service:tun-mongo"
+    depends_on: [tun-mongo, tun-redis]
+    env_file: ["${PKI_DIR}/api.env"]
+    environment:
+      APP_ENV: development
+      CLOUDINARY_CLOUD_NAME: piloto
+      CLOUDINARY_API_KEY: "000000"
+      CLOUDINARY_API_SECRET: piloto-sin-uso
+      AI_ENABLED: "false"
+      ASSISTANT_ENABLED: "false"
+      RECO_ENABLED: "false"
+      PUSH_ENABLED: "false"
+
+  intruder:
+    image: docker.io/library/busybox:1.37
+    container_name: pilot-intruder
+    command: ["sleep", "3600"]
+    networks:
+      lan: { ipv4_address: 172.31.252.99 }
+
+networks:
+  vm1: {}
+  lan:
+    ipam:
+      config:
+        - subnet: 172.31.252.0/24

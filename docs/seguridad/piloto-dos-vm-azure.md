@@ -191,3 +191,11 @@ az deployment group what-if -g rg-vaiven --mode Incremental -f infra/pilot.bicep
 2. VM2 tiene de dónde instalar Docker y descargar la imagen firmada. Su NSG niega toda salida salvo MongoDB, Redis y DNS, así que hace falta un relevo de artefactos en VM1 (`artifactRelayPrivateIp`) o abrir la salida de forma temporal.
 
 Los dos cambios tocan la VM que también aloja producción: se presentan y se aprueban por separado. Sin ellos, el balanceador puede crearse, pero la sonda `/healthz` de VM2 fallará y **no** habrá dos réplicas reales.
+
+## Resultado del what-if (2026-11-19, Cloud Shell del responsable)
+
+- **Imagen:** `24.04.202611170` (resuelta con `az vm image show … :latest`; `[-1]` de la lista devolvía una versión no publicada).
+- **Resultado:** **4 a crear y 6 a ignorar.** Se crean `vaiven-pilot-p1-vm`, `-nic`, `-nsg` y `-lb`; el disco del SO va dentro de la VM y se borra con ella. VM1, su disco, NIC, NSG, IP pública y VNet quedan como `Ignore`: **ningún** cambio sobre recursos existentes. **Cumple el criterio de aceptación.**
+- **Balanceador:** interno en `10.0.0.20`; backends VM1 y VM2 por IP; sonda HTTPS `/healthz` cada 15 s con 2 fallos; regla TCP 8443 → 8443.
+- **Hallazgo para la creación:** el NSG de VM2 abre la salida a MongoDB (27017) y Redis (6379) **directo** en VM1, lo que corresponde a la opción B (publicar las bases), que está descartada. Con la pasarela mTLS recomendada (opción A), esas reglas pasan a 27018 y 6380 y se agrega la salida a `Storage.WestUS2:443` para el relevo de la imagen. Hay que ajustar el Bicep y repetir el what-if antes de crear.
+- **La ventana de 4 h** (`expiresAtUtc`) se recalcula al momento de crear: hay que regenerar `pilot.json` justo antes.

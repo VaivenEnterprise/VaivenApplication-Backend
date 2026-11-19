@@ -11,6 +11,15 @@ param mongoPrivateIp string
 param redisPrivateIp string
 param artifactRelayPrivateIp string
 
+// Puertos de la pasarela TLS mutua de VM1 (cmd/tlstunnel). MongoDB y Redis no
+// publican puertos: VM2 solo llega al túnel (docs/seguridad/piloto-red-vm2.md).
+@description('Puerto del túnel mTLS hacia MongoDB en VM1.')
+param mongoGatewayPort int = 27018
+@description('Puerto del túnel mTLS hacia Redis en VM1.')
+param redisGatewayPort int = 6380
+@description('Puerto del relevo de artefactos mTLS en VM1 (443 lo usa producción).')
+param relayPort int = 8444
+
 var baseRules = [
   {
     name: 'api-private-clients'
@@ -61,7 +70,7 @@ var baseRules = [
       sourceAddressPrefix: pilotVmPrivateIp
       sourcePortRange: '*'
       destinationAddressPrefix: mongoPrivateIp
-      destinationPortRange: '27017'
+      destinationPortRange: string(mongoGatewayPort)
     }
   }
   {
@@ -74,7 +83,7 @@ var baseRules = [
       sourceAddressPrefix: pilotVmPrivateIp
       sourcePortRange: '*'
       destinationAddressPrefix: redisPrivateIp
-      destinationPortRange: '6379'
+      destinationPortRange: string(redisGatewayPort)
     }
   }
   {
@@ -132,7 +141,7 @@ var relayRules = empty(artifactRelayPrivateIp) ? [] : [
       sourceAddressPrefix: pilotVmPrivateIp
       sourcePortRange: '*'
       destinationAddressPrefix: artifactRelayPrivateIp
-      destinationPortRange: '443'
+      destinationPortRange: string(relayPort)
     }
   }
 ]

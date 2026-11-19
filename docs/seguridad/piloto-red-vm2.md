@@ -87,3 +87,33 @@ Son **datos históricos**: el día de la creación se vuelven a leer en el porta
 - por eso el retiro **borra** el balanceador, VM2, su disco, su NIC, su NSG y el Storage, y lo confirma en *Cost Management*.
 
 **Regla:** si el día de la creación no se puede leer el saldo o el costo proyectado supera el crédito disponible menos el 20 %, no se crea nada.
+
+## 6. Implementación (2026-11-19, pasarela aprobada por el responsable)
+
+**Cambios respecto del análisis:**
+- **Túnel propio en lugar de ghostunnel.** Las imágenes oficiales de ghostunnel 1.11.4 y 1.11.5 están compiladas con Go 1.27.2 y 1.27.3, afectadas por CVE-2026-97054 (alta). Se escribió `cmd/tlstunnel`: solo biblioteca estándar, TLS 1.3 mutuo y `VerifyConnection`, que también comprueba el CN en las sesiones reanudadas. Va **dentro de la imagen firmada de la API** (`/tlstunnel`), así que hereda Trivy, el SBOM, la firma y el digest.
+- **Relevo por VM1 en lugar de Storage.** VM2 no tiene salida a internet. El relevo (modo `files` del túnel, mTLS, solo lectura) entrega la imagen que staging **ya verificó por firma**, los paquetes de Docker y el `.env` de VM2, siempre por la red privada. Sin Storage ni cambios en la VNet: el costo baja a ≈ USD 3,20 en 4 h.
+
+**Archivos:**
+
+| Archivo | Para qué |
+|---|---|
+| `cmd/tlstunnel` | Túnel con modos `server`, `client` y `files`. 4 pruebas: ida y vuelta; rechazo sin certificado, de otra CA, de otro CN y con TLS 1.2; relevo solo con mTLS y solo GET y HEAD |
+| `deploy/pilot/gateway.compose.yml` | VM1: túneles hacia MongoDB (27018) y Redis (6380) y el relevo (8444), publicados **solo** en la IP privada, en la red de **staging** |
+| `deploy/pilot/vm2.compose.yml` | VM2: túneles cliente en 127.0.0.1 y la API en :8443 (red del host) |
+| `infra/modules/pilot-network.bicep` | Salida de VM2 a los puertos de la pasarela (27018, 6380, 8444), nunca a las bases. `scripts/verify-pilot-iac.mjs` lo exige |
+| `scripts/pilot/pilot.sh` | Cloud Shell: `ca`, `vm1-up`, `vm2-up`, `test` y `down`. La CA no sale de Cloud Shell. Las llaves se generan dentro de cada VM y solo viajan solicitudes y certificados |
+| `tests/pilot/run-local.sh` | Emulación local con la imagen real |
+
+**Prueba local** (`tests/pilot/run-local.sh`, 2026-11-19, en verde):
+- «VM2» queda lista con MongoDB y Redis de «VM1» por los túneles;
+- un registro escribe en MongoDB de «VM1» (transacción);
+- desde la subred, MongoDB y Redis no son alcanzables;
+- la pasarela rechaza TCP sin certificado.
+
+**Orden de ejecución:**
+1. Fusionar esta rama en `develop`. `deploy-staging` publica en staging la imagen firmada **con** `/tlstunnel`, y VM1 la usa para la pasarela.
+2. Cloud Shell: actualizar el clon (`git pull`) y regenerar `pilot.json`. Repetir el what-if: deben aparecer las reglas 27018, 6380 y 8444.
+3. Revisar el saldo del crédito en el portal y crear con `az deployment group create` (mismos parámetros que el what-if).
+4. `pilot.sh ca`, `vm1-up`, `vm2-up` y `test`.
+5. **Retiro en la misma ventana:** `pilot.sh down` y luego borrar los 4 recursos `vaiven-pilot-p1-*` por ID; confirmar en *Cost Management*.
