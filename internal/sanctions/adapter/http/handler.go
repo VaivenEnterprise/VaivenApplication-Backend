@@ -98,7 +98,7 @@ func (m *Module) apply(w http.ResponseWriter, r *http.Request) {
 			m.fail(w, r, shared.NewValidation(domain.MessageInvalidData, shared.Detail{Field: typeErr.Field, Issue: "tipo de dato inválido"}))
 			return
 		}
-		m.fail(w, r, shared.NewValidation("El cuerpo de la petición no es un JSON válido."))
+		m.fail(w, r, respond.InvalidBody(err))
 		return
 	}
 	// Validación en la frontera con validator/v10 (Art. VI.2; spec 016, T006):

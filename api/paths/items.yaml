@@ -125,6 +125,8 @@ priceSuggestion:
         $ref: '../openapi.yaml#/components/responses/RateLimited'
       '500':
         $ref: '../openapi.yaml#/components/responses/InternalError'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'
 
 itemById:
   parameters:
@@ -163,6 +165,8 @@ itemById:
         $ref: '../openapi.yaml#/components/responses/RateLimited'
       '500':
         $ref: '../openapi.yaml#/components/responses/InternalError'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'
   patch:
     tags: [objetos]
     operationId: updateItem
@@ -236,6 +240,8 @@ itemById:
         $ref: '../openapi.yaml#/components/responses/RateLimited'
       '500':
         $ref: '../openapi.yaml#/components/responses/InternalError'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'
 
 pauseItem:
   parameters:
@@ -276,6 +282,8 @@ pauseItem:
         $ref: '../openapi.yaml#/components/responses/RateLimited'
       '500':
         $ref: '../openapi.yaml#/components/responses/InternalError'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'
 
 resumeItem:
   parameters:
@@ -315,6 +323,8 @@ resumeItem:
         $ref: '../openapi.yaml#/components/responses/RateLimited'
       '500':
         $ref: '../openapi.yaml#/components/responses/InternalError'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'
 
 myItems:
   get:
@@ -367,6 +377,8 @@ myItems:
         $ref: '../openapi.yaml#/components/responses/RateLimited'
       '500':
         $ref: '../openapi.yaml#/components/responses/InternalError'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'
 
 categories:
   get:
@@ -399,3 +411,5 @@ categories:
         $ref: '../openapi.yaml#/components/responses/RateLimited'
       '500':
         $ref: '../openapi.yaml#/components/responses/InternalError'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'

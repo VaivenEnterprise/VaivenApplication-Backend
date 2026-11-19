@@ -94,7 +94,7 @@ func (m *Module) signature(w http.ResponseWriter, r *http.Request) {
 	var req signatureRequest
 	dec := json.NewDecoder(r.Body)
 	if err := dec.Decode(&req); err != nil || dec.More() {
-		respond.Error(w, r, shared.NewValidation("El cuerpo de la petición no es un JSON válido."))
+		respond.Error(w, r, respond.InvalidBody(err))
 		return
 	}
 	if err := m.v.Struct(req); err != nil {

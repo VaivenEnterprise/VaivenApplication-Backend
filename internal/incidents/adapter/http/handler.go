@@ -123,7 +123,7 @@ func decode(w http.ResponseWriter, r *http.Request, dst any) error {
 		if errors.As(err, &typeErr) && typeErr.Field != "" {
 			return invalid(typeErr.Field, "tipo de dato inválido")
 		}
-		return shared.NewValidation("El cuerpo de la petición no es un JSON válido.")
+		return respond.InvalidBody(err)
 	}
 	return nil
 }

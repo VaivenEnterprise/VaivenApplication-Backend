@@ -21,7 +21,8 @@ func (s *Service) Refresh(ctx context.Context, token string) (Tokens, error) {
 	now := s.now()
 
 	if rt.Reused() {
-		return Tokens{}, s.revokeFamily(ctx, rt.FamilyID)
+		s.event(ctx, "auth.refresh_reuse", "denied", "high", "user:"+rt.UserID)
+		return Tokens{}, s.revokeFamily(ctx, rt.UserID, rt.FamilyID)
 	}
 	if !rt.Usable(now) {
 		return Tokens{}, domain.ErrInvalidSession
@@ -32,7 +33,8 @@ func (s *Service) Refresh(ctx context.Context, token string) (Tokens, error) {
 	}
 	if !ok {
 		// Otra petición lo canjeó al mismo tiempo: se trata como reutilización.
-		return Tokens{}, s.revokeFamily(ctx, rt.FamilyID)
+		s.event(ctx, "auth.refresh_reuse", "denied", "high", "user:"+rt.UserID)
+		return Tokens{}, s.revokeFamily(ctx, rt.UserID, rt.FamilyID)
 	}
 
 	u, err := s.d.Users.ByID(ctx, rt.UserID)
@@ -40,7 +42,7 @@ func (s *Service) Refresh(ctx context.Context, token string) (Tokens, error) {
 		return Tokens{}, fmt.Errorf("auth: refresh: %w", err)
 	}
 	if err != nil || !u.IsActive() {
-		return Tokens{}, s.revokeFamily(ctx, rt.FamilyID)
+		return Tokens{}, s.revokeFamily(ctx, rt.UserID, rt.FamilyID)
 	}
 	return s.issueSession(ctx, u, rt.FamilyID)
 }
@@ -63,9 +65,15 @@ func (s *Service) findRefresh(ctx context.Context, token string) (domain.Refresh
 
 // revokeFamily revoca la familia y devuelve ErrInvalidSession, o el error de
 // la revocación si falló (para no ocultar que la familia sigue abierta).
-func (s *Service) revokeFamily(ctx context.Context, familyID string) error {
+// revokeFamily revoca la familia de refresh (MongoDB) y los tokens de acceso
+// de esa sesión (Redis), y registra auth.family_revoked.
+func (s *Service) revokeFamily(ctx context.Context, userID, familyID string) error {
 	if err := s.d.Refresh.RevokeFamily(ctx, familyID, s.now()); err != nil {
 		return fmt.Errorf("auth: revocar familia: %w", err)
 	}
+	if err := s.revokeSessionAccess(ctx, familyID); err != nil {
+		return err
+	}
+	s.event(ctx, "auth.family_revoked", "revoked", "medium", "user:"+userID)
 	return domain.ErrInvalidSession
 }

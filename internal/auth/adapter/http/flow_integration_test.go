@@ -129,7 +129,7 @@ type adminProbe struct {
 func (adminProbe) Name() string { return "admin-probe" }
 
 func (p adminProbe) Register(r chi.Router) {
-	r.With(p.auth, RequireRole(domain.RoleAdmin, p.lookup)).Get("/admin/probe", func(w http.ResponseWriter, _ *http.Request) {
+	r.With(p.auth, RequireRole(domain.RoleAdmin, p.lookup, nil)).Get("/admin/probe", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 }

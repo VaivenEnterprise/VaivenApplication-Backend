@@ -435,9 +435,9 @@ func TestRequireRoleAndActive(t *testing.T) { // CA-07, RF-13
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
-	r.With(Authenticate(hs.jwt), RequireRole(domain.RoleAdmin, adminLookup)).Get("/admin", ok)
+	r.With(Authenticate(hs.jwt), RequireRole(domain.RoleAdmin, adminLookup, nil)).Get("/admin", ok)
 	r.With(Authenticate(hs.jwt), RequireActive(lookup, func() time.Time { return now })).Post("/items", ok)
-	r.With(RequireRole(domain.RoleAdmin, adminLookup)).Get("/sin-auth-admin", ok)
+	r.With(RequireRole(domain.RoleAdmin, adminLookup, nil)).Get("/sin-auth-admin", ok)
 	r.With(RequireActive(lookup, nil)).Post("/sin-auth-items", ok)
 
 	run := func(method, path, authz string) int {
@@ -577,7 +577,7 @@ func TestRequireRoleLooksUpOnlyAdminTokens(t *testing.T) {
 	ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusTeapot) })
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
-	r.With(Authenticate(hs.jwt), RequireRole(domain.RoleAdmin, lookup)).Get("/admin", ok)
+	r.With(Authenticate(hs.jwt), RequireRole(domain.RoleAdmin, lookup, nil)).Get("/admin", ok)
 	get := func(authz string) int {
 		req := httptest.NewRequest(http.MethodGet, "/admin", nil)
 		req.Header.Set("Authorization", authz)
@@ -599,5 +599,5 @@ func TestRequireRoleLooksUpOnlyAdminTokens(t *testing.T) {
 			t.Fatal("RequireRole sin lookup debe fallar al armarse")
 		}
 	}()
-	RequireRole(domain.RoleAdmin, nil)
+	RequireRole(domain.RoleAdmin, nil, nil)
 }

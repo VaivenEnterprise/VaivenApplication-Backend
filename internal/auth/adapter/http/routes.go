@@ -25,6 +25,9 @@ type ModuleDeps struct {
 	// AccountLoginLimit son los intentos de login por cuenta en
 	// AccountLoginWindow (15 min); 0 desactiva el límite por cuenta.
 	AccountLoginLimit int
+	// Revocations comprueba tokens revocados antes de vencer (spec 018,
+	// C-12); nil no comprueba nada.
+	Revocations RevocationChecker
 }
 
 // Module registra las rutas de auth, cuenta y usuarios bajo /api/v1 (RF-11).
@@ -43,7 +46,7 @@ func NewModule(d ModuleDeps) (*Module, error) {
 		h: handlers{svc: d.Service, dec: newDecoder(), log: d.Log, account: accountLimiter{
 			primary: d.Limiter, fallback: d.LimiterFallback, limit: d.AccountLoginLimit,
 		}},
-		authenticate: Authenticate(d.Tokens),
+		authenticate: AuthenticateWith(d.Tokens, d.Revocations, d.Log),
 		limit: middleware.RateLimit(d.Limiter, d.LimiterFallback, middleware.RateLimitConfig{
 			Limit: d.LimitPerMinute, Window: time.Minute, KeyPrefix: "auth:",
 		}, d.Log),

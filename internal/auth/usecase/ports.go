@@ -58,8 +58,32 @@ type PasswordHasher interface {
 
 // AccessTokens emite tokens de acceso (JWT).
 type AccessTokens interface {
-	Issue(userID, role string) (string, error)
+	// IssueSession firma un token de acceso ligado a la sesión (familia de
+	// refresh) para poder revocarlo al cerrarla (spec 018, C-12).
+	IssueSession(userID, role, sessionID string) (string, error)
 	TTL() time.Duration
+}
+
+// Revocations revoca tokens de acceso antes de que venzan (spec 018, C-12).
+// La implementación es Redis (internal/platform/redis); nil no revoca nada y
+// el token sigue valiendo hasta vencer, como antes.
+type Revocations interface {
+	RevokeSession(ctx context.Context, sessionID string, ttl time.Duration) error
+	RevokeUserBefore(ctx context.Context, userID string, cutoff time.Time, ttl time.Duration) error
+}
+
+// SecurityEvent es un evento de seguridad (spec 018, C-02). Subject es un
+// seudónimo («user:<id>» o «unknown»): nunca correo, contraseña ni token.
+type SecurityEvent struct {
+	Name     string
+	Result   string
+	Severity string
+	Subject  string
+}
+
+// SecurityEvents registra eventos de seguridad; nil no registra nada.
+type SecurityEvents interface {
+	Record(ctx context.Context, e SecurityEvent)
 }
 
 // RefreshGenerator genera un refresh token opaco y su hash.

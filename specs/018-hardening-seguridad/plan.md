@@ -1,6 +1,6 @@
 # Plan 018 — Hardening de seguridad (backend)
 
-- **Spec:** `spec.md` · **Estado:** PROPUESTA, borrador local, no aprobada; preguntas cerradas con propuesta el 2026-11-17 · **Constitución:** v2.0.0
+- **Spec:** `spec.md` · **Estado:** aprobada el 2026-11-18 (B-2) · **Constitución:** v2.0.0
 - **Evidencia base:** Diagnóstico interno del 17 de noviembre de 2026, disponible a solicitud del equipo. No se publica aquí; los detalles operativos de los hallazgos se revisa por canal privado.
 
 ## 1. Enfoque

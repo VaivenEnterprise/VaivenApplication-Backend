@@ -88,6 +88,7 @@ import (
 	suggestusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/suggest/usecase"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/usecase/cache"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/usecase/ratelimit"
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/usecase/revocation"
 )
 
 const (
@@ -96,8 +97,7 @@ const (
 
 	// Límite global por IP (Art. XIV.2). Provisional: las specs funcionales
 	// fijarán límites por política (POL-11, intentos de inicio de sesión).
-	rateLimitPerWindow = 120
-	rateLimitWindow    = time.Minute
+	rateLimitWindow = time.Minute
 )
 
 // version la inyecta el build con -ldflags "-X main.version=..." (make build).
@@ -196,6 +196,9 @@ func run() error {
 	// Caché de la IA (spec 014, RF-15): solo con Redis; sin Redis el asistente
 	// llama siempre al modelo (nada se guarda en la memoria del proceso, Art. XIV.1).
 	var aiCache cache.Cache
+	// Revocación inmediata de tokens de acceso (spec 018, C-12): en Redis para
+	// que todas las réplicas la vean; sin Redis (solo en local), en memoria.
+	var revocations revocation.Store = redis.NewMemoryRevocations()
 	if cfg.Redis.Enabled() {
 		rc, err := redis.NewClient(cfg.Redis.URL.Reveal(), cfg.AppEnv)
 		if err != nil {
@@ -209,11 +212,12 @@ func run() error {
 		redisPinger = rc
 		limiter = redis.NewLimiter(rc)
 		aiCache = redis.NewCache(rc)
+		revocations = redis.NewRevocations(rc)
 	}
 
 	// Reservas reales (spec 007, RF-14): impiden dar de baja una cuenta (003)
 	// o eliminar un objeto (005) con reservas aceptadas o en curso.
-	authModule, err := newAuthModule(cfg, log, userRepo, refreshRepo, limiter, bookingsmongo.NewUserActivity(db))
+	authModule, err := newAuthModule(cfg, log, userRepo, refreshRepo, limiter, bookingsmongo.NewUserActivity(db), revocations)
 	if err != nil {
 		return err
 	}
@@ -314,7 +318,7 @@ func run() error {
 	}
 	// Calificaciones, incidencias y sanciones (spec 010). Las rutas de
 	// administración exigen el rol admin además de la sesión (CA-05).
-	requireAdmin := authhttp.RequireRole(authdomain.RoleAdmin, userRepo.ByID) // rol también contra la base (AUD-017)
+	requireAdmin := authhttp.RequireRole(authdomain.RoleAdmin, userRepo.ByID, log) // rol también contra la base (AUD-017)
 	ratingsSvc, err := ratingsusecase.NewService(ratingsusecase.Deps{
 		Repo: ratingsRepo, Bookings: bookingRepo, Users: userRepo, Notifier: notifier, Log: log,
 	})
@@ -448,9 +452,12 @@ func run() error {
 			Redis:           redisPinger,
 			Limiter:         limiter,
 			LimiterFallback: redis.NewMemoryLimiter(),
-			RateLimit:       middleware.RateLimitConfig{Limit: rateLimitPerWindow, Window: rateLimitWindow},
+			RateLimit:       middleware.RateLimitConfig{Limit: cfg.Edge.GlobalRateLimitPerMin, Window: rateLimitWindow},
 			Modules:         mods,
 			Docs:            docsHandler(cfg.DocsEnabled),
+			TrustedProxies:  cfg.Edge.TrustedProxies,
+			Compress:        compressConfig(cfg.Edge.CompressionEnabled),
+			SecurityHeaders: securityHeadersConfig(cfg),
 			Meta: handler.MetaInfo{
 				Name:        serviceName,
 				Version:     resolveVersion(version, cfg.AppVersion),
@@ -507,7 +514,7 @@ func run() error {
 
 // newAuthModule arma el módulo de la spec 003: argon2id, JWT, casos de uso y
 // rutas, con el límite de register, login y refresh sobre el limitador común.
-func newAuthModule(cfg config.Config, log *slog.Logger, users *authmongo.UserRepo, refresh *authmongo.RefreshRepo, limiter ratelimit.Limiter, bookings authusecase.ActiveBookingChecker) (*authhttp.Module, error) {
+func newAuthModule(cfg config.Config, log *slog.Logger, users *authmongo.UserRepo, refresh *authmongo.RefreshRepo, limiter ratelimit.Limiter, bookings authusecase.ActiveBookingChecker, revocations revocation.Store) (*authhttp.Module, error) {
 	jwt, err := security.NewJWT(cfg.Auth.AccessSecret.Reveal(), cfg.Auth.AccessTTL)
 	if err != nil {
 		return nil, fmt.Errorf("no se pudo configurar JWT: %w", err)
@@ -527,6 +534,8 @@ func newAuthModule(cfg config.Config, log *slog.Logger, users *authmongo.UserRep
 		HashRefresh: security.HashToken,
 		RefreshTTL:  cfg.Auth.RefreshTTL,
 		Bookings:    bookings,
+		Revocations: revocations,
+		Events:      authhttp.SlogEvents{Log: log},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("no se pudo crear el servicio de auth: %w", err)
@@ -539,6 +548,7 @@ func newAuthModule(cfg config.Config, log *slog.Logger, users *authmongo.UserRep
 		LimiterFallback:   redis.NewMemoryLimiter(),
 		LimitPerMinute:    cfg.Auth.RateLimitPerMin,
 		AccountLoginLimit: cfg.Auth.LoginAttemptsPerAccount,
+		Revocations:       revocations,
 	})
 }
 
@@ -757,4 +767,24 @@ func newAIProvider(p config.Provider) (aiGenerator, error) {
 		return gemini.New(gemini.Config{BaseURL: p.BaseURL, Model: p.Model, APIKey: p.APIKey.Reveal()})
 	}
 	return aiopenai.New(aiopenai.Config{BaseURL: p.BaseURL, Model: p.Model, APIKey: p.APIKey.Reveal()})
+}
+
+// compressConfig devuelve la configuración de gzip si está activada
+// (HTTP_COMPRESSION_ENABLED; spec 018, C-08, propuesta).
+func compressConfig(enabled bool) *middleware.CompressConfig {
+	if !enabled {
+		return nil
+	}
+	c := middleware.DefaultCompressConfig()
+	return &c
+}
+
+// securityHeadersConfig activa HSTS solo en staging, que sirve HTTPS con un
+// certificado válido (spec 018, C-01, P-5): vigencia de un día, sin
+// subdominios ni preload. En producción no se envía sin autorización (B-8).
+func securityHeadersConfig(cfg config.Config) middleware.SecurityHeadersConfig {
+	if cfg.AppEnv == config.EnvStaging && cfg.TLS.Enabled() {
+		return middleware.SecurityHeadersConfig{HSTSMaxAge: middleware.HSTSStagingMaxAge}
+	}
+	return middleware.SecurityHeadersConfig{}
 }

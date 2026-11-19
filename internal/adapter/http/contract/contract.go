@@ -15,6 +15,7 @@ package contract
 
 import (
 	"bytes"
+	"compress/gzip"
 	"errors"
 	"fmt"
 	"io"
@@ -32,6 +33,8 @@ import (
 	validator "github.com/pb33f/libopenapi-validator"
 	"github.com/pb33f/libopenapi-validator/paths"
 	v3 "github.com/pb33f/libopenapi/datamodel/high/v3"
+
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/middleware"
 )
 
 // CoverageEnv es la variable con la ruta del archivo de cobertura.
@@ -151,12 +154,26 @@ func Wrap(t TB, h http.Handler, prefix string, skip ...string) http.Handler {
 
 // Wrap es Wrap con un Checker dado.
 func (c *Checker) Wrap(t TB, h http.Handler, prefix string, skip ...string) http.Handler {
+	compress := os.Getenv(CompressEnv) == "1"
+	if compress {
+		h = middleware.Compress(middleware.DefaultCompressConfig())(h)
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if compress {
+			r = r.Clone(r.Context())
+			r.Header.Set("Accept-Encoding", "gzip")
+		}
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, r)
 		if slices.Contains(skip, prefix+r.URL.Path) {
 			copyResponse(w, rec)
 			return
+		}
+		if compress {
+			var err string
+			if rec, err = decompress(rec, r.Method+" "+prefix+r.URL.Path); err != "" {
+				t.Errorf("compresión: %s %s%s → %d: %s", r.Method, prefix, r.URL.Path, rec.Code, err)
+			}
 		}
 		res := rec.Result()
 		body := rec.Body.Bytes()
@@ -187,11 +204,54 @@ func copyResponse(w http.ResponseWriter, rec *httptest.ResponseRecorder) {
 	_, _ = w.Write(rec.Body.Bytes())
 }
 
+// CompressEnv activa el modo de compresión (spec 018, C-08): cada prueba pide
+// gzip, la respuesta pasa por middleware.Compress y se descomprime antes de
+// validar el contrato y de llegar a la prueba, que así comprueba que el JSON
+// no cambió. CompressStatsEnv apunta a un archivo donde se anotan los tamaños.
+const (
+	CompressEnv      = "CONTRACT_COMPRESS"
+	CompressStatsEnv = "CONTRACT_COMPRESS_STATS"
+)
+
+// decompress devuelve una respuesta igual a rec pero con el cuerpo original
+// (sin gzip) y comprueba las cabeceras. Devuelve también un problema o "".
+func decompress(rec *httptest.ResponseRecorder, op string) (*httptest.ResponseRecorder, string) {
+	h := rec.Result().Header
+	raw := rec.Body.Bytes()
+	if h.Get("Content-Encoding") != "gzip" {
+		appendLine(os.Getenv(CompressStatsEnv), fmt.Sprintf("%s\t%d\t%d\t%d\tidentity", op, rec.Code, len(raw), len(raw)))
+		return rec, ""
+	}
+	if !strings.Contains(h.Get("Vary"), "Accept-Encoding") || h.Get("Content-Length") != "" {
+		return rec, "cabeceras de gzip incorrectas (Vary o Content-Length)"
+	}
+	zr, err := gzip.NewReader(bytes.NewReader(raw))
+	if err != nil {
+		return rec, "gzip inválido: " + err.Error()
+	}
+	plain, err := io.ReadAll(zr)
+	if err != nil {
+		return rec, "gzip inválido: " + err.Error()
+	}
+	appendLine(os.Getenv(CompressStatsEnv), fmt.Sprintf("%s\t%d\t%d\t%d\tgzip", op, rec.Code, len(plain), len(raw)))
+	out := httptest.NewRecorder()
+	for k, vs := range h {
+		if k != "Content-Encoding" {
+			out.Header()[k] = vs
+		}
+	}
+	out.WriteHeader(rec.Code)
+	_, _ = out.Write(plain)
+	return out, ""
+}
+
 var recordMu sync.Mutex
 
 // record anexa la operación al archivo de cobertura, si está configurado.
-func record(op string) {
-	path := os.Getenv(CoverageEnv)
+func record(op string) { appendLine(os.Getenv(CoverageEnv), op) }
+
+// appendLine anexa una línea a path; vacío no hace nada.
+func appendLine(path, op string) {
 	if path == "" {
 		return
 	}

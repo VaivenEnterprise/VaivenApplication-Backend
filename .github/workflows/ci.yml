@@ -155,6 +155,12 @@ jobs:
       # de ejemplo; solo lee archivos.
       - name: Test traceability script
         run: python3 -I -m unittest discover -s scripts -p 'trace_test.py'
+      # Spec 018 (C-03, C-09, C-10): excepciones de Trivy con dueño y
+      # vencimiento, puerta de ZAP y activación de las seis alertas.
+      - name: Validate Trivy exceptions
+        run: node scripts/check-trivyignore.mjs .trivyignore.yaml
+      - name: Test security controls
+        run: node --test tests/security-controls.test.mjs tests/security-readiness.test.mjs
 
   sast:
     name: CodeQL
@@ -211,6 +217,7 @@ jobs:
           scan-type: image
           severity: CRITICAL,HIGH
           ignore-unfixed: true
+          trivyignores: .trivyignore.yaml
           exit-code: '1'
           format: table
       - name: Generate SBOM (CycloneDX)

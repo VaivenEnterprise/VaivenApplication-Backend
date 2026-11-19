@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: VAIVÉN API
-  version: 0.11.0
+  version: 0.12.0
   summary: API REST del backend de VAIVÉN (préstamo y renta de objetos en México).
   description: |
     Contrato de la spec 002 (arquitectura base): endpoints de infraestructura y
@@ -374,6 +374,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
     patch:
       tags:
         - cuenta
@@ -411,6 +413,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
     delete:
       tags:
         - cuenta
@@ -529,6 +533,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/ai/listing-suggestions:
     post:
       tags:
@@ -725,6 +731,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/recommendations:
     get:
       tags:
@@ -962,6 +970,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/items:
     get:
       tags:
@@ -1237,6 +1247,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/items/{id}:
     parameters:
       - name: id
@@ -1275,6 +1287,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
     patch:
       tags:
         - objetos
@@ -1350,6 +1364,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/items/{id}/pause:
     parameters:
       - name: id
@@ -1390,6 +1406,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/items/{id}/resume:
     parameters:
       - name: id
@@ -1429,6 +1447,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/me/items:
     get:
       tags:
@@ -1484,6 +1504,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/categories:
     get:
       tags:
@@ -1516,6 +1538,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/items/{id}/quote:
     parameters:
       - name: id
@@ -1584,6 +1608,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings:
     post:
       tags:
@@ -1666,6 +1692,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/me/bookings:
     get:
       tags:
@@ -1723,6 +1751,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings/{id}/accept:
     parameters:
       - $ref: '#/components/parameters/BookingId'
@@ -1763,6 +1793,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings/{id}/reject:
     parameters:
       - $ref: '#/components/parameters/BookingId'
@@ -1796,6 +1828,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings/{id}/cancel:
     parameters:
       - $ref: '#/components/parameters/BookingId'
@@ -1834,6 +1868,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings/{id}/meeting-point:
     parameters:
       - $ref: '#/components/parameters/BookingId'
@@ -1867,6 +1903,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/conversations:
     get:
       tags:
@@ -1915,6 +1953,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/conversations/unread-count:
     get:
       tags:
@@ -1948,6 +1988,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/conversations/{id}/messages:
     parameters:
       - $ref: '#/components/parameters/ConversationId'
@@ -2036,6 +2078,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
     post:
       tags:
         - chat
@@ -2091,6 +2135,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/conversations/{id}/read:
     parameters:
       - $ref: '#/components/parameters/ConversationId'
@@ -2117,6 +2163,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings/{id}/delivery/evidence:
     parameters:
       - $ref: '#/components/parameters/parameters-BookingId'
@@ -2161,6 +2209,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings/{id}/delivery/qr:
     parameters:
       - $ref: '#/components/parameters/parameters-BookingId'
@@ -2203,6 +2253,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings/{id}/delivery/confirm:
     parameters:
       - $ref: '#/components/parameters/parameters-BookingId'
@@ -2243,6 +2295,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings/{id}/delivery:
     parameters:
       - $ref: '#/components/parameters/parameters-BookingId'
@@ -2267,6 +2321,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings/{id}/return/evidence:
     parameters:
       - $ref: '#/components/parameters/parameters-BookingId'
@@ -2311,6 +2367,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings/{id}/return/qr:
     parameters:
       - $ref: '#/components/parameters/parameters-BookingId'
@@ -2353,6 +2411,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings/{id}/return/confirm:
     parameters:
       - $ref: '#/components/parameters/parameters-BookingId'
@@ -2393,6 +2453,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings/{id}/return:
     parameters:
       - $ref: '#/components/parameters/parameters-BookingId'
@@ -2417,6 +2479,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings/{id}/payments/{stage}/report:
     parameters:
       - $ref: '#/components/parameters/parameters-BookingId'
@@ -2460,6 +2524,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings/{id}/payments/{stage}/confirm:
     parameters:
       - $ref: '#/components/parameters/parameters-BookingId'
@@ -2488,6 +2554,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings/{id}/ratings:
     post:
       tags:
@@ -2550,6 +2618,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings/{id}/rating-status:
     get:
       tags:
@@ -2586,6 +2656,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/users/{id}/ratings:
     get:
       tags:
@@ -2622,6 +2694,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings/{id}/incidents:
     post:
       tags:
@@ -2711,6 +2785,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/me/incidents:
     get:
       tags:
@@ -2748,6 +2824,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/admin/incidents:
     get:
       tags:
@@ -2789,6 +2867,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/admin/incidents/{id}/notes:
     post:
       tags:
@@ -2838,6 +2918,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/admin/incidents/{id}/close:
     post:
       tags:
@@ -2889,6 +2971,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/admin/users/{id}/sanctions:
     post:
       tags:
@@ -2941,6 +3025,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/me/notifications:
     get:
       tags:
@@ -2986,6 +3072,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/me/notifications/unread-count:
     get:
       tags:
@@ -3019,6 +3107,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/me/notifications/read:
     post:
       tags:
@@ -3053,6 +3143,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/me/push-tokens:
     post:
       tags:
@@ -3088,6 +3180,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
     delete:
       tags:
         - avisos
@@ -3120,6 +3214,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/reports:
     post:
       tags:
@@ -3185,6 +3281,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/admin/reports:
     get:
       tags:
@@ -3227,6 +3325,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/admin/reports/{id}/resolve:
     post:
       tags:
@@ -3283,6 +3383,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
 components:
   securitySchemes:
     bearerAuth:
@@ -5567,9 +5669,11 @@ components:
               requestId: 43d4c7dbb802d8b3711c8f4163ffc823
     ServiceUnavailable:
       description: |
-        Una dependencia obligatoria no responde (MongoDB, Cloudinary) o hay
+        Una dependencia obligatoria no responde (MongoDB, Cloudinary), hay
         demasiadas solicitudes de contraseña en curso (espera de turno de
-        argon2id agotada, 2 s). Se puede reintentar.
+        argon2id agotada, 2 s) o, en una ruta con sesión, no se puede
+        comprobar si el token fue revocado (Redis; la ruta falla cerrada,
+        spec 018, C-12). Se puede reintentar.
       headers:
         X-Request-Id:
           $ref: '#/components/headers/X-Request-Id'

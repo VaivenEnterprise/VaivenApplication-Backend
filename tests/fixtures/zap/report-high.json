@@ -1,0 +1,4 @@
+{"site":[{"@name":"http://api:8080","alerts":[
+ {"pluginid":"40018","alert":"SQL Injection","riskcode":"3","count":"1"},
+ {"pluginid":"10038","alert":"Content Security Policy (CSP) Header Not Set","riskcode":"2","count":"4"}
+]}]}
