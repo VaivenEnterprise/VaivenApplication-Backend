@@ -1,0 +1,158 @@
+# Alertas de seguridad A1–A4 (spec 018, C-10) y prueba de entrega.
+#
+#   - schedule: cada 30 min cuenta, EN LA VM de staging y en modo solo lectura
+#     (az vm run-command con OIDC), las señales de reutilización de refresh,
+#     fallos de login, 5xx y reinicios (scripts/alert-scan.sh). Nunca copia
+#     líneas de registro. Si se dispara una alerta, abre un issue asignado a
+#     los destinatarios (scripts/notify-alert.sh). Tiempo de detección: ≤ 30 min.
+#   - workflow_dispatch con «synthetic»: dispara la alerta elegida con conteos
+#     sintéticos, sin tocar Azure, para comprobar que la entrega llega de
+#     verdad a los destinatarios.
+#   - Si existe el secreto BETTERSTACK_HEARTBEAT_URL, cada escaneo exitoso
+#     avisa a un monitor de latido de Better Stack: si el escaneo deja de
+#     correr, Better Stack alerta.
+# A5 y A6 los entrega deploy-staging.yml en cuanto fallan.
+name: Security alerts
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+    inputs:
+      synthetic:
+        description: 'Alerta sintética para probar la entrega (none = escaneo real de staging)'
+        type: choice
+        default: none
+        options: [none, A1, A2, A3, A4, A5, A6]
+
+permissions: {}
+
+concurrency:
+  group: security-alerts
+  cancel-in-progress: false
+
+env:
+  AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP || 'rg-vaiven' }}
+  AZURE_VM_NAME: ${{ vars.AZURE_VM_NAME || 'vm-vaiven' }}
+
+jobs:
+  scan:
+    name: Scan staging (read-only)
+    if: github.event_name == 'schedule' || inputs.synthetic == 'none'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: staging
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      alert: ${{ steps.eval.outputs.alert }}
+      summary: ${{ steps.eval.outputs.summary }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Azure login (OIDC, sin secreto)
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Count alert signals on the VM
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          payload="$RUNNER_TEMP/alert-scan.sh"
+          { echo '#!/usr/bin/env bash'; echo 'set -- staging 35m'; cat scripts/alert-scan.sh; } >"$payload"
+          az vm run-command invoke --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_VM_NAME" \
+            --command-id RunShellScript --scripts "@$payload" \
+            --query 'value[0].message' --output tsv >"$RUNNER_TEMP/scan.txt"
+          # El repositorio es público: los conteos no se imprimen en el log.
+          grep -q 'ALERT_COUNTS {' "$RUNNER_TEMP/scan.txt" || { echo "::error::el escaneo no devolvió conteos"; exit 1; }
+          echo "Escaneo de staging completado" >>"$GITHUB_STEP_SUMMARY"
+      - name: Azure logout
+        if: always()
+        run: az logout || true
+      - id: eval
+        name: Evaluate thresholds
+        shell: bash
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          status=0
+          node scripts/security-alerts.mjs --scan "$RUNNER_TEMP/scan.txt" --quiet \
+            --summary-out "$RUNNER_TEMP/alert-summary.txt" || status=$?
+          case "$status" in
+            0) echo "alert=false" >>"$GITHUB_OUTPUT" ;;
+            2) echo "alert=true" >>"$GITHUB_OUTPUT"
+               echo "summary=$(cat "$RUNNER_TEMP/alert-summary.txt")" >>"$GITHUB_OUTPUT" ;;
+            *) exit "$status" ;;
+          esac
+      - name: Better Stack heartbeat (optional)
+        env:
+          HEARTBEAT: ${{ secrets.BETTERSTACK_HEARTBEAT_URL }}
+        if: env.HEARTBEAT != ''
+        run: curl -fsS --max-time 10 "$HEARTBEAT" >/dev/null || echo "::warning::el latido de Better Stack no respondió"
+
+  notify:
+    name: Deliver alert
+    needs: scan
+    if: always() && needs.scan.outputs.alert == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Notify recipients
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ALERT_SUMMARY: ${{ needs.scan.outputs.summary }}
+          ALERT_ENV: staging
+          ALERT_ASSIGNEES: ${{ vars.ALERT_ASSIGNEES }}
+          ALERT_REPOSITORY: ${{ vars.ALERT_REPOSITORY }}
+          ALERT_REPO_TOKEN: ${{ secrets.ALERT_REPO_TOKEN }}
+          ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: bash scripts/notify-alert.sh
+
+  synthetic:
+    name: Synthetic delivery test
+    if: github.event_name == 'workflow_dispatch' && inputs.synthetic != 'none'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build synthetic alert
+        env:
+          ALERT_ID: ${{ inputs.synthetic }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          status=0
+          node scripts/security-alerts.mjs --synthetic "$ALERT_ID" --quiet \
+            --summary-out "$RUNNER_TEMP/alert-summary.txt" || status=$?
+          [ "$status" -eq 2 ] || { echo "::error::la alerta sintética no se disparó"; exit 1; }
+          echo "ALERT_SUMMARY=$(cat "$RUNNER_TEMP/alert-summary.txt")" >>"$GITHUB_ENV"
+      - name: Notify recipients
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ALERT_ENV: staging
+          ALERT_SYNTHETIC: 'true'
+          ALERT_ASSIGNEES: ${{ vars.ALERT_ASSIGNEES }}
+          ALERT_REPOSITORY: ${{ vars.ALERT_REPOSITORY }}
+          ALERT_REPO_TOKEN: ${{ secrets.ALERT_REPO_TOKEN }}
+          ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: bash scripts/notify-alert.sh

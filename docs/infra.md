@@ -63,3 +63,19 @@ La estimación incremental suma las horas facturables por nivel de reglas, el vo
 La SPEC-018 está aprobada. El acceso B-5 se limita a lectura. El inventario y la facturación siguen pendientes por MFA de Azure CLI. `what-if`, B-6, la enmienda y la operación de escritura requieren autorización propia.
 
 Para dos VMs independientes, usar el punto de entrada `infra/pilot.bicep`. Su archivo `infra/params/pilot.bicepparam` viene desactivado y conserva solo referencias de lectura a la VNet y la subred. El [piloto de dos VMs](seguridad/piloto-dos-vm-azure.md) documenta la propuesta vigente con máximo incremental de USD 15, ventana, reversión y retiro. La propuesta anterior de dos contenedores en una VM queda como alternativa para pruebas sin independencia de host.
+
+## Propiedad de la infraestructura como código (Bicep y Terraform)
+
+**Regla:** cada recurso tiene **un solo** dueño de estado IaC. Bicep es dueño de todo lo que vive en Azure. Terraform es dueño solo de la observabilidad externa (Better Stack). Ninguna configuración de Terraform declara recursos de Azure, así que no hay dos herramientas capaces de modificar el mismo recurso.
+
+| Recurso | Bicep | Terraform | Existente o nuevo | Estado | Riesgo |
+|---|---|---|---|---|---|
+| VM1 `vm-vaiven`, su NIC, NSG, IP pública, disco del SO y VNet | Referencia `existing` (solo lectura) en `infra/main.bicep` y `infra/pilot.bicep` | No | Existentes (creados a mano) | Sin cambios por IaC | El what-if debe mostrar **cero** cambios en ellos; si muestra alguno, se detiene |
+| VM2 del piloto, su NIC, NSG y disco | Dueño: `infra/pilot.bicep` y `modules/pilot-*.bicep` | No | Nuevos | Preparado; creación aprobada por el equipo, pendiente del what-if | Costo (≤ USD 15 en 4 h); se retiran al terminar |
+| Standard Load Balancer interno del piloto | Dueño: `infra/modules/load-balancer.bicep` | No | Nuevo | Preparado | Interno: **no** reemplaza la URL pública actual |
+| Monitores de Better Stack (healthz y readyz por entorno) | No | Dueño: `infra/terraform/observability` | Nuevos (externos a Azure) | Preparado y validado en la CI; sin aplicar (no hay cuenta) | Plan gratuito: verificar límites al crear la cuenta |
+| Latido del escaneo de alertas | No | Dueño: `infra/terraform/observability` | Nuevo (externo) | Preparado | Si el escaneo se detiene, Better Stack alerta |
+
+**Estado de Terraform:** nunca en Git (`.gitignore` excluye `*.tfstate` y `*.tfvars`). Para aplicarlo, el estado se guarda fuera del repositorio. El token va en `BETTERUPTIME_API_TOKEN`, nunca en archivos.
+
+**Migración de propiedad:** si el equipo quisiera que Terraform administre recursos de Azure, se hace con `terraform import` y un `plan` sin cambios, y luego se retira el recurso de Bicep. Nunca las dos a la vez.

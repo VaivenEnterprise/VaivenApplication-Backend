@@ -72,3 +72,36 @@ jobs:
           path: ${{ runner.temp }}/vaiven-iac/*-lint.sarif
           if-no-files-found: ignore
           retention-days: 3
+
+  # Terraform (spec 018): solo Better Stack (observabilidad externa). Valida
+  # sin estado remoto, sin credenciales y sin plan ni apply.
+  terraform:
+    name: Terraform fmt, validate and security scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: infra/terraform/observability
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.17.1
+          terraform_wrapper: false
+      - name: terraform fmt -check
+        run: terraform fmt -check -recursive -diff
+      - name: terraform init (sin backend) y validate
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+      - name: Security scan of the configuration (Trivy config)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.70.0
+          scan-type: config
+          scan-ref: infra/terraform
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+          format: table

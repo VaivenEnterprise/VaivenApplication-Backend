@@ -1,7 +1,8 @@
 # Alertas de seguridad y respuesta a incidentes (spec 018, C-10)
 
 - **Fecha:** 2026-11-18 · **Evaluador:** `scripts/security-alerts.mjs` · **Pruebas de activación:** `tests/security-controls.test.mjs` (en la CI, job Secrets)
-- **Destinatarios:** **PENDIENTE DE OPERACIÓN.** El equipo no ha asignado quién recibe cada alerta ni por qué canal. Hasta asignarlos, las alertas de la cadena de suministro (A5 y A6) llegan como fallo de workflow a quien vigila el repositorio, y las de registros (A1 a A4) se revisan a mano con el evaluador. **Sin destinatarios asignados, C-10 no cuenta como cumplido.**
+- **Destinatarios:** **PENDIENTE DE OPERACIÓN.** La entrega ya está implementada: issue `security-alert` asignado a los usuarios de GitHub de la variable de repositorio `ALERT_ASSIGNEES` (titular y suplente), más un webhook opcional (`ALERT_WEBHOOK_URL`). Sin destinatarios, la entrega falla con «C-10 no operativo». **C-10 no cuenta como cumplido** hasta fijar los destinatarios que aceptaron el rol y comprobar la recepción con `Security alerts → synthetic`.
+- **Tiempos objetivo:** detección ≤ 30 min (A1 a A4, escaneo programado) e inmediata (A5 y A6, en el despliegue); primera respuesta ≤ 15 min tras el aviso.
 - **Sin servicios de pago:** no se usa Azure Monitor ni otro servicio con costo (Art. XIII.1).
 
 ## Las seis alertas
