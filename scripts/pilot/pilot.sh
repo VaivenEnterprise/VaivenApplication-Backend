@@ -76,6 +76,9 @@ rewrite_env() {
 # cabecera de Azure). Los argumentos nunca llevan secretos.
 vm_run() {
   local vm=$1 script=$2
+  # Sin esta línea, run-command usa sh (dash), que rechaza «set -o pipefail» y
+  # termina sin imprimir nada (deploy-staging.yml también la antepone).
+  sed -i '1i #!/usr/bin/env bash' "$script"
   az vm run-command invoke -g "$RG" -n "$vm" --command-id RunShellScript --scripts "@$script" \
     --query 'value[0].message' -o tsv
 }
@@ -100,7 +103,8 @@ cmd_vm1_up() {
 set -euo pipefail
 . /etc/os-release
 [ "\$ID" = ubuntu ] && [ "\$VERSION_ID" = 24.04 ] || { echo "OS-NO-SOPORTADO \$ID \$VERSION_ID"; exit 1; }
-install -d -m 750 -o 65532 -g 65532 /opt/vaiven/pilot/gw
+# 65532 = usuario nonroot de la imagen; no existe en la VM, por eso chown numérico.
+install -d -m 750 /opt/vaiven/pilot/gw && chown 65532:65532 /opt/vaiven/pilot/gw
 install -d -m 755 /opt/vaiven/pilot/relay
 cd /opt/vaiven/pilot/gw
 [ -f gw.key ] || openssl ecparam -name prime256v1 -genkey -noout -out gw.key 2>/dev/null
@@ -141,7 +145,9 @@ $(declare -f rewrite_env)
 rewrite_env </opt/vaiven/staging/.env >\$R/api.env
 chown -R 65532:65532 \$R && chmod 400 \$R/api.env
 cd /opt/vaiven/pilot
-PILOT_IMAGE="\$IMG" VM1_PRIVATE_IP=$ip docker compose -f gateway.compose.yml up -d
+# Exportadas: Compose las necesita en cada llamada (up y ps), no solo en up.
+export PILOT_IMAGE="\$IMG" VM1_PRIVATE_IP=$ip
+docker compose -f gateway.compose.yml up -d
 docker compose -f gateway.compose.yml ps --format '{{.Service}} {{.State}}'
 echo "relevo: \$(ls \$R/debs | wc -l) paquetes, imagen \$TAG"
 EOF
@@ -182,7 +188,9 @@ echo '$ca_b64' | base64 -d >\$C/ca.pem
 echo '$compose_b64' | base64 -d >/opt/vaiven/pilot/vm2.compose.yml
 chown -R 65532:65532 \$C && chmod 444 \$C/*.pem
 mkdir -p \$W && cd \$W
-get() { curl -fsS --tlsv1.3 --cacert \$C/ca.pem --cert \$C/vm2.pem --key \$C/vm2.key --resolve vaiven-pilot-gw:8444:$ip "https://vaiven-pilot-gw:8444/\$1" -o "\$1"; }
+# Los .deb de Docker llevan la época codificada («5%3a28…»): el % va como %25
+# en la URL o el relevo lo decodifica y responde 404.
+get() { curl -fsS --tlsv1.3 --cacert \$C/ca.pem --cert \$C/vm2.pem --key \$C/vm2.key --resolve vaiven-pilot-gw:8444:$ip "https://vaiven-pilot-gw:8444/\${1//%/%25}" -o "\$1"; }
 mkdir -p debs
 get SHA256SUMS; get image.tar.gz; get image.id; get image.ref; get api.env
 for d in \$(awk '{print \$2}' SHA256SUMS | grep '^debs/'); do get "\$d"; done
@@ -190,7 +198,7 @@ sha256sum -c SHA256SUMS >/dev/null && echo "relevo verificado (sha256)"
 command -v docker >/dev/null || DEBIAN_FRONTEND=noninteractive dpkg -i debs/*.deb >/dev/null
 docker load -i image.tar.gz >/dev/null
 [ "\$(docker image inspect -f '{{.Id}}' "\$(cat image.ref)")" = "\$(cat image.id)" ] && echo "imagen idéntica a la verificada en VM1"
-install -m 400 -o 65532 -g 65532 api.env /opt/vaiven/pilot/api.env && rm -f api.env
+install -m 400 api.env /opt/vaiven/pilot/api.env && chown 65532:65532 /opt/vaiven/pilot/api.env && rm -f api.env
 cd /opt/vaiven/pilot
 PILOT_IMAGE="\$(cat \$W/image.ref)" VM1_PRIVATE_IP=$ip docker compose -f vm2.compose.yml up -d
 sleep 8

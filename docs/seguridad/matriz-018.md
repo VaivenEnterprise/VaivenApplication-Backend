@@ -27,7 +27,7 @@
 |---|---|
 | **C-12** Revocación ≤ 60 s | **Implementado y validado.** El token lleva `sid` (familia). Logout y reutilización revocan la sesión, y la baja revoca todo el usuario, en Redis. Con dos réplicas reales, el logout en una se ve en la otra en **8 ms**. Con Redis caído, la ruta protegida responde **503 en 500 ms** (falla cerrada) y las públicas siguen funcionando. El contrato documenta el 503 en las 51 operaciones protegidas que no lo tenían (0.12.0, compatible) |
 | **C-08** Compresión | Implementada, apagada por omisión (coordinar con móvil). 69/69 operaciones con gzip y 0 incumplimientos; −77 % de bytes |
-| **C-13** Segregación y **C-14** Bicep y proxy | Balanceador local demostrado; Azure Load Balancer solo diseñado (Bicep), sin desplegar: requiere la enmienda y la aprobación del gasto |
+| **C-13** Segregación y **C-14** Bicep y proxy | Balanceador local demostrado. **Piloto de dos VMs ejecutado en Azure y retirado (2026-11-19 y 20):** dos backends sanos por la sonda, exclusión de VM2 a los 45 s, recuperación y logout entre VMs en 43 ms. El grupo de backends por IP se declara como recurso hijo (en línea, Azure lo dejó vacío). Detalle en `piloto-dos-vm-azure.md` |
 | **C-15** CRLF | Corregido (016) |
 
 ## Dictamen
