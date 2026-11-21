@@ -23,8 +23,13 @@ function validate(template, staging, production) {
   }
 
   const nested = Object.entries(candidate.properties.template.resources).filter(isManaged);
-  assert.deepEqual(nested.map(([, resource]) => resource.type), ['Microsoft.Network/loadBalancers']);
-  const balancer = nested[0][1];
+  // El grupo de backends por IP va como recurso hijo: en línea, Azure lo
+  // descartó al crear el balanceador del piloto (2026-11-19).
+  assert.deepEqual(nested.map(([, resource]) => resource.type).sort(),
+    ['Microsoft.Network/loadBalancers', 'Microsoft.Network/loadBalancers/backendAddressPools']);
+  const balancer = nested.find(([, r]) => r.type === 'Microsoft.Network/loadBalancers')[1];
+  const pool = nested.find(([, r]) => r.type === 'Microsoft.Network/loadBalancers/backendAddressPools')[1];
+  assert.ok(pool.properties.copy[0].count, 'el grupo debe declarar sus direcciones');
   assert.equal(balancer.sku.name, 'Standard');
   const { frontendIPConfigurations, probes, loadBalancingRules, outboundRules } = balancer.properties;
   assert.equal(frontendIPConfigurations.length, 1);

@@ -1,6 +1,6 @@
 # Piloto de dos VMs: datos compartidos e imagen firmada en VM2
 
-- **Fecha:** 2026-11-19 · **Estado:** análisis y diseño. **No se implementó nada** en Azure, en VM1 ni en sus NSG.
+- **Fecha:** 2026-11-19 · **Estado:** implementado (§6) y **ejecutado en Azure** el 2026-11-19 y 20; resultados y retiro en `piloto-dos-vm-azure.md`. Las §1 a §5 conservan el análisis previo.
 - **Hechos de partida** (lectura B-5 y repositorio):
   - VM1 (`vm-vaiven`) aloja staging **y producción**;
   - MongoDB y Redis corren en Docker **sin publicar puertos** (Art. XIV);
@@ -117,3 +117,4 @@ Son **datos históricos**: el día de la creación se vuelven a leer en el porta
 3. Revisar el saldo del crédito en el portal y crear con `az deployment group create` (mismos parámetros que el what-if).
 4. `pilot.sh ca`, `vm1-up`, `vm2-up` y `test`.
 5. **Retiro en la misma ventana:** `pilot.sh down` y luego borrar los 4 recursos `vaiven-pilot-p1-*` por ID; confirmar en *Cost Management*.
+6. **Resultado (2026-11-19 y 20):** pasarela, relevo, sesión entre VMs, exclusión y recuperación en verde; retiro completo. Detalle en `piloto-dos-vm-azure.md`, «Ejecución del piloto».

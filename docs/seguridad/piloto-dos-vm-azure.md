@@ -199,3 +199,35 @@ Los dos cambios tocan la VM que también aloja producción: se presentan y se ap
 - **Balanceador:** interno en `10.0.0.20`; backends VM1 y VM2 por IP; sonda HTTPS `/healthz` cada 15 s con 2 fallos; regla TCP 8443 → 8443.
 - **Hallazgo para la creación:** el NSG de VM2 abre la salida a MongoDB (27017) y Redis (6379) **directo** en VM1, lo que corresponde a la opción B (publicar las bases), que está descartada. Con la pasarela mTLS recomendada (opción A), esas reglas pasan a 27018 y 6380 y se agrega la salida a `Storage.WestUS2:443` para el relevo de la imagen. Hay que ajustar el Bicep y repetir el what-if antes de crear.
 - **La ventana de 4 h** (`expiresAtUtc`) se recalcula al momento de crear: hay que regenerar `pilot.json` justo antes.
+
+## Ejecución del piloto (2026-11-19 y 20, Cloud Shell del responsable)
+
+Creado con `az deployment group create` (mismos parámetros que el what-if) y operado con `scripts/pilot/pilot.sh` (`ca`, `vm1-up`, `vm2-up`, `down`).
+
+**Fallas encontradas y corregidas durante la ejecución:**
+
+| Falla | Causa | Corrección |
+|---|---|---|
+| El despliegue falló con `SecurityRuleInvalidAccessType` | La etiqueta `AzurePlatformDNS` solo admite *Deny* | Se quitó la regla; `verify-pilot-iac.mjs` rechaza toda regla *Allow* con etiquetas `AzurePlatform*` |
+| `vm1-up` no devolvía la solicitud de certificado | `install -o 65532` (ese usuario no existe en la VM) y `run-command` ejecuta el guion con `sh`, que no admite `pipefail` | `chown` numérico y `#!/usr/bin/env bash` antepuesto en `vm_run` |
+| `vm2-up` recibía 404 del relevo | Los `.deb` de Docker llevan `%3a` en el nombre | El cliente codifica `%` como `%25` |
+| **0 respuestas por el balanceador** | El grupo de backends quedó **vacío**: las direcciones por IP escritas dentro del balanceador se descartaron al crearlo, aunque el what-if las mostraba. VM2 no recibía sondas | En el piloto se agregaron con `az network lb address-pool address add`. En el Bicep pasan a un recurso hijo `backendAddressPools`, y los dos verificadores exigen esa forma |
+
+**Resultados:**
+
+| Prueba | Resultado |
+|---|---|
+| Datos de VM2 por la pasarela mTLS | `/readyz` de VM2: `ready`, `redis: ok`. Relevo verificado por sha256; imagen idéntica a la verificada por firma en VM1 |
+| Sesión entre VMs (C-12) | Token emitido en VM1 → `/me` en VM2: 200. Logout en VM2: 204. El mismo token en VM1: **401 en 43 ms** |
+| Salud de los dos backends (API de salud por regla) | `up: 2`, los dos `Up_Probe_Success`; los dos reciben la sonda `/healthz` (≈ 4–5 por minuto) |
+| Reparto desde VM1 (20 peticiones al frontend del balanceador) | 15 atendidas por VM2 (contadas en su registro) y 5 sin respuesta, asignadas a VM1 misma (*hairpin*, ver abajo) |
+| Exclusión | API de VM2 detenida: a los 45 s, VM2 `Down_Probe_HttpEndpointUnreachable` y `up: 1` |
+| Recuperación | Tras reiniciar la API de VM2, 20/20 respuestas 200 desde VM1, ninguna atendida por VM1: VM2 volvió a recibir tráfico. Se midió por tráfico en el primer ciclo de parada; el segundo ciclo, medido con la API de salud, no se volvió a consultar antes del retiro |
+
+**Límite del método:** Azure Load Balancer interno no admite *hairpin*. Si un backend se conecta al frontend y el flujo se asigna a sí mismo, la conexión se pierde. El único cliente fue VM1 (cuota de 4/4 vCPU, sin una tercera VM), así que el reparto se mide por los registros de cada backend y la salud por la API del balanceador, no por un cliente neutral.
+
+**Retiro (en la ventana de 4 h):**
+- `pilot.sh down` quitó la pasarela y el relevo de VM1 (MongoDB y Redis sin cambios) y borró la CA de Cloud Shell;
+- se borraron por ID los 5 recursos etiquetados: balanceador, VM2, su disco, su NIC y su NSG;
+- verificación: no queda ningún recurso `spec-018-pilot` ni `vaiven-pilot*`; en VM1, 0 contenedores del piloto y 0 puertos 27018, 6380 u 8444;
+- costo: pendiente de leer en *Cost Management* (el estimado era ≈ USD 3,20).

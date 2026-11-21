@@ -60,22 +60,13 @@ resource balancer 'Microsoft.Network/loadBalancers@2024-05-01' = {
         }
       }
     ]
+    // El grupo se declara vacío aquí y sus direcciones en el recurso hijo
+    // `backendPool`: en el piloto del 2026-11-19, las direcciones escritas en
+    // línea se descartaron al crear el balanceador (grupo vacío, sin sonda a
+    // los backends), aunque el what-if las mostraba.
     backendAddressPools: [
       {
         name: 'api'
-        properties: {
-          loadBalancerBackendAddresses: [
-            for (ip, index) in settings.backendPrivateIps: {
-              name: 'api-${index + 1}'
-              properties: {
-                ipAddress: ip
-                virtualNetwork: {
-                  id: vnetId
-                }
-              }
-            }
-          ]
-        }
       }
     ]
     probes: [
@@ -108,6 +99,26 @@ resource balancer 'Microsoft.Network/loadBalancers@2024-05-01' = {
           }
           enableFloatingIP: false
           disableOutboundSnat: true
+        }
+      }
+    ]
+  }
+}
+
+// Direcciones del grupo por IP como recurso hijo: Azure las aplica después del
+// balanceador y no las descarta (ver el comentario de backendAddressPools).
+resource backendPool 'Microsoft.Network/loadBalancers/backendAddressPools@2024-05-01' = {
+  parent: balancer
+  name: 'api'
+  properties: {
+    loadBalancerBackendAddresses: [
+      for (ip, index) in settings.backendPrivateIps: {
+        name: 'api-${index + 1}'
+        properties: {
+          ipAddress: ip
+          virtualNetwork: {
+            id: vnetId
+          }
         }
       }
     ]

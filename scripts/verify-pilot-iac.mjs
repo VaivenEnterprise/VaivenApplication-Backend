@@ -70,16 +70,21 @@ function verifyPilot(arm, defaults) {
   assert.equal(networkProfile.networkInterfaces[0].id, "[parameters('nicId')]");
   assert.deepEqual(securityProfile, { securityType: 'TrustedLaunch', uefiSettings: { secureBootEnabled: true, vTpmEnabled: true } });
 
-  const [balancer] = Object.values(pilotLoadBalancer.properties.template.resources);
-  assert.equal(Object.values(pilotLoadBalancer.properties.template.resources).length, 1);
+  const lbResources = Object.values(pilotLoadBalancer.properties.template.resources);
+  assert.equal(lbResources.length, 2);
+  const balancer = lbResources.find(r => r.type === 'Microsoft.Network/loadBalancers');
+  // Direcciones en un recurso hijo: en línea, Azure las descartó (2026-11-19).
+  const pool = lbResources.find(r => r.type === 'Microsoft.Network/loadBalancers/backendAddressPools');
+  assert.ok(pool, 'falta el grupo de backends como recurso hijo');
   assert.equal(balancer.type, 'Microsoft.Network/loadBalancers');
   assert.equal(balancer.sku.name, 'Standard');
   const { frontendIPConfigurations, backendAddressPools, probes, loadBalancingRules, outboundRules } = balancer.properties;
   assert.equal(frontendIPConfigurations.length, 1);
   assert.equal(frontendIPConfigurations[0].properties.subnet.id, "[parameters('subnetId')]");
   assert.equal(backendAddressPools.length, 1);
+  assert.equal(backendAddressPools[0].properties, undefined, 'las direcciones no deben ir en línea');
   assert.deepEqual(pilotLoadBalancer.properties.parameters.settings.value.backendPrivateIps, ["[variables('existingVmPrivateIp')]", "[variables('pilotVmPrivateIp')]"]);
-  assert.equal(backendAddressPools[0].properties.copy[0].count, "[length(parameters('settings').backendPrivateIps)]");
+  assert.equal(pool.properties.copy[0].count, "[length(parameters('settings').backendPrivateIps)]");
   assert.equal(pilotLoadBalancer.properties.parameters.tlsPort.value, 8443);
   assert.equal(probes.length, 1);
   assert.equal(probes[0].properties.protocol, 'Https');
