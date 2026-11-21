@@ -230,4 +230,5 @@ Creado con `az deployment group create` (mismos parámetros que el what-if) y op
 - `pilot.sh down` quitó la pasarela y el relevo de VM1 (MongoDB y Redis sin cambios) y borró la CA de Cloud Shell;
 - se borraron por ID los 5 recursos etiquetados: balanceador, VM2, su disco, su NIC y su NSG;
 - verificación: no queda ningún recurso `spec-018-pilot` ni `vaiven-pilot*`; en VM1, 0 contenedores del piloto y 0 puertos 27018, 6380 u 8444;
-- costo: pendiente de leer en *Cost Management* (el estimado era ≈ USD 3,20).
+- costo real (lectura del responsable en el portal, 2026-11-21): gasto del mes de USD 2,10 y crédito disponible de USD 197,90, frente al estimado de ≈ USD 3,20 (tope de USD 15); la diferencia contra la lectura del 2026-11-18 (≈ USD 1,8) es de ≈ USD 0,30 e incluye el piloto y la base normal de VM1, y no queda costo residual porque no sobrevive ningún recurso del piloto;
+- *Cost Management* puede tardar de 24 a 72 h en reflejar el consumo: se recomienda volver a leer el gasto después del 2026-11-23.
