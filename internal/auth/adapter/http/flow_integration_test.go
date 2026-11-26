@@ -20,6 +20,7 @@ import (
 	drv "go.mongodb.org/mongo-driver/v2/mongo"
 
 	apihttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http"
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/contract"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/handler"
 	adaptermongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/mongo"
 	authmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/adapter/mongo"
@@ -113,7 +114,8 @@ func newAPIOn(t *testing.T, db *drv.Database, jwtSecret string, accessTTL time.D
 		Limiter: limiter, LimiterFallback: redis.NewMemoryLimiter(),
 		Modules: []apihttp.Module{mod, adminProbe{auth: mod.Authenticate(), lookup: users.ByID}},
 	})
-	srv := httptest.NewServer(router)
+	// Spec 016, T008: cada respuesta se valida contra el contrato OpenAPI.
+	srv := httptest.NewServer(contract.Wrap(t, router, "", "/api/v1/admin/probe"))
 	t.Cleanup(srv.Close)
 	return &api{t: t, srv: srv}
 }
@@ -127,7 +129,7 @@ type adminProbe struct {
 func (adminProbe) Name() string { return "admin-probe" }
 
 func (p adminProbe) Register(r chi.Router) {
-	r.With(p.auth, RequireRole(domain.RoleAdmin, p.lookup)).Get("/admin/probe", func(w http.ResponseWriter, _ *http.Request) {
+	r.With(p.auth, RequireRole(domain.RoleAdmin, p.lookup, nil)).Get("/admin/probe", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 }
@@ -194,6 +196,11 @@ func TestIntegrationSessionFlow(t *testing.T) {
 	if st, _ := a.call(http.MethodGet, "/api/v1/me", "", reg.Tokens.AccessToken, &me); st != http.StatusOK || me.ID != reg.User.ID {
 		t.Fatalf("/me = %d %+v", st, me)
 	}
+	// Editar el perfil (spec 016, T008: ruta ejercida contra el contrato).
+	var edited struct{ DisplayName string }
+	if st, code := a.call(http.MethodPatch, "/api/v1/me", `{"displayName":"Ana López"}`, reg.Tokens.AccessToken, &edited); st != http.StatusOK || edited.DisplayName != "Ana López" {
+		t.Fatalf("PATCH /me = %d %s %+v", st, code, edited)
+	}
 
 	// CA-02: el mismo correo con otras mayúsculas o espacios → 409, sin crear otra cuenta.
 	for _, email := range []string{"ana@example.com", "ANA@EXAMPLE.COM", "  Ana@example.com  "} {
@@ -209,7 +216,7 @@ func TestIntegrationSessionFlow(t *testing.T) {
 	// Perfil público sin datos privados.
 	var pub map[string]any
 	if st, _ := a.call(http.MethodGet, "/api/v1/users/"+reg.User.ID, "", reg.Tokens.AccessToken, &pub); st != http.StatusOK ||
-		pub["displayName"] != "Ana" || pub["email"] != nil || pub["phone"] != nil {
+		pub["displayName"] != "Ana López" || pub["email"] != nil || pub["phone"] != nil {
 		t.Errorf("perfil público = %d %v", st, pub)
 	}
 

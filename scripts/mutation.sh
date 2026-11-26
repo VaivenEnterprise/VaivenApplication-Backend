@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Pruebas de mutación con gremlins (spec 017, T010).
+# Pruebas de mutación con gremlins (spec 017, T010; ampliado en la spec 016,
+# T009).
 #
 # Uso:   scripts/mutation.sh [directorio...]
-# Por defecto: internal/domain internal/usecase internal/platform/security
+# Por defecto: internal/domain internal/usecase internal/platform/security y
+# el domain y el usecase de cada módulo (internal/*/domain, internal/*/usecase)
 #
 # Recorre cada paquete Go (subpaquetes incluidos) de los directorios dados,
 # ejecuta `gremlins unleash`, comprueba los umbrales y deja en $MUTATION_OUT:
@@ -35,6 +37,10 @@ if [[ $# -gt 0 ]]; then
   targets=("$@")
 else
   targets=(internal/domain internal/usecase internal/platform/security)
+  # Spec 016, T009 (CA-05): todos los domain y usecase de módulo.
+  for dir in internal/*/domain internal/*/usecase; do
+    [[ -d $dir ]] && targets+=("$dir")
+  done
 fi
 
 command -v go >/dev/null || { echo "Falta go." >&2; exit 2; }

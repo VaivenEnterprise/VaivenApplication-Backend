@@ -17,6 +17,7 @@ import (
 
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/middleware"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/respond"
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/validate"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/chat/domain"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/chat/usecase"
@@ -51,6 +52,7 @@ type Module struct {
 	log   *slog.Logger
 	auth  func(http.Handler) http.Handler
 	limit func(http.Handler) http.Handler
+	v     *validate.Validator
 }
 
 // NewModule crea el módulo. Falla si falta una dependencia obligatoria.
@@ -59,7 +61,7 @@ func NewModule(d ModuleDeps) (*Module, error) {
 		return nil, errors.New("chat: faltan dependencias del módulo HTTP")
 	}
 	return &Module{
-		svc: d.Service, log: d.Log, auth: d.Authenticate,
+		svc: d.Service, log: d.Log, auth: d.Authenticate, v: validate.New(),
 		limit: middleware.RateLimit(d.Limiter, d.LimiterFallback, middleware.RateLimitConfig{
 			Limit: policy.POL11MessagesPerMinute, Window: time.Minute, KeyPrefix: "chat:",
 			UserID: func(r *http.Request) (string, bool) { return auth.UserID(r.Context()) },
@@ -283,8 +285,10 @@ func (m *Module) messages(w http.ResponseWriter, r *http.Request) {
 	respond.JSON(w, http.StatusOK, out)
 }
 
+// sendRequest se valida en la frontera con validator/v10 (Art. VI.2; spec 016,
+// T006); el texto vacío tras recortar y las longitudes los aplica el dominio.
 type sendRequest struct {
-	Body     *string `json:"body"`
+	Body     *string `json:"body" validate:"required"`
 	ClientID *string `json:"clientId"`
 }
 
@@ -297,11 +301,11 @@ func (m *Module) send(w http.ResponseWriter, r *http.Request) {
 			m.fail(w, r, invalid(typeErr.Field, "tipo de dato inválido"))
 			return
 		}
-		m.fail(w, r, shared.NewValidation("El cuerpo de la petición no es un JSON válido."))
+		m.fail(w, r, respond.InvalidBody(err))
 		return
 	}
-	if req.Body == nil {
-		m.fail(w, r, invalid("body", "es obligatorio"))
+	if err := m.v.Struct(&req, domain.MessageInvalidData); err != nil {
+		m.fail(w, r, err)
 		return
 	}
 	msg, created, err := m.svc.Send(r.Context(), userID(r), chi.URLParam(r, "id"), *req.Body, req.ClientID)

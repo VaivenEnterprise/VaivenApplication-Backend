@@ -12,3 +12,10 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+  # Spec 018, C-03: imágenes base del Dockerfile (fijadas por digest).
+  - package-ecosystem: docker
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3

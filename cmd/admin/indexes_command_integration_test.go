@@ -62,7 +62,7 @@ func TestIntegrationIndexesCommand(t *testing.T) {
 	db := client.Database("vaiven_cmd")
 	mustEnsure(t, db)
 
-	if code, out := commandOn(t, db); code != indexesOK || !strings.Contains(out, "34 correctos") {
+	if code, out := commandOn(t, db); code != indexesOK || !strings.Contains(out, "40 correctos") {
 		t.Fatalf("base recién creada: código %d, want 0\n%s", code, out)
 	}
 

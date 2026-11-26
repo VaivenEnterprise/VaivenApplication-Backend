@@ -90,6 +90,42 @@ func (d cardDoc) toDomain() domain.Card {
 	return c
 }
 
+// CardsByIDs devuelve las tarjetas visibles de ids en el mismo orden en que
+// se pidieron; los ids inválidos, repetidos o no visibles se omiten (spec 015,
+// T005).
+func (r *Repo) CardsByIDs(ctx context.Context, viewerID string, ids []string) ([]domain.Card, error) {
+	oids := make([]bson.ObjectID, 0, len(ids))
+	for _, id := range ids {
+		if oid, err := bson.ObjectIDFromHex(id); err == nil {
+			oids = append(oids, oid)
+		}
+	}
+	if len(oids) == 0 {
+		return []domain.Card{}, nil
+	}
+	cur, err := r.items.Aggregate(ctx, BuildByIDsPipeline(viewerID, oids, r.now()))
+	if err != nil {
+		return nil, fmt.Errorf("search: consultar por ids: %w", err)
+	}
+	var docs []cardDoc
+	if err := cur.All(ctx, &docs); err != nil {
+		return nil, fmt.Errorf("search: leer resultados por ids: %w", err)
+	}
+	byID := make(map[string]domain.Card, len(docs))
+	for _, d := range docs {
+		c := d.toDomain()
+		byID[c.ID] = c
+	}
+	out := make([]domain.Card, 0, len(byID))
+	for _, id := range ids {
+		if c, ok := byID[id]; ok {
+			out = append(out, c)
+			delete(byID, id) // un id repetido sale una sola vez
+		}
+	}
+	return out, nil
+}
+
 // Search ejecuta la consulta y devuelve una página de tarjetas (RF-01 a RF-07).
 func (r *Repo) Search(ctx context.Context, q domain.Query) (domain.Page, error) {
 	cur, err := r.items.Aggregate(ctx, BuildPipeline(q, r.now()))

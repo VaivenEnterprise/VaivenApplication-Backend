@@ -148,3 +148,20 @@ func TestWordFiltersLimit(t *testing.T) {
 		t.Error("mustOID con id inválido")
 	}
 }
+
+// BuildByIDsPipeline aplica las mismas reglas de visibilidad que la búsqueda
+// (spec 015, T005): primero el filtro por ids, activos y ajenos; después las
+// etapas del dueño y la proyección de la tarjeta.
+func TestByIDsPipelineShape(t *testing.T) {
+	oid, _ := bson.ObjectIDFromHex(cursorID)
+	p := BuildByIDsPipeline("u1", []bson.ObjectID{oid}, fixedNow)
+	if want := 2 + len(ownerStages(fixedNow)); len(p) != want {
+		t.Fatalf("etapas = %d, want %d", len(p), want)
+	}
+	js := string(pipelineJSON(t, p))
+	for _, frag := range []string{`"$in"`, cursorID, `"status":"active"`, `"$ne":"u1"`, `"_owner.status":"active"`, `"suspendedUntil"`, `"$project"`} {
+		if !strings.Contains(strings.ReplaceAll(js, " ", ""), frag) {
+			t.Errorf("falta %s en %s", frag, js)
+		}
+	}
+}

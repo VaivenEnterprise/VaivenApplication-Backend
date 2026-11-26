@@ -46,9 +46,15 @@ type Config struct {
 	Images Images
 	// Push configura el envío de notificaciones por Expo (spec 011).
 	Push Push
+	// AI configura la IA generativa (spec 014): sugerencias y asistente.
+	AI AI
+	// Reco configura las recomendaciones con ML (spec 015).
+	Reco Reco
 
 	// DocsEnabled sirve Swagger UI en /docs (solo development y staging).
 	DocsEnabled bool
+	// Edge: compresión y proxies de confianza (spec 018, propuesta).
+	Edge Edge
 }
 
 // IsProduction indica si el servicio corre en producción (logs en JSON, plan P-04).
@@ -125,7 +131,10 @@ func load(lookup lookupFunc) (Config, error) {
 	cfg.Auth = loadAuth(&r, cfg.AppEnv)
 	cfg.Images = loadImages(&r)
 	cfg.Push = loadPush(&r, cfg.AppEnv)
+	cfg.AI = loadAI(&r, cfg.AppEnv)
+	cfg.Reco = loadReco(&r)
 	cfg.DocsEnabled = loadDocs(&r, cfg.AppEnv)
+	cfg.Edge = loadEdge(&r, cfg.AppEnv)
 
 	if len(r.problems) > 0 {
 		return Config{}, &Error{Problems: r.problems}

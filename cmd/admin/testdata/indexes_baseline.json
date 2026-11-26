@@ -1,5 +1,54 @@
 [
   {
+    "collection": "ai_conversations",
+    "name": "updated_ttl",
+    "spec": {
+      "key": {
+        "updatedAt": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "updated_ttl",
+      "expireAfterSeconds": {
+        "$numberInt": "86400"
+      }
+    }
+  },
+  {
+    "collection": "ai_usage",
+    "name": "created_ttl",
+    "spec": {
+      "key": {
+        "createdAt": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "created_ttl",
+      "expireAfterSeconds": {
+        "$numberInt": "259200"
+      }
+    }
+  },
+  {
+    "collection": "ai_usage",
+    "name": "user_feature_day_unique",
+    "spec": {
+      "key": {
+        "userId": {
+          "$numberInt": "1"
+        },
+        "feature": {
+          "$numberInt": "1"
+        },
+        "day": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "user_feature_day_unique",
+      "unique": true
+    }
+  },
+  {
     "collection": "bookings",
     "name": "item_status_dates",
     "spec": {
@@ -435,6 +484,58 @@
         }
       },
       "name": "ratee_id"
+    }
+  },
+  {
+    "collection": "reco_interactions",
+    "name": "created_ttl",
+    "spec": {
+      "key": {
+        "createdAt": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "created_ttl",
+      "expireAfterSeconds": {
+        "$numberInt": "7776000"
+      }
+    }
+  },
+  {
+    "collection": "reco_interactions",
+    "name": "user_createdAt",
+    "spec": {
+      "key": {
+        "userId": {
+          "$numberInt": "1"
+        },
+        "createdAt": {
+          "$numberInt": "-1"
+        }
+      },
+      "name": "user_createdAt"
+    }
+  },
+  {
+    "collection": "reco_interactions",
+    "name": "user_item_type_bucket_unique",
+    "spec": {
+      "key": {
+        "userId": {
+          "$numberInt": "1"
+        },
+        "itemId": {
+          "$numberInt": "1"
+        },
+        "type": {
+          "$numberInt": "1"
+        },
+        "bucket": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "user_item_type_bucket_unique",
+      "unique": true
     }
   },
   {

@@ -47,6 +47,8 @@ myNotifications:
         $ref: '../openapi.yaml#/components/responses/RateLimited'
       '500':
         $ref: '../openapi.yaml#/components/responses/InternalError'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'
 
 myNotificationsUnreadCount:
   get:
@@ -79,6 +81,8 @@ myNotificationsUnreadCount:
         $ref: '../openapi.yaml#/components/responses/RateLimited'
       '500':
         $ref: '../openapi.yaml#/components/responses/InternalError'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'
 
 myNotificationsRead:
   post:
@@ -113,6 +117,8 @@ myNotificationsRead:
         $ref: '../openapi.yaml#/components/responses/RateLimited'
       '500':
         $ref: '../openapi.yaml#/components/responses/InternalError'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'
 
 myPushTokens:
   post:
@@ -148,6 +154,8 @@ myPushTokens:
         $ref: '../openapi.yaml#/components/responses/RateLimited'
       '500':
         $ref: '../openapi.yaml#/components/responses/InternalError'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'
   delete:
     tags: [avisos]
     operationId: deleteMyPushToken
@@ -179,3 +187,5 @@ myPushTokens:
         $ref: '../openapi.yaml#/components/responses/RateLimited'
       '500':
         $ref: '../openapi.yaml#/components/responses/InternalError'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'

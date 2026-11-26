@@ -16,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/respond"
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/validate"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth"
 	shared "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/domain"
 	images "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/images/domain"
@@ -54,6 +55,7 @@ type Module struct {
 	log   *slog.Logger
 	auth  func(http.Handler) http.Handler
 	admin func(http.Handler) http.Handler
+	v     *validate.Validator
 }
 
 // NewModule crea el módulo. Falla si falta una dependencia obligatoria.
@@ -61,7 +63,7 @@ func NewModule(d ModuleDeps) (*Module, error) {
 	if d.Service == nil || d.Authenticate == nil || d.RequireAdmin == nil || d.Log == nil {
 		return nil, errors.New("incidents: faltan dependencias del módulo HTTP")
 	}
-	return &Module{svc: d.Service, log: d.Log, auth: d.Authenticate, admin: d.RequireAdmin}, nil
+	return &Module{svc: d.Service, log: d.Log, auth: d.Authenticate, admin: d.RequireAdmin, v: validate.New()}, nil
 }
 
 // Name identifica el módulo.
@@ -121,9 +123,17 @@ func decode(w http.ResponseWriter, r *http.Request, dst any) error {
 		if errors.As(err, &typeErr) && typeErr.Field != "" {
 			return invalid(typeErr.Field, "tipo de dato inválido")
 		}
-		return shared.NewValidation("El cuerpo de la petición no es un JSON válido.")
+		return respond.InvalidBody(err)
 	}
 	return nil
+}
+
+// decode lee el cuerpo y lo valida en la frontera con validator/v10 (Art. VI.2).
+func (m *Module) decode(w http.ResponseWriter, r *http.Request, dst any) error {
+	if err := decode(w, r, dst); err != nil {
+		return err
+	}
+	return m.v.Struct(dst, domain.MessageInvalidData)
 }
 
 // --- respuestas ---
@@ -297,7 +307,7 @@ type openRequest struct {
 
 func (m *Module) open(w http.ResponseWriter, r *http.Request) {
 	var req openRequest
-	if err := decode(w, r, &req); err != nil {
+	if err := m.decode(w, r, &req); err != nil {
 		m.fail(w, r, err)
 		return
 	}
@@ -351,26 +361,17 @@ func (m *Module) adminList(w http.ResponseWriter, r *http.Request) {
 	respond.JSON(w, http.StatusOK, toPage(page))
 }
 
+// noteRequest y closeRequest se validan en la frontera con validator/v10
+// (Art. VI.2; spec 016, T006); longitudes y valores permitidos, en el dominio.
 type noteRequest struct {
-	Text             *string `json:"text"`
-	VisibleToParties *bool   `json:"visibleToParties"`
+	Text             *string `json:"text" validate:"required"`
+	VisibleToParties *bool   `json:"visibleToParties" validate:"required"`
 }
 
 func (m *Module) addNote(w http.ResponseWriter, r *http.Request) {
 	var req noteRequest
-	if err := decode(w, r, &req); err != nil {
+	if err := m.decode(w, r, &req); err != nil {
 		m.fail(w, r, err)
-		return
-	}
-	var details []shared.Detail
-	if req.Text == nil {
-		details = append(details, shared.Detail{Field: "text", Issue: "es obligatorio"})
-	}
-	if req.VisibleToParties == nil {
-		details = append(details, shared.Detail{Field: "visibleToParties", Issue: "es obligatorio"})
-	}
-	if len(details) > 0 {
-		m.fail(w, r, shared.NewValidation(domain.MessageInvalidData, details...))
 		return
 	}
 	v, err := m.svc.AddNote(r.Context(), userID(r), chi.URLParam(r, "id"), *req.Text, *req.VisibleToParties)
@@ -382,25 +383,14 @@ func (m *Module) addNote(w http.ResponseWriter, r *http.Request) {
 }
 
 type closeRequest struct {
-	FinalResponse *string `json:"finalResponse"`
-	Outcome       *string `json:"outcome"`
+	FinalResponse *string `json:"finalResponse" validate:"required"`
+	Outcome       *string `json:"outcome" validate:"required"`
 }
 
 func (m *Module) close(w http.ResponseWriter, r *http.Request) {
 	var req closeRequest
-	if err := decode(w, r, &req); err != nil {
+	if err := m.decode(w, r, &req); err != nil {
 		m.fail(w, r, err)
-		return
-	}
-	var details []shared.Detail
-	if req.FinalResponse == nil {
-		details = append(details, shared.Detail{Field: "finalResponse", Issue: "es obligatorio"})
-	}
-	if req.Outcome == nil {
-		details = append(details, shared.Detail{Field: "outcome", Issue: "es obligatorio"})
-	}
-	if len(details) > 0 {
-		m.fail(w, r, shared.NewValidation(domain.MessageInvalidData, details...))
 		return
 	}
 	v, err := m.svc.Close(r.Context(), userID(r), chi.URLParam(r, "id"), *req.FinalResponse, domain.Outcome(*req.Outcome))

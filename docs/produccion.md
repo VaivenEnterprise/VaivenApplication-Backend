@@ -96,7 +96,7 @@ La salida debe mostrar `mongo: healthy`, `primario: true`, el usuario creado, el
    | `vaiven-production-data-redis-1` | 4 MB de 96 MB |
    | `base-mongo-1` / `base-redis-1` / `vaiven-staging-api-1` | 183 / 5 / 10 MB |
 
-   Falta repetir la medición con la API de producción (paso 6) y con datos (CA-08).
+   **Con los dos entornos completos (2026-11-16, CA-08):** 534 MB disponibles de 887; swap 343 MB de 2 GB. `vaiven-production-api-1` 5 MB, `vaiven-staging-api-1` 46 MB, `base-mongo-1` 30 MB (recién recreado), `base-redis-1` 7 MB, `vaiven-production-data-mongo-1` 56 MB y `vaiven-production-data-redis-1` 7 MB. Disco al 12 %. Hay margen, así que los límites se mantienen.
 
    Anotar los valores aquí y en `memoria.md`. Si la memoria libre más el swap no da margen, ajustar los límites de producción o reducir o detener staging. **No** cambiar de talla sin consultar, porque tiene costo (Art. XIII.1).
 
@@ -122,7 +122,7 @@ Better Stack, plan gratuito. Lo da de alta una persona:
 | Fecha | Monitor | Intervalo | Aviso | Alta por |
 |---|---|---|---|---|
 | 2026-11-11 | Staging: `https://vaiven-staging.westus2.cloudapp.azure.com:8443/healthz` | 3 min | correo de la cuenta del equipo | BE-B |
-| — | Producción: `https://vaiven-staging.westus2.cloudapp.azure.com/healthz` | 3 min | correo | pendiente: después del despliegue (§5) |
+| 2026-11-16 | Producción: `https://vaiven-staging.westus2.cloudapp.azure.com/healthz` | 3 min | correo de la cuenta del equipo | BE-B |
 
 Plan gratuito, sin tarjeta ni teléfono (Art. XIII.1). El enlace de invitación de la cuenta no se comparte en el repositorio ni en chats: a los demás integrantes se les invita por correo desde *Team members*.
 
@@ -193,6 +193,12 @@ Ninguno es igual a los de staging (CA-02). **Sin `seed` en producción** (RF-05)
 ## 9. Operación diaria, registros y reversión (T008)
 
 - **Despliegue:** §5. **Reversión:** `bash deploy-production.sh --rollback`; termina con `Resultado: rolled_back` y `/api/v1/meta` vuelve a la versión anterior. Luego se vuelve a desplegar la buena.
+- **Prueba de reversión en staging (T008, la hace otra persona del equipo):**
+  1. Anotar la versión actual: `curl -s https://vaiven-staging.westus2.cloudapp.azure.com:8443/api/v1/meta` (campo `version`).
+  2. GitHub → **Actions → Deploy staging → Run workflow**, rama `develop`, `action: rollback`. Debe terminar en verde con «Resultado en la VM: `rolled_back`».
+  3. Repetir el `curl`: `version` ahora es la anterior y `/readyz` sigue en `ready`.
+  4. **Run workflow** otra vez con `action: deploy`: vuelve a la versión del paso 1.
+  5. Anotar en `memoria.md` quién lo hizo, la fecha y las dos versiones.
 - **Registros sin datos personales (CA-06):** tras una sesión completa (registro, publicar, buscar, chat), contar en `docker logs --since 2h vaiven-production-api-1` las apariciones de `password`, `Bearer `, `refreshToken`, `api_secret` y correos: todas deben ser 0.
 - **Límite de tasa en Redis (RF-11):** 130 peticiones seguidas a `/api/v1/meta` desde una IP empiezan a dar 429 pasadas las 120 por minuto, y `/readyz` sigue con `redis: ok`.
 - **Memoria y disco:** `free -m`, `docker stats --no-stream` y `df -h /` cada semana; límites en §2.8.
@@ -203,15 +209,77 @@ Ninguno es igual a los de staging (CA-02). **Sin `seed` en producción** (RF-05)
 
 | Punto | Evidencia | Estado |
 |---|---|---|
-| Secretos propios (CA-02) | §8 y T001 | |
-| Índices (T002) | `vm-admin.sh production indexes` = 0 | |
-| Sin seed (RF-05) | `seed` se niega en producción | |
-| Monitor (RF-06) | §4 | |
-| Respaldo y restauración (CA-04) | `docs/respaldos.md` §5 | |
-| Humo (CA-03) | §5 y T007 | |
-| Registros (CA-06) | §9 | |
-| HTTPS 443 y 8443 (CA-07) | §5 | |
-| Capacidad (CA-08) | §2.8 | |
-| Disco | §3 | |
-| p95 < 800 ms (RNF-01) | `tests/load` contra producción | |
-| Costo cero (RNF-02) | *Cost Management* | |
+| Secretos propios (CA-02) | §8 y T001 | ✅ 2026-11-16 |
+| Índices (T002) | `vm-admin.sh production indexes` = 0 | ✅ 34 correctos |
+| Sin seed (RF-05) | `seed` se niega en producción | ✅ |
+| Monitor (RF-06) | §4 | ✅ staging y producción Up |
+| Respaldo y restauración (CA-04) | `docs/respaldos.md` §5 | ✅ 0 diferencias |
+| Humo (CA-03) | §5 y T007 | ✅ |
+| Registros (CA-06) | §9 | ✅ 0 datos personales |
+| HTTPS 443 y 8443 (CA-07) | §5 | ✅ vence 1 feb 2027 |
+| Capacidad (CA-08) | §2.8 | ✅ 534 MB libres |
+| Disco | §3 | ✅ 12 % |
+| p95 < 800 ms (RNF-01) | dentro de la VM, solo lectura (`tests/load` se niega fuera de local porque crea datos) | ✅ p95 1,0 ms |
+| Costo cero (RNF-02) | *Cost Management* de `rg-vaiven` (2026-11-16): IP pública $1.55 (la única excepción del Art. XIII.1) y VM <$0.01 (capa gratuita) | ✅ |
+
+## 11. IA generativa (spec 014)
+
+Dos funciones, las dos **apagadas por defecto**: sugerencias al publicar (`AI_ENABLED`, parte A) y asistente de proyectos (`ASSISTANT_ENABLED`, parte B). `GET /api/v1/meta` dice cuáles están encendidas (`features`).
+
+**Proveedor (RF-03, T016).** **Groq**, con su capa gratuita y sin tarjeta (costo cero, Art. XIII.1), mediante el adaptador compatible con OpenAI (`AI_PROVIDER=openai`, `AI_BASE_URL=https://api.groq.com/openai/v1`, `AI_MODEL=openai/gpt-oss-120b`). **Groq no ofrece hoy (17 nov) un modelo con visión** para la clave del proyecto, así que **las sugerencias por foto usan su propio proveedor (T017): OpenRouter** con un modelo **gratuito con visión** (`SUGGEST_*`: `SUGGEST_BASE_URL=https://openrouter.ai/api/v1`, `SUGGEST_MODEL=nvidia/nemotron-3.5-super-vl:free`; `google/gemma-4-31b-it:free` daba 429 por saturación del proveedor el 17 nov). El asistente sigue en Groq. **Límite:** la cuenta gratuita de OpenRouter tiene un tope bajo de solicitudes por día para toda la cuenta; alcanza para la demo, no para muchos usuarios. Si faltan las `SUGGEST_*`, las sugerencias usan el mismo proveedor que el asistente. Verificado con una petición real: JSON en español, `finish_reason: stop`, ~1 060 tokens con el razonamiento (por eso el límite de salida es 4 096). Gemini queda como alternativa (`AI_PROVIDER=gemini`): el 17 nov su nivel gratuito no estaba disponible para la cuenta del proyecto y pagar no está permitido. En local se puede usar Ollama con el mismo adaptador (`AI_PROVIDER=ollama`). Cambiar de proveedor es cambiar variables.
+
+**Claves.** Groq (asistente): **console.groq.com** (*API Keys → Create API Key*). OpenRouter (sugerencias): **openrouter.ai** (*Keys → Create Key*; sin crédito, solo modelos `:free`; en *Settings → Privacy* revisar qué proveedores gratuitos se permiten). Con la cuenta del proyecto y **una por entorno**: la de producción es distinta de la de staging (CA-02). Se guarda en el gestor de contraseñas del equipo y nunca en el repositorio ni en chats. Para ponerla en la VM, desde Cloud Shell (Bash):
+
+```bash
+C=<commit que tenga el script>
+curl -fsSLO "https://raw.githubusercontent.com/VaivenEnterprise/VaivenApplication-Backend/$C/scripts/set-ai-key.sh"
+bash set-ai-key.sh staging --assistant-only  # valida con Groq, guarda la clave y enciende solo B
+PROVIDER=openrouter bash set-ai-key.sh staging --enable  # clave de OpenRouter (SUGGEST_*) y enciende solo las sugerencias
+PROVIDER=openrouter bash set-ai-key.sh staging --disable # apaga solo las sugerencias
+bash set-ai-key.sh staging --disable  # apaga las dos (la clave se conserva)
+PROVIDER=gemini bash set-ai-key.sh staging --enable   # alternativa, si hay nivel gratuito
+```
+
+El script valida la clave y hace una generación mínima con el modelo real **antes** de tocar la VM; si el proveedor pide pago (429/403) o el modelo no existe (404), se detiene. La envía como parámetro protegido, se niega si coincide con la del otro entorno y borra el run command. El cambio se aplica **al recrear la API**: en staging, con el siguiente despliegue (o «Run workflow → deploy»); en producción, con `scripts/deploy-production.sh`.
+
+**Registro.**
+
+| Fecha | Entorno | Proveedor y modelo | Estado | Vence la clave | Quién |
+|---|---|---|---|---|---|
+| 2026-11-17 | staging | Groq, `openai/gpt-oss-120b` | asistente encendido | 2027-02-15 (rotar antes) | BE-B |
+| 2026-11-17 | staging | OpenRouter, `nvidia/nemotron-3.5-super-vl:free` | sugerencias por foto encendidas (prueba con imagen OK, sin pago); privacidad: sin publicación de prompts, sin descuento por datos | 2027-02-15 11:03 CST (rotar antes) | BE-B |
+
+**Apagado de emergencia.** `bash set-ai-key.sh <entorno> --disable` y recrear la API. La app sigue sin IA (`features` en `false`; las rutas responden 503).
+
+**Privacidad (RF-07 y RF-18).**
+- Parte A: al proveedor solo viaja la **miniatura** de la foto, cuando la persona pide la sugerencia.
+- Parte B: solo viaja el **texto** de la conversación (máximo 6 turnos). La **ubicación nunca sale del backend**.
+- No se guardan fotos ni respuestas del modelo; la conversación dura 24 h y se puede borrar. Los registros no llevan fotos, mensajes ni respuestas.
+- El aviso de privacidad (landing) y «Seguridad de datos» de Play deben nombrar a los proveedores (Groq para el asistente y OpenRouter para las sugerencias por foto) y lo que hacen con los datos según sus términos vigentes; los modelos gratuitos de OpenRouter pueden registrar lo enviado según el proveedor del modelo (mobile 014-T006). La app pide no escribir datos personales en el chat.
+
+**Producción.** Según el ROADMAP, la IA sale como v1.1: se enciende en producción solo cuando el equipo lo decida y la versión de la app con IA esté publicada.
+
+## 12. Recomendaciones con ML (spec 015)
+
+«Recomendado para ti», **apagado por defecto** (`RECO_ENABLED=false`). `GET /api/v1/meta` dice si está encendido (`features.recommendations`). No usa servicios externos ni claves: el modelo es propio (Go y MongoDB) y se describe en `docs/ml/modelo.md`.
+
+**Encender en staging**, desde Cloud Shell (Bash). `set-reco.sh` cambia solo `RECO_ENABLED` en el `.env`, recrea la API con la misma imagen y espera a que `/meta` lo refleje:
+
+```bash
+C=<commit que tenga los scripts>
+curl -fsSLO "https://raw.githubusercontent.com/VaivenEnterprise/VaivenApplication-Backend/$C/scripts/cloudshell-run.sh"
+bash cloudshell-run.sh "$C" scripts/set-reco.sh staging --enable
+bash cloudshell-run.sh "$C" scripts/vm-admin.sh staging seed-interactions        # datos de demostración (nunca en production)
+bash cloudshell-run.sh "$C" scripts/vm-admin.sh staging recompute-recommendations
+```
+
+`seed-interactions` necesita objetos activos: si staging tiene pocos, correr antes `seed`. `seed-interactions --purge` borra los datos de demostración (personas `demo-NNN`, marcadas con `demo: true`).
+
+**Operación.**
+- El modelo se recalcula solo cuando tiene más de 6 h, en segundo plano y con candado en MongoDB. `recompute-recommendations` lo fuerza.
+- Los eventos duran 90 días (TTL) y cada persona puede borrar su historial.
+- Los registros solo llevan conteos, nunca personas ni objetos.
+
+**Apagado de emergencia.** `bash cloudshell-run.sh "$C" scripts/set-reco.sh <entorno> --disable`: las rutas responden 503 y la app oculta la sección. En production, encender exige además `--yes-production` (decisión del equipo).
+
+**Producción.** Igual que la IA (spec 014): sale como v1.1 cuando el equipo lo decida y la versión de la app con la pantalla esté publicada. En producción nunca se corren `seed-interactions` ni `eval-recommendations --source db` (los dos se niegan).

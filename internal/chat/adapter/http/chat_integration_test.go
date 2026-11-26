@@ -19,6 +19,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	drv "go.mongodb.org/mongo-driver/v2/mongo"
 
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/contract"
 	bookingshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/bookings/adapter/http"
 	bookingsmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/bookings/adapter/mongo"
 	bookingsusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/bookings/usecase"
@@ -141,7 +142,8 @@ func newWorld(t *testing.T) world {
 	r := chi.NewRouter()
 	chatMod.Register(r)
 	bookMod.Register(r)
-	w.h = r
+	// Spec 016, T008: cada respuesta se valida contra el contrato OpenAPI.
+	w.h = contract.Wrap(t, r, "/api/v1")
 	return w
 }
 

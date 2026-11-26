@@ -1,0 +1,106 @@
+# Análisis DAST ACTIVO y AISLADO con OWASP ZAP (spec 018, C-09; complementa el
+# baseline pasivo de zap.yml de la 016).
+#
+# Aislamiento:
+#   - la API se construye desde este commit y corre efímera en el runner;
+#   - MongoDB y Redis son contenedores vacíos con datos sintéticos;
+#   - todo vive en una red Docker --internal: sin salida a internet, así que la
+#     API no puede llamar a Cloudinary, IA ni Expo, y ZAP no puede tocar
+#     staging ni producción;
+#   - los secretos son aleatorios por ejecución y nunca se imprimen.
+# Puerta: scripts/zap-gate.mjs falla con cualquier alerta High sin excepción
+# vigente (.zap/exceptions.json, con vencimiento). Una prueba negativa
+# comprueba primero que la puerta bloquea un informe con una High.
+name: ZAP isolated
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '37 10 * * 3' # semanal, miércoles
+  pull_request:
+    branches: [develop]
+    paths: ['internal/**', 'cmd/**', 'api/**', 'Dockerfile', '.zap/**', '.github/workflows/zap-isolated.yml', 'scripts/zap-gate.mjs']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zap-isolated-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ZAP_IMAGE: ghcr.io/zaproxy/zaproxy:2.16.1@sha256:7840969c7c9fead565bf9734b12f49f6886db90b1d35b1f74d79710bbd081dab
+
+jobs:
+  zap:
+    name: ZAP active scan (isolated API)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Gate self-test (a High must block the pipeline)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if node scripts/zap-gate.mjs tests/fixtures/zap/report-high.json .zap/exceptions.json; then
+            echo "::error::la puerta dejó pasar una alerta High"; exit 1
+          fi
+          node scripts/zap-gate.mjs tests/fixtures/zap/report-clean.json .zap/exceptions.json
+      - name: Build API image (not pushed)
+        run: docker build --build-arg APP_VERSION=zap -t vaiven-api:zap .
+      - name: Start isolated stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker network create --internal zapnet
+          docker run -d --name mongo --network zapnet mongo:7 --replSet rs0 --bind_ip_all >/dev/null
+          docker run -d --name redis --network zapnet redis:7 >/dev/null
+          for i in $(seq 1 30); do
+            docker exec mongo mongosh --quiet --eval "try { rs.status().ok } catch (e) { rs.initiate({_id:'rs0',members:[{_id:0,host:'mongo:27017'}]}).ok }" 2>/dev/null | grep -q 1 && break
+            sleep 2
+          done
+          jwt=$(openssl rand -hex 32)
+          docker run -d --name api --network zapnet \
+            -e APP_ENV=development -e MONGO_URI='mongodb://mongo:27017/?replicaSet=rs0' -e MONGO_DB=vaiven_zap \
+            -e REDIS_URL=redis://redis:6379/0 -e JWT_ACCESS_SECRET="$jwt" \
+            -e CLOUDINARY_CLOUD_NAME=zap -e CLOUDINARY_API_KEY=000000 -e CLOUDINARY_API_SECRET=zap-sin-uso \
+            -e AI_ENABLED=false -e ASSISTANT_ENABLED=false -e RECO_ENABLED=false -e PUSH_ENABLED=false -e DOCS_ENABLED=false \
+            -e RATE_LIMIT_GLOBAL_PER_MIN=100000 -e RATE_LIMIT_AUTH_PER_MIN=100000 -e LOGIN_ATTEMPTS_PER_ACCOUNT=100000 \
+            vaiven-api:zap >/dev/null
+          unset jwt
+          for i in $(seq 1 30); do
+            docker run --rm --network zapnet busybox:1.37 wget -qO- http://api:8080/readyz 2>/dev/null | grep -q ready && { echo "API lista"; exit 0; }
+            sleep 2
+          done
+          docker logs api | tail -20
+          echo "::error::la API no arrancó"; exit 1
+      - name: ZAP active API scan
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p zap-work && chmod 0777 zap-work
+          cp internal/adapter/http/docs/openapi.yaml zap-work/openapi.yaml
+          cp .zap/api-rules.tsv zap-work/api-rules.tsv
+          # -I: no falla por advertencias; la puerta de abajo decide.
+          docker run --rm --network zapnet -v "$PWD/zap-work:/zap/wrk:rw" "$ZAP_IMAGE" \
+            zap-api-scan.py -t /zap/wrk/openapi.yaml -f openapi -O http://api:8080 \
+            -c api-rules.tsv -J zap-report.json -r zap-report.html -I
+      - name: Gate (no High without a valid exception)
+        run: node scripts/zap-gate.mjs zap-work/zap-report.json .zap/exceptions.json | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Upload ZAP report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: zap-isolated-report
+          path: |
+            zap-work/zap-report.json
+            zap-work/zap-report.html
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Tear down
+        if: always()
+        run: |
+          docker rm -f api mongo redis >/dev/null 2>&1 || true
+          docker network rm zapnet >/dev/null 2>&1 || true

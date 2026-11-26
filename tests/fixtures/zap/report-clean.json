@@ -1,0 +1,3 @@
+{"site":[{"@name":"http://api:8080","alerts":[
+ {"pluginid":"10021","alert":"X-Content-Type-Options Header Missing","riskcode":"1","count":"3"}
+]}]}

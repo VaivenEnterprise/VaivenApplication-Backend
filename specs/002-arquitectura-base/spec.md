@@ -1,6 +1,7 @@
 # Spec 002 — Arquitectura base del backend
 
 - **Estado:** Aprobada por la persona responsable (Joseph Yañez) el 2026-11-05. T001 y T002 se ejecutaron antes de esta aprobación (desviación del Art. I.1 registrada en `memoria.md`)
+- **Dueño:** repartida por tareas entre BE-A y BE-B (ROADMAP §5); coordinación de BE-B (agregado en la spec 016, T007: DT-j)
 - **Proyecto:** `vaiven-backend/` (Go + MongoDB)
 - **Constitución aplicable:** v1.0.0
 - **Fecha:** 2026-10-26

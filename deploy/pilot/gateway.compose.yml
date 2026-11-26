@@ -1,0 +1,54 @@
+# Pasarela del piloto de dos VMs en VM1 (spec 018; docs/seguridad/piloto-red-vm2.md).
+# Solo STAGING: se une a la red de staging (base_vaiven-net), nunca a la de
+# producción. MongoDB y Redis NO cambian ni publican puertos: lo único que
+# escucha en la IP privada de VM1 es el túnel TLS 1.3 mutuo (cmd/tlstunnel),
+# que solo acepta el certificado de cliente de VM2 (CN vaiven-pilot-vm2).
+#
+# La levanta scripts/pilot/pilot.sh y se retira con `docker compose down`
+# (MongoDB y Redis siguen igual). Variables: PILOT_IMAGE (la imagen de staging
+# ya verificada por firma), VM1_PRIVATE_IP.
+name: vaiven-pilot-gw
+
+x-tunnel: &tunnel
+  image: ${PILOT_IMAGE:?falta PILOT_IMAGE}
+  entrypoint: ["/tlstunnel"]
+  restart: "no"
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  volumes:
+    - /opt/vaiven/pilot/gw:/certs:ro
+  networks: [staging]
+  deploy:
+    resources:
+      limits: { memory: 32M, cpus: "0.2" }
+  logging:
+    driver: json-file
+    options: { max-size: "5m", max-file: "2" }
+
+services:
+  gw-mongo:
+    <<: *tunnel
+    command: [server, --listen, "0.0.0.0:27018", --target, "mongo:27017",
+              --cert, /certs/gw.pem, --key, /certs/gw.key, --ca, /certs/ca.pem, --allow-cn, vaiven-pilot-vm2]
+    ports: ["${VM1_PRIVATE_IP:?falta VM1_PRIVATE_IP}:27018:27018"]
+
+  gw-redis:
+    <<: *tunnel
+    command: [server, --listen, "0.0.0.0:6380", --target, "redis:6379",
+              --cert, /certs/gw.pem, --key, /certs/gw.key, --ca, /certs/ca.pem, --allow-cn, vaiven-pilot-vm2]
+    ports: ["${VM1_PRIVATE_IP:?falta VM1_PRIVATE_IP}:6380:6380"]
+
+  relay:
+    <<: *tunnel
+    command: [files, --listen, "0.0.0.0:8444", --dir, /relay,
+              --cert, /certs/gw.pem, --key, /certs/gw.key, --ca, /certs/ca.pem, --allow-cn, vaiven-pilot-vm2]
+    volumes:
+      - /opt/vaiven/pilot/gw:/certs:ro
+      - /opt/vaiven/pilot/relay:/relay:ro
+    ports: ["${VM1_PRIVATE_IP:?falta VM1_PRIVATE_IP}:8444:8444"]
+
+networks:
+  staging:
+    external: true
+    name: base_vaiven-net

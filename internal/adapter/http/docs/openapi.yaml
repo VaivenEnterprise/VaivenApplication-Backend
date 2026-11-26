@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: VAIVÉN API
-  version: 0.11.0
+  version: 0.12.0
   summary: API REST del backend de VAIVÉN (préstamo y renta de objetos en México).
   description: |
     Contrato de la spec 002 (arquitectura base): endpoints de infraestructura y
@@ -65,6 +65,10 @@ tags:
     description: Avisos dentro de la app y tokens de push (spec 011).
   - name: reportes
     description: Reportar objetos, mensajes, perfiles y decisiones de moderación (spec 011).
+  - name: ia
+    description: IA generativa (spec 014) — sugerencias al publicar y asistente de proyectos; detrás de interruptores.
+  - name: recomendaciones
+    description: Recomendaciones con machine learning (spec 015) — «Recomendado para ti», eventos de vista e historial; detrás de `RECO_ENABLED`.
 paths:
   /healthz:
     get:
@@ -370,6 +374,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
     patch:
       tags:
         - cuenta
@@ -407,6 +413,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
     delete:
       tags:
         - cuenta
@@ -525,6 +533,387 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/ai/listing-suggestions:
+    post:
+      tags:
+        - ia
+      operationId: createListingSuggestion
+      summary: Sugerir título y categoría a partir de una foto
+      description: |
+        Propone un título y una categoría de POL-14 a partir de una foto **propia**
+        ya subida con finalidad `item_photo` (RF-01, RF-02). El servidor **no acepta
+        URL**: recibe el `publicId` y construye él mismo la miniatura. La sugerencia
+        es solo una propuesta; quien publica la acepta, la edita o la ignora.
+
+        - Si la categoría que propone el modelo no es una clave válida, se omite; el
+          título se recorta a 80 caracteres y el texto que el filtro de contenido no
+          permita se descarta (RF-04).
+        - Límite: 20 sugerencias por persona y día (`AI_DAILY_LIMIT`, RF-05).
+        - Apagada (`AI_ENABLED=false`) o con el proveedor sin responder en 10 s:
+          `503 service_unavailable` (RF-06). La app sigue sin sugerencias.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListingSuggestionRequest'
+            example:
+              imagePublicId: vaiven/production/item_photo/6730f1c2a9b3e4d5f6a7b8c9/9b2f6c1e4a7d4c0e8f3b5a2d1c6e7f80
+      responses:
+        '200':
+          description: Sugerencia para revisar antes de publicar.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListingSuggestion'
+              example:
+                title: Taladro inalámbrico 18 V con dos baterías
+                category: herramientas_electricas
+                description: Taladro con estuche, cargador y dos baterías.
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/ai/assistant/messages:
+    post:
+      tags:
+        - ia
+      operationId: sendAssistantMessage
+      summary: Enviar un mensaje al asistente de proyectos
+      description: |
+        La persona describe lo que quiere realizar («quiero pintar mi cuarto») y el
+        asistente responde (RF-09 a RF-12):
+
+        - `needs`: qué objetos necesita (los propone el modelo, máximo 8, con
+          categoría de POL-14).
+        - `matches` dentro de cada necesidad: **quién los tiene disponibles**. Salen
+          de la búsqueda de la spec 006, **nunca del modelo**: misma tarjeta pública
+          (`ItemCard`), solo objetos `active` de otras personas con cuenta activa,
+          hasta 5 por necesidad, ordenados por distancia si se envía `location`
+          (radio `ASSISTANT_RADIUS_KM`, 10 km por omisión). `matches: []` si nadie
+          lo tiene cerca. Con `approxLocation` la app los dibuja en un mapa; la
+          solicitud sigue el flujo normal de la spec 007.
+        - `steps`: pasos en orden para completar la tarea, y `safetyNotes` cuando hay
+          riesgo.
+
+        Sin `conversationId` se abre una conversación nueva; con él se continúa (el
+        modelo recibe los últimos 6 turnos). La conversación dura 24 h (RF-13).
+
+        Privacidad (RF-18): la **ubicación nunca se envía al proveedor de IA**; solo
+        se usa para buscar. No escribas datos personales en el mensaje.
+
+        Peticiones fuera de alcance, peligrosas o ilegales reciben una negativa con
+        `needs` y `steps` vacíos (RF-14). Límites: 30 mensajes por persona y día y
+        10 por minuto (RF-15). Apagado (`ASSISTANT_ENABLED=false`) o con el
+        proveedor sin responder en 12 s: `503 service_unavailable` (RF-16).
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssistantMessageRequest'
+            example:
+              message: Quiero pintar mi cuarto este fin de semana
+              location:
+                lat: 25.67
+                lng: -100.31
+      responses:
+        '200':
+          description: Respuesta del asistente con necesidades, quién las tiene y pasos.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssistantMessageResponse'
+              example:
+                conversationId: 6735a0c1b2d3e4f5a6b7c8d9
+                reply:
+                  summary: Para pintar un cuarto necesitas una escalera, un rodillo con charola y una lona. Encontré escaleras y rodillos cerca de ti; nadie presta lonas en tu zona por ahora.
+                  needs:
+                    - name: Escalera de tijera
+                      category: hogar
+                      optional: false
+                      matches:
+                        - id: 6730f1c2a9b3e4d5f6a7b8c9
+                          title: Escalera de aluminio 5 peldaños
+                          category: hogar
+                          modality: rent
+                          pricePerDayCents: 5000
+                          zone:
+                            municipality: Monterrey
+                            neighborhood: Centro
+                          approxLocation:
+                            lat: 25.67
+                            lng: -100.31
+                          distanceKm: 1.2
+                          thumbUrl: https://res.cloudinary.com/vaiven/image/upload/c_fill,w_400,h_400/vaiven/production/item_photo/6730f1c2a9b3e4d5f6a7b8c9/a1.jpg
+                          photoCount: 2
+                          owner:
+                            id: 6730f0aa9b3e4d5f6a7b8c90
+                            displayName: Ana
+                            ratingAverage: 4.8
+                            ratingCount: 12
+                          createdAt: '2026-11-10T18:00:00Z'
+                    - name: Lona protectora
+                      category: hogar
+                      optional: true
+                      matches: []
+                  steps:
+                    - Retira los muebles y cubre el piso con la lona.
+                    - Lija y limpia las paredes; deja secar.
+                    - Aplica una mano con el rodillo y espera el tiempo de secado del fabricante.
+                    - Aplica la segunda mano y ventila el cuarto.
+                  safetyNotes:
+                    - Abre la escalera por completo y no te pares en el último peldaño.
+                    - Ventila el cuarto mientras pintas y al terminar.
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/ai/assistant/conversations/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Identificador de la conversación.
+        schema:
+          type: string
+          pattern: ^[0-9a-f]{24}$
+      - $ref: '#/components/parameters/RequestId'
+    delete:
+      tags:
+        - ia
+      operationId: deleteAssistantConversation
+      summary: Borrar una conversación con el asistente
+      description: |
+        Borra la conversación propia y sus turnos (RF-13). Una conversación de otra
+        persona, o que ya caducó (24 h), responde `404`.
+      responses:
+        '204':
+          description: Conversación borrada.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/recommendations:
+    get:
+      tags:
+        - recomendaciones
+      operationId: listRecommendations
+      summary: Objetos recomendados para la persona
+      description: |
+        Devuelve objetos recomendados con un modelo híbrido propio (colaborativo
+        objeto-objeto y de contenido; RF-02 a RF-05). Cada objeto trae la **misma
+        tarjeta pública** de la búsqueda (spec 006: zona y punto aproximado, nunca
+        la ubicación exacta) y el motivo (`reason`), del que la app arma el texto.
+
+        - Nunca aparecen objetos propios, pausados, bloqueados o retirados, de
+          cuentas suspendidas o dadas de baja, ni los que la persona tiene en una
+          reserva activa. Máximo 3 por categoría.
+        - Con menos de 2 interacciones (arranque en frío) se usan los más populares
+          del municipio indicado y de las categorías vistas; sin datos, los más
+          populares. Si hay objetos visibles, la lista nunca está vacía.
+        - No hay más páginas: `nextCursor` siempre es `null` (formato de lista del
+          Art. IV.4).
+        - Apagada (`RECO_ENABLED=false`): `503 service_unavailable`.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+            default: 10
+        - name: municipality
+          in: query
+          required: false
+          description: Municipio o alcaldía que muestra la app en Explorar; solo se usa para el arranque en frío. No se guarda.
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 60
+      responses:
+        '200':
+          description: Recomendaciones en orden.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecommendationList'
+              example:
+                items:
+                  - item:
+                      id: 6730f1c2a9b3e4d5f6a7b8c9
+                      title: Taladro percutor 600 W
+                      category: herramientas_electricas
+                      modality: rent
+                      pricePerDayCents: 8000
+                      zone:
+                        municipality: Guadalajara
+                        neighborhood: Americana
+                      approxLocation:
+                        lat: 20.67
+                        lng: -103.37
+                      distanceKm: null
+                      thumbUrl: https://res.cloudinary.com/vaiven/image/upload/c_fill,w_400,h_400/vaiven/production/item_photo/6730f0aa9b3e4d5f6a7b8c90/a1.jpg
+                      photoCount: 2
+                      owner:
+                        id: 6730f0aa9b3e4d5f6a7b8c90
+                        displayName: Ana
+                        ratingAverage: 4.8
+                        ratingCount: 12
+                      createdAt: '2026-11-10T18:00:00Z'
+                    reason:
+                      code: similar_to
+                      itemId: 6731a2b3c4d5e6f7a8b9c0d1
+                      itemTitle: Sierra circular 1 200 W
+                  - item:
+                      id: 6732b3c4d5e6f7a8b9c0d1e2
+                      title: Escalera de aluminio 5 peldaños
+                      category: hogar
+                      modality: loan
+                      pricePerDayCents: 0
+                      zone:
+                        municipality: Guadalajara
+                        neighborhood: null
+                      approxLocation: null
+                      distanceKm: null
+                      thumbUrl: null
+                      photoCount: 1
+                      owner:
+                        id: 6730f0aa9b3e4d5f6a7b8c91
+                        displayName: Luis
+                        ratingAverage: null
+                        ratingCount: 0
+                      createdAt: '2026-11-12T15:30:00Z'
+                    reason:
+                      code: popular_nearby
+                nextCursor: null
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/recommendations/events:
+    post:
+      tags:
+        - recomendaciones
+      operationId: recordRecommendationEvent
+      summary: Registrar que la persona vio un objeto
+      description: |
+        La app lo envía al abrir el detalle de un objeto (RF-01). Solo se guardan
+        identificadores (persona y objeto), el tipo y la fecha; los eventos duran
+        90 días (RF-09).
+
+        - Responde `204` también cuando el evento se ignora: objeto propio, objeto
+          que no está activo o vista repetida del mismo objeto en menos de 10 min.
+          Así la app no tiene que distinguir casos.
+        - `404` si el objeto no existe.
+        - Límite: 60 eventos por minuto por persona (`429` con `Retry-After`).
+        - Apagada (`RECO_ENABLED=false`): `503 service_unavailable`.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecommendationEventRequest'
+            example:
+              itemId: 6730f1c2a9b3e4d5f6a7b8c9
+              type: view
+      responses:
+        '204':
+          description: Evento recibido (guardado o ignorado).
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/recommendations/history:
+    delete:
+      tags:
+        - recomendaciones
+      operationId: deleteRecommendationHistory
+      summary: Borrar mi historial de recomendaciones
+      description: |
+        Borra los eventos de la persona; sus solicitudes anteriores (spec 007) dejan
+        de contar para las recomendaciones. Las recomendaciones vuelven al arranque
+        en frío (RF-09, CA-05). Es idempotente: sin historial también responde `204`.
+        Apagada (`RECO_ENABLED=false`): `503 service_unavailable`.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '204':
+          description: Historial borrado.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-Request-Id'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/uploads/signature:
     post:
       tags:
@@ -581,6 +970,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/items:
     get:
       tags:
@@ -856,6 +1247,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/items/{id}:
     parameters:
       - name: id
@@ -894,6 +1287,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
     patch:
       tags:
         - objetos
@@ -969,6 +1364,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/items/{id}/pause:
     parameters:
       - name: id
@@ -1009,6 +1406,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/items/{id}/resume:
     parameters:
       - name: id
@@ -1048,6 +1447,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/me/items:
     get:
       tags:
@@ -1103,6 +1504,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/categories:
     get:
       tags:
@@ -1135,6 +1538,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/items/{id}/quote:
     parameters:
       - name: id
@@ -1203,6 +1608,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings:
     post:
       tags:
@@ -1285,6 +1692,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/me/bookings:
     get:
       tags:
@@ -1342,6 +1751,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings/{id}/accept:
     parameters:
       - $ref: '#/components/parameters/BookingId'
@@ -1382,6 +1793,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings/{id}/reject:
     parameters:
       - $ref: '#/components/parameters/BookingId'
@@ -1415,6 +1828,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings/{id}/cancel:
     parameters:
       - $ref: '#/components/parameters/BookingId'
@@ -1453,6 +1868,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings/{id}/meeting-point:
     parameters:
       - $ref: '#/components/parameters/BookingId'
@@ -1486,6 +1903,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/conversations:
     get:
       tags:
@@ -1534,6 +1953,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/conversations/unread-count:
     get:
       tags:
@@ -1567,6 +1988,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/conversations/{id}/messages:
     parameters:
       - $ref: '#/components/parameters/ConversationId'
@@ -1655,6 +2078,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
     post:
       tags:
         - chat
@@ -1710,6 +2135,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/conversations/{id}/read:
     parameters:
       - $ref: '#/components/parameters/ConversationId'
@@ -1736,6 +2163,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings/{id}/delivery/evidence:
     parameters:
       - $ref: '#/components/parameters/parameters-BookingId'
@@ -1780,6 +2209,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings/{id}/delivery/qr:
     parameters:
       - $ref: '#/components/parameters/parameters-BookingId'
@@ -1822,6 +2253,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings/{id}/delivery/confirm:
     parameters:
       - $ref: '#/components/parameters/parameters-BookingId'
@@ -1862,6 +2295,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings/{id}/delivery:
     parameters:
       - $ref: '#/components/parameters/parameters-BookingId'
@@ -1886,6 +2321,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings/{id}/return/evidence:
     parameters:
       - $ref: '#/components/parameters/parameters-BookingId'
@@ -1930,6 +2367,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings/{id}/return/qr:
     parameters:
       - $ref: '#/components/parameters/parameters-BookingId'
@@ -1972,6 +2411,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings/{id}/return/confirm:
     parameters:
       - $ref: '#/components/parameters/parameters-BookingId'
@@ -2012,6 +2453,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings/{id}/return:
     parameters:
       - $ref: '#/components/parameters/parameters-BookingId'
@@ -2036,6 +2479,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings/{id}/payments/{stage}/report:
     parameters:
       - $ref: '#/components/parameters/parameters-BookingId'
@@ -2079,6 +2524,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings/{id}/payments/{stage}/confirm:
     parameters:
       - $ref: '#/components/parameters/parameters-BookingId'
@@ -2107,6 +2554,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings/{id}/ratings:
     post:
       tags:
@@ -2169,6 +2618,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings/{id}/rating-status:
     get:
       tags:
@@ -2205,6 +2656,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/users/{id}/ratings:
     get:
       tags:
@@ -2241,6 +2694,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/bookings/{id}/incidents:
     post:
       tags:
@@ -2330,6 +2785,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/me/incidents:
     get:
       tags:
@@ -2367,6 +2824,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/admin/incidents:
     get:
       tags:
@@ -2408,6 +2867,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/admin/incidents/{id}/notes:
     post:
       tags:
@@ -2457,6 +2918,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/admin/incidents/{id}/close:
     post:
       tags:
@@ -2508,6 +2971,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/admin/users/{id}/sanctions:
     post:
       tags:
@@ -2560,6 +3025,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/me/notifications:
     get:
       tags:
@@ -2605,6 +3072,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/me/notifications/unread-count:
     get:
       tags:
@@ -2638,6 +3107,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/me/notifications/read:
     post:
       tags:
@@ -2672,6 +3143,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/me/push-tokens:
     post:
       tags:
@@ -2707,6 +3180,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
     delete:
       tags:
         - avisos
@@ -2739,6 +3214,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/reports:
     post:
       tags:
@@ -2804,6 +3281,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/admin/reports:
     get:
       tags:
@@ -2846,6 +3325,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/admin/reports/{id}/resolve:
     post:
       tags:
@@ -2902,6 +3383,8 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
 components:
   securitySchemes:
     bearerAuth:
@@ -3059,6 +3542,19 @@ components:
           type: string
           format: date-time
           description: Hora del servidor en UTC (ISO-8601).
+        features:
+          type: object
+          description: Funciones opcionales encendidas en este entorno (specs 014 y 015). Si falta una, la app la trata como apagada.
+          properties:
+            aiSuggestions:
+              type: boolean
+              description: Sugerencias de título y categoría a partir de una foto (`AI_ENABLED`).
+            projectAssistant:
+              type: boolean
+              description: Asistente de proyectos (`ASSISTANT_ENABLED`).
+            recommendations:
+              type: boolean
+              description: «Recomendado para ti» (`RECO_ENABLED`, spec 015).
     Role:
       type: string
       enum:
@@ -4663,6 +5159,184 @@ components:
         createdAt:
           type: string
           format: date-time
+    ListingSuggestionRequest:
+      type: object
+      required:
+        - imagePublicId
+      additionalProperties: false
+      properties:
+        imagePublicId:
+          type: string
+          maxLength: 255
+          description: publicId de una foto `item_photo` propia, ya subida (spec 004). No se aceptan URL.
+    ListingSuggestion:
+      type: object
+      description: Propuesta para revisar; quien publica la acepta, la edita o la ignora (spec 014, RF-01).
+      required:
+        - title
+      properties:
+        title:
+          type: string
+          maxLength: 80
+        category:
+          $ref: '#/components/schemas/CategoryKey'
+        description:
+          type: string
+          maxLength: 1000
+    AssistantMessageRequest:
+      type: object
+      required:
+        - message
+      additionalProperties: false
+      properties:
+        conversationId:
+          type: string
+          pattern: ^[0-9a-f]{24}$
+          description: Para continuar una conversación propia; sin él se abre una nueva.
+        message:
+          type: string
+          minLength: 2
+          maxLength: 500
+          description: Lo que la persona quiere realizar. No incluyas datos personales.
+        location:
+          type: object
+          description: Solo se usa para buscar cerca; nunca se envía al proveedor de IA ni se guarda (RF-18).
+          required:
+            - lat
+            - lng
+          properties:
+            lat:
+              type: number
+              minimum: -90
+              maximum: 90
+            lng:
+              type: number
+              minimum: -180
+              maximum: 180
+    AssistantNeed:
+      type: object
+      required:
+        - name
+        - category
+        - optional
+        - matches
+      properties:
+        name:
+          type: string
+          maxLength: 60
+          description: Lo que se necesita, como lo propone el modelo.
+        category:
+          $ref: '#/components/schemas/CategoryKey'
+        optional:
+          type: boolean
+        matches:
+          type: array
+          maxItems: 5
+          description: Quién lo tiene disponible. Sale de la búsqueda (spec 006), nunca del modelo; vacío si nadie lo tiene cerca.
+          items:
+            $ref: '#/components/schemas/ItemCard'
+    AssistantReply:
+      type: object
+      required:
+        - summary
+        - needs
+        - steps
+        - safetyNotes
+      properties:
+        summary:
+          type: string
+          maxLength: 600
+        needs:
+          type: array
+          maxItems: 8
+          items:
+            $ref: '#/components/schemas/AssistantNeed'
+        steps:
+          type: array
+          maxItems: 10
+          items:
+            type: string
+            maxLength: 200
+        safetyNotes:
+          type: array
+          maxItems: 3
+          items:
+            type: string
+            maxLength: 200
+    AssistantMessageResponse:
+      type: object
+      required:
+        - conversationId
+        - reply
+      properties:
+        conversationId:
+          type: string
+        reply:
+          $ref: '#/components/schemas/AssistantReply'
+    RecommendationEventRequest:
+      type: object
+      required:
+        - itemId
+        - type
+      additionalProperties: false
+      properties:
+        itemId:
+          type: string
+          pattern: ^[0-9a-f]{24}$
+        type:
+          type: string
+          enum:
+            - view
+          description: Por ahora solo vistas; las solicitudes se leen de las reservas (spec 015, RF-01).
+    RecommendationReasonCode:
+      type: string
+      enum:
+        - similar_to
+        - popular_in_category
+        - popular_nearby
+        - popular
+      description: |
+        Motivo de la recomendación; la app arma el texto en es-MX (Art. V.4):
+        `similar_to` (parecido a un objeto que la persona vio o solicitó),
+        `popular_in_category` (popular en una categoría que ha visto),
+        `popular_nearby` (popular en el municipio indicado) y `popular`.
+    RecommendationReason:
+      type: object
+      required:
+        - code
+      properties:
+        code:
+          $ref: '#/components/schemas/RecommendationReasonCode'
+        itemId:
+          type: string
+          description: Solo con `similar_to`; el objeto visto o solicitado que más contribuyó.
+        itemTitle:
+          type: string
+          description: Solo con `similar_to`; título de ese objeto.
+    Recommendation:
+      type: object
+      required:
+        - item
+        - reason
+      properties:
+        item:
+          $ref: '#/components/schemas/ItemCard'
+        reason:
+          $ref: '#/components/schemas/RecommendationReason'
+    RecommendationList:
+      type: object
+      required:
+        - items
+        - nextCursor
+      properties:
+        items:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/Recommendation'
+        nextCursor:
+          type: 'null'
+          description: Siempre null; no hay más páginas (Art. IV.4).
     ErrorCode:
       type: string
       description: Códigos permitidos por el Art. IV.3 de la constitución.
@@ -4995,9 +5669,11 @@ components:
               requestId: 43d4c7dbb802d8b3711c8f4163ffc823
     ServiceUnavailable:
       description: |
-        Una dependencia obligatoria no responde (MongoDB, Cloudinary) o hay
+        Una dependencia obligatoria no responde (MongoDB, Cloudinary), hay
         demasiadas solicitudes de contraseña en curso (espera de turno de
-        argon2id agotada, 2 s). Se puede reintentar.
+        argon2id agotada, 2 s) o, en una ruta con sesión, no se puede
+        comprobar si el token fue revocado (Redis; la ruta falla cerrada,
+        spec 018, C-12). Se puede reintentar.
       headers:
         X-Request-Id:
           $ref: '#/components/headers/X-Request-Id'

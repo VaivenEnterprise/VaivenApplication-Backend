@@ -10,9 +10,11 @@ import (
 	shared "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/domain"
 )
 
-// reportRequest es ReportPaymentRequest; note es opcional.
+// reportRequest es ReportPaymentRequest; note es opcional. Pasa por el
+// validador de la frontera (Art. VI.2; spec 016, T005); la longitud de la nota
+// se mide en el dominio tras normalizar el texto (bookings.NormalizeText).
 type reportRequest struct {
-	Note *string `json:"note"`
+	Note *string `json:"note" validate:"omitempty"`
 }
 
 // decode lee un único objeto JSON. Un cuerpo vacío es válido (la nota es

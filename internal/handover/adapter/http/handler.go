@@ -11,7 +11,9 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/respond"
+	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http/validate"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth"
+	bookings "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/bookings/domain"
 	shared "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/domain"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/handover/domain"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/handover/usecase"
@@ -46,6 +48,7 @@ type Module struct {
 	log          *slog.Logger
 	authenticate func(http.Handler) http.Handler
 	writeBooking WriteBooking
+	v            *validate.Validator
 }
 
 // NewModule crea el módulo. Falla si falta una dependencia obligatoria.
@@ -53,7 +56,7 @@ func NewModule(d ModuleDeps) (*Module, error) {
 	if d.Service == nil || d.Authenticate == nil || d.WriteBooking == nil || d.Log == nil {
 		return nil, errors.New("handover: faltan dependencias del módulo HTTP")
 	}
-	return &Module{svc: d.Service, log: d.Log, authenticate: d.Authenticate, writeBooking: d.WriteBooking}, nil
+	return &Module{svc: d.Service, log: d.Log, authenticate: d.Authenticate, writeBooking: d.WriteBooking, v: validate.New()}, nil
 }
 
 // Name identifica el módulo.
@@ -75,15 +78,11 @@ func (m *Module) fail(w http.ResponseWriter, r *http.Request, err error) {
 func (m *Module) evidence(k domain.Kind) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req evidenceRequest
-		if err := decode(r, &req); err != nil {
+		if err := m.decode(r, &req); err != nil {
 			m.fail(w, r, err)
 			return
 		}
-		notes, refs, err := req.input()
-		if err != nil {
-			m.fail(w, r, err)
-			return
-		}
+		notes, refs := req.input()
 		v, err := m.svc.RecordEvidence(r.Context(), viewer(r), chi.URLParam(r, "id"), k, notes, refs)
 		if err != nil {
 			m.fail(w, r, err)
@@ -109,7 +108,7 @@ func (m *Module) issueQR(k domain.Kind) http.HandlerFunc {
 func (m *Module) confirm(k domain.Kind) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req confirmRequest
-		if err := decode(r, &req); err != nil {
+		if err := m.decode(r, &req); err != nil {
 			m.fail(w, r, err)
 			return
 		}
@@ -135,4 +134,12 @@ func (m *Module) stage(k domain.Kind) http.HandlerFunc {
 		}
 		respond.JSON(w, http.StatusOK, toStage(v))
 	}
+}
+
+// decode lee el cuerpo y lo valida en la frontera con validator/v10 (Art. VI.2).
+func (m *Module) decode(r *http.Request, dst any) error {
+	if err := decode(r, dst); err != nil {
+		return err
+	}
+	return m.v.Struct(dst, bookings.MessageInvalidData)
 }

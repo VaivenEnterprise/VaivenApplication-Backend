@@ -44,6 +44,8 @@ adminIncidents:
         $ref: '../openapi.yaml#/components/responses/RateLimited'
       '500':
         $ref: '../openapi.yaml#/components/responses/InternalError'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'
 
 adminIncidentNotes:
   post:
@@ -93,6 +95,8 @@ adminIncidentNotes:
         $ref: '../openapi.yaml#/components/responses/RateLimited'
       '500':
         $ref: '../openapi.yaml#/components/responses/InternalError'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'
 
 adminIncidentClose:
   post:
@@ -144,6 +148,8 @@ adminIncidentClose:
         $ref: '../openapi.yaml#/components/responses/RateLimited'
       '500':
         $ref: '../openapi.yaml#/components/responses/InternalError'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'
 
 adminUserSanctions:
   post:
@@ -196,3 +202,5 @@ adminUserSanctions:
         $ref: '../openapi.yaml#/components/responses/RateLimited'
       '500':
         $ref: '../openapi.yaml#/components/responses/InternalError'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: VAIVÉN API
-  version: 0.11.0
+  version: 0.12.0
   summary: API REST del backend de VAIVÉN (préstamo y renta de objetos en México).
   description: |
     Contrato de la spec 002 (arquitectura base): endpoints de infraestructura y
@@ -65,6 +65,10 @@ tags:
     description: Avisos dentro de la app y tokens de push (spec 011).
   - name: reportes
     description: Reportar objetos, mensajes, perfiles y decisiones de moderación (spec 011).
+  - name: ia
+    description: IA generativa (spec 014) — sugerencias al publicar y asistente de proyectos; detrás de interruptores.
+  - name: recomendaciones
+    description: Recomendaciones con machine learning (spec 015) — «Recomendado para ti», eventos de vista e historial; detrás de `RECO_ENABLED`.
 paths:
   /healthz:
     get:
@@ -168,6 +172,18 @@ paths:
     $ref: './paths/auth.yaml#/me'
   /api/v1/users/{id}:
     $ref: './paths/users.yaml#/userById'
+  /api/v1/ai/listing-suggestions:
+    $ref: './paths/ai.yaml#/listingSuggestions'
+  /api/v1/ai/assistant/messages:
+    $ref: './paths/ai.yaml#/assistantMessages'
+  /api/v1/ai/assistant/conversations/{id}:
+    $ref: './paths/ai.yaml#/assistantConversation'
+  /api/v1/recommendations:
+    $ref: './paths/recommendations.yaml#/recommendations'
+  /api/v1/recommendations/events:
+    $ref: './paths/recommendations.yaml#/events'
+  /api/v1/recommendations/history:
+    $ref: './paths/recommendations.yaml#/history'
   /api/v1/uploads/signature:
     $ref: './paths/uploads.yaml#/signature'
   /api/v1/items:
@@ -374,6 +390,19 @@ components:
           type: string
           format: date-time
           description: Hora del servidor en UTC (ISO-8601).
+        features:
+          type: object
+          description: Funciones opcionales encendidas en este entorno (specs 014 y 015). Si falta una, la app la trata como apagada.
+          properties:
+            aiSuggestions:
+              type: boolean
+              description: Sugerencias de título y categoría a partir de una foto (`AI_ENABLED`).
+            projectAssistant:
+              type: boolean
+              description: Asistente de proyectos (`ASSISTANT_ENABLED`).
+            recommendations:
+              type: boolean
+              description: «Recomendado para ti» (`RECO_ENABLED`, spec 015).
     Role:
       type: string
       enum: [user, admin]
@@ -1555,6 +1584,157 @@ components:
         createdAt:
           type: string
           format: date-time
+    ListingSuggestionRequest:
+      type: object
+      required: [imagePublicId]
+      additionalProperties: false
+      properties:
+        imagePublicId:
+          type: string
+          maxLength: 255
+          description: publicId de una foto `item_photo` propia, ya subida (spec 004). No se aceptan URL.
+    ListingSuggestion:
+      type: object
+      description: Propuesta para revisar; quien publica la acepta, la edita o la ignora (spec 014, RF-01).
+      required: [title]
+      properties:
+        title:
+          type: string
+          maxLength: 80
+        category:
+          $ref: '#/components/schemas/CategoryKey'
+        description:
+          type: string
+          maxLength: 1000
+    AssistantMessageRequest:
+      type: object
+      required: [message]
+      additionalProperties: false
+      properties:
+        conversationId:
+          type: string
+          pattern: '^[0-9a-f]{24}$'
+          description: Para continuar una conversación propia; sin él se abre una nueva.
+        message:
+          type: string
+          minLength: 2
+          maxLength: 500
+          description: Lo que la persona quiere realizar. No incluyas datos personales.
+        location:
+          type: object
+          description: Solo se usa para buscar cerca; nunca se envía al proveedor de IA ni se guarda (RF-18).
+          required: [lat, lng]
+          properties:
+            lat:
+              type: number
+              minimum: -90
+              maximum: 90
+            lng:
+              type: number
+              minimum: -180
+              maximum: 180
+    AssistantNeed:
+      type: object
+      required: [name, category, optional, matches]
+      properties:
+        name:
+          type: string
+          maxLength: 60
+          description: Lo que se necesita, como lo propone el modelo.
+        category:
+          $ref: '#/components/schemas/CategoryKey'
+        optional:
+          type: boolean
+        matches:
+          type: array
+          maxItems: 5
+          description: Quién lo tiene disponible. Sale de la búsqueda (spec 006), nunca del modelo; vacío si nadie lo tiene cerca.
+          items:
+            $ref: '#/components/schemas/ItemCard'
+    AssistantReply:
+      type: object
+      required: [summary, needs, steps, safetyNotes]
+      properties:
+        summary:
+          type: string
+          maxLength: 600
+        needs:
+          type: array
+          maxItems: 8
+          items:
+            $ref: '#/components/schemas/AssistantNeed'
+        steps:
+          type: array
+          maxItems: 10
+          items:
+            type: string
+            maxLength: 200
+        safetyNotes:
+          type: array
+          maxItems: 3
+          items:
+            type: string
+            maxLength: 200
+    AssistantMessageResponse:
+      type: object
+      required: [conversationId, reply]
+      properties:
+        conversationId:
+          type: string
+        reply:
+          $ref: '#/components/schemas/AssistantReply'
+    RecommendationEventRequest:
+      type: object
+      required: [itemId, type]
+      additionalProperties: false
+      properties:
+        itemId:
+          type: string
+          pattern: '^[0-9a-f]{24}$'
+        type:
+          type: string
+          enum: [view]
+          description: Por ahora solo vistas; las solicitudes se leen de las reservas (spec 015, RF-01).
+    RecommendationReasonCode:
+      type: string
+      enum: [similar_to, popular_in_category, popular_nearby, popular]
+      description: |
+        Motivo de la recomendación; la app arma el texto en es-MX (Art. V.4):
+        `similar_to` (parecido a un objeto que la persona vio o solicitó),
+        `popular_in_category` (popular en una categoría que ha visto),
+        `popular_nearby` (popular en el municipio indicado) y `popular`.
+    RecommendationReason:
+      type: object
+      required: [code]
+      properties:
+        code:
+          $ref: '#/components/schemas/RecommendationReasonCode'
+        itemId:
+          type: string
+          description: Solo con `similar_to`; el objeto visto o solicitado que más contribuyó.
+        itemTitle:
+          type: string
+          description: Solo con `similar_to`; título de ese objeto.
+    Recommendation:
+      type: object
+      required: [item, reason]
+      properties:
+        item:
+          $ref: '#/components/schemas/ItemCard'
+        reason:
+          $ref: '#/components/schemas/RecommendationReason'
+    RecommendationList:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/Recommendation'
+        nextCursor:
+          type: 'null'
+          description: Siempre null; no hay más páginas (Art. IV.4).
     ErrorCode:
       type: string
       description: Códigos permitidos por el Art. IV.3 de la constitución.
@@ -1831,9 +2011,11 @@ components:
               requestId: 43d4c7dbb802d8b3711c8f4163ffc823
     ServiceUnavailable:
       description: |
-        Una dependencia obligatoria no responde (MongoDB, Cloudinary) o hay
+        Una dependencia obligatoria no responde (MongoDB, Cloudinary), hay
         demasiadas solicitudes de contraseña en curso (espera de turno de
-        argon2id agotada, 2 s). Se puede reintentar.
+        argon2id agotada, 2 s) o, en una ruta con sesión, no se puede
+        comprobar si el token fue revocado (Redis; la ruta falla cerrada,
+        spec 018, C-12). Se puede reintentar.
       headers:
         X-Request-Id:
           $ref: '#/components/headers/X-Request-Id'

@@ -1,0 +1,187 @@
+# Recomendaciones con machine learning (spec 015, T001; Art. IV y XII.2). Se
+# referencia desde api/openapi.yaml; los esquemas compartidos viven allí.
+#   - POST events: la app avisa que la persona abrió el detalle de un objeto.
+#   - GET recommendations: «Recomendado para ti» con el motivo de cada objeto.
+#   - DELETE history: la persona borra su historial.
+# La función va detrás del interruptor RECO_ENABLED; GET /api/v1/meta lo expone
+# en `features.recommendations`. Apagada, las tres rutas responden 503.
+events:
+  post:
+    tags: [recomendaciones]
+    operationId: recordRecommendationEvent
+    summary: Registrar que la persona vio un objeto
+    description: |
+      La app lo envía al abrir el detalle de un objeto (RF-01). Solo se guardan
+      identificadores (persona y objeto), el tipo y la fecha; los eventos duran
+      90 días (RF-09).
+
+      - Responde `204` también cuando el evento se ignora: objeto propio, objeto
+        que no está activo o vista repetida del mismo objeto en menos de 10 min.
+        Así la app no tiene que distinguir casos.
+      - `404` si el objeto no existe.
+      - Límite: 60 eventos por minuto por persona (`429` con `Retry-After`).
+      - Apagada (`RECO_ENABLED=false`): `503 service_unavailable`.
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/RecommendationEventRequest'
+          example:
+            itemId: 6730f1c2a9b3e4d5f6a7b8c9
+            type: view
+    responses:
+      '204':
+        description: Evento recibido (guardado o ignorado).
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'
+
+recommendations:
+  get:
+    tags: [recomendaciones]
+    operationId: listRecommendations
+    summary: Objetos recomendados para la persona
+    description: |
+      Devuelve objetos recomendados con un modelo híbrido propio (colaborativo
+      objeto-objeto y de contenido; RF-02 a RF-05). Cada objeto trae la **misma
+      tarjeta pública** de la búsqueda (spec 006: zona y punto aproximado, nunca
+      la ubicación exacta) y el motivo (`reason`), del que la app arma el texto.
+
+      - Nunca aparecen objetos propios, pausados, bloqueados o retirados, de
+        cuentas suspendidas o dadas de baja, ni los que la persona tiene en una
+        reserva activa. Máximo 3 por categoría.
+      - Con menos de 2 interacciones (arranque en frío) se usan los más populares
+        del municipio indicado y de las categorías vistas; sin datos, los más
+        populares. Si hay objetos visibles, la lista nunca está vacía.
+      - No hay más páginas: `nextCursor` siempre es `null` (formato de lista del
+        Art. IV.4).
+      - Apagada (`RECO_ENABLED=false`): `503 service_unavailable`.
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 20
+          default: 10
+      - name: municipality
+        in: query
+        required: false
+        description: Municipio o alcaldía que muestra la app en Explorar; solo se usa para el arranque en frío. No se guarda.
+        schema:
+          type: string
+          minLength: 2
+          maxLength: 60
+    responses:
+      '200':
+        description: Recomendaciones en orden.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/RecommendationList'
+            example:
+              items:
+                - item:
+                    id: 6730f1c2a9b3e4d5f6a7b8c9
+                    title: Taladro percutor 600 W
+                    category: herramientas_electricas
+                    modality: rent
+                    pricePerDayCents: 8000
+                    zone:
+                      municipality: Guadalajara
+                      neighborhood: Americana
+                    approxLocation:
+                      lat: 20.67
+                      lng: -103.37
+                    distanceKm: null
+                    thumbUrl: https://res.cloudinary.com/vaiven/image/upload/c_fill,w_400,h_400/vaiven/production/item_photo/6730f0aa9b3e4d5f6a7b8c90/a1.jpg
+                    photoCount: 2
+                    owner:
+                      id: 6730f0aa9b3e4d5f6a7b8c90
+                      displayName: Ana
+                      ratingAverage: 4.8
+                      ratingCount: 12
+                    createdAt: '2026-11-10T18:00:00Z'
+                  reason:
+                    code: similar_to
+                    itemId: 6731a2b3c4d5e6f7a8b9c0d1
+                    itemTitle: Sierra circular 1 200 W
+                - item:
+                    id: 6732b3c4d5e6f7a8b9c0d1e2
+                    title: Escalera de aluminio 5 peldaños
+                    category: hogar
+                    modality: loan
+                    pricePerDayCents: 0
+                    zone:
+                      municipality: Guadalajara
+                      neighborhood: null
+                    approxLocation: null
+                    distanceKm: null
+                    thumbUrl: null
+                    photoCount: 1
+                    owner:
+                      id: 6730f0aa9b3e4d5f6a7b8c91
+                      displayName: Luis
+                      ratingAverage: null
+                      ratingCount: 0
+                    createdAt: '2026-11-12T15:30:00Z'
+                  reason:
+                    code: popular_nearby
+              nextCursor: null
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'
+
+history:
+  delete:
+    tags: [recomendaciones]
+    operationId: deleteRecommendationHistory
+    summary: Borrar mi historial de recomendaciones
+    description: |
+      Borra los eventos de la persona; sus solicitudes anteriores (spec 007) dejan
+      de contar para las recomendaciones. Las recomendaciones vuelven al arranque
+      en frío (RF-09, CA-05). Es idempotente: sin historial también responde `204`.
+      Apagada (`RECO_ENABLED=false`): `503 service_unavailable`.
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+    responses:
+      '204':
+        description: Historial borrado.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'

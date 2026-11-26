@@ -38,5 +38,11 @@ func (s *Service) Deactivate(ctx context.Context, userID, password string) error
 	if err := s.d.Refresh.RevokeAllForUser(ctx, u.ID, now); err != nil {
 		return fmt.Errorf("auth: baja: revocar sesiones: %w", err)
 	}
+	// Todos los tokens de acceso emitidos hasta ahora dejan de valer ya.
+	if s.d.Revocations != nil {
+		if err := s.d.Revocations.RevokeUserBefore(ctx, u.ID, now, s.d.Access.TTL()); err != nil {
+			return fmt.Errorf("auth: baja: revocar acceso: %w", err)
+		}
+	}
 	return nil
 }

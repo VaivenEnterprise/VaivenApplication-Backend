@@ -1,0 +1,203 @@
+# IA generativa (spec 014, T001; Art. IV y XII.2). Se referencia desde
+# api/openapi.yaml; los esquemas compartidos viven allí.
+#   Parte A: sugerencias al publicar (título y categoría a partir de una foto).
+#   Parte B: asistente de proyectos (qué se necesita, quién lo tiene cerca y pasos).
+# Las dos funciones van detrás de interruptores (AI_ENABLED, ASSISTANT_ENABLED);
+# GET /api/v1/meta los expone en `features`.
+listingSuggestions:
+  post:
+    tags: [ia]
+    operationId: createListingSuggestion
+    summary: Sugerir título y categoría a partir de una foto
+    description: |
+      Propone un título y una categoría de POL-14 a partir de una foto **propia**
+      ya subida con finalidad `item_photo` (RF-01, RF-02). El servidor **no acepta
+      URL**: recibe el `publicId` y construye él mismo la miniatura. La sugerencia
+      es solo una propuesta; quien publica la acepta, la edita o la ignora.
+
+      - Si la categoría que propone el modelo no es una clave válida, se omite; el
+        título se recorta a 80 caracteres y el texto que el filtro de contenido no
+        permita se descarta (RF-04).
+      - Límite: 20 sugerencias por persona y día (`AI_DAILY_LIMIT`, RF-05).
+      - Apagada (`AI_ENABLED=false`) o con el proveedor sin responder en 10 s:
+        `503 service_unavailable` (RF-06). La app sigue sin sugerencias.
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/ListingSuggestionRequest'
+          example:
+            imagePublicId: vaiven/production/item_photo/6730f1c2a9b3e4d5f6a7b8c9/9b2f6c1e4a7d4c0e8f3b5a2d1c6e7f80
+    responses:
+      '200':
+        description: Sugerencia para revisar antes de publicar.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/ListingSuggestion'
+            example:
+              title: Taladro inalámbrico 18 V con dos baterías
+              category: herramientas_electricas
+              description: Taladro con estuche, cargador y dos baterías.
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '403':
+        $ref: '../openapi.yaml#/components/responses/Forbidden'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'
+
+assistantMessages:
+  post:
+    tags: [ia]
+    operationId: sendAssistantMessage
+    summary: Enviar un mensaje al asistente de proyectos
+    description: |
+      La persona describe lo que quiere realizar («quiero pintar mi cuarto») y el
+      asistente responde (RF-09 a RF-12):
+
+      - `needs`: qué objetos necesita (los propone el modelo, máximo 8, con
+        categoría de POL-14).
+      - `matches` dentro de cada necesidad: **quién los tiene disponibles**. Salen
+        de la búsqueda de la spec 006, **nunca del modelo**: misma tarjeta pública
+        (`ItemCard`), solo objetos `active` de otras personas con cuenta activa,
+        hasta 5 por necesidad, ordenados por distancia si se envía `location`
+        (radio `ASSISTANT_RADIUS_KM`, 10 km por omisión). `matches: []` si nadie
+        lo tiene cerca. Con `approxLocation` la app los dibuja en un mapa; la
+        solicitud sigue el flujo normal de la spec 007.
+      - `steps`: pasos en orden para completar la tarea, y `safetyNotes` cuando hay
+        riesgo.
+
+      Sin `conversationId` se abre una conversación nueva; con él se continúa (el
+      modelo recibe los últimos 6 turnos). La conversación dura 24 h (RF-13).
+
+      Privacidad (RF-18): la **ubicación nunca se envía al proveedor de IA**; solo
+      se usa para buscar. No escribas datos personales en el mensaje.
+
+      Peticiones fuera de alcance, peligrosas o ilegales reciben una negativa con
+      `needs` y `steps` vacíos (RF-14). Límites: 30 mensajes por persona y día y
+      10 por minuto (RF-15). Apagado (`ASSISTANT_ENABLED=false`) o con el
+      proveedor sin responder en 12 s: `503 service_unavailable` (RF-16).
+    parameters:
+      - $ref: '../openapi.yaml#/components/parameters/RequestId'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '../openapi.yaml#/components/schemas/AssistantMessageRequest'
+          example:
+            message: Quiero pintar mi cuarto este fin de semana
+            location:
+              lat: 25.67
+              lng: -100.31
+    responses:
+      '200':
+        description: Respuesta del asistente con necesidades, quién las tiene y pasos.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+        content:
+          application/json:
+            schema:
+              $ref: '../openapi.yaml#/components/schemas/AssistantMessageResponse'
+            example:
+              conversationId: 6735a0c1b2d3e4f5a6b7c8d9
+              reply:
+                summary: Para pintar un cuarto necesitas una escalera, un rodillo con charola y una lona. Encontré escaleras y rodillos cerca de ti; nadie presta lonas en tu zona por ahora.
+                needs:
+                  - name: Escalera de tijera
+                    category: hogar
+                    optional: false
+                    matches:
+                      - id: 6730f1c2a9b3e4d5f6a7b8c9
+                        title: Escalera de aluminio 5 peldaños
+                        category: hogar
+                        modality: rent
+                        pricePerDayCents: 5000
+                        zone:
+                          municipality: Monterrey
+                          neighborhood: Centro
+                        approxLocation:
+                          lat: 25.67
+                          lng: -100.31
+                        distanceKm: 1.2
+                        thumbUrl: https://res.cloudinary.com/vaiven/image/upload/c_fill,w_400,h_400/vaiven/production/item_photo/6730f1c2a9b3e4d5f6a7b8c9/a1.jpg
+                        photoCount: 2
+                        owner:
+                          id: 6730f0aa9b3e4d5f6a7b8c90
+                          displayName: Ana
+                          ratingAverage: 4.8
+                          ratingCount: 12
+                        createdAt: '2026-11-10T18:00:00Z'
+                  - name: Lona protectora
+                    category: hogar
+                    optional: true
+                    matches: []
+                steps:
+                  - Retira los muebles y cubre el piso con la lona.
+                  - Lija y limpia las paredes; deja secar.
+                  - Aplica una mano con el rodillo y espera el tiempo de secado del fabricante.
+                  - Aplica la segunda mano y ventila el cuarto.
+                safetyNotes:
+                  - Abre la escalera por completo y no te pares en el último peldaño.
+                  - Ventila el cuarto mientras pintas y al terminar.
+      '400':
+        $ref: '../openapi.yaml#/components/responses/ValidationFailed'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'
+
+assistantConversation:
+  parameters:
+    - name: id
+      in: path
+      required: true
+      description: Identificador de la conversación.
+      schema:
+        type: string
+        pattern: '^[0-9a-f]{24}$'
+    - $ref: '../openapi.yaml#/components/parameters/RequestId'
+  delete:
+    tags: [ia]
+    operationId: deleteAssistantConversation
+    summary: Borrar una conversación con el asistente
+    description: |
+      Borra la conversación propia y sus turnos (RF-13). Una conversación de otra
+      persona, o que ya caducó (24 h), responde `404`.
+    responses:
+      '204':
+        description: Conversación borrada.
+        headers:
+          X-Request-Id:
+            $ref: '../openapi.yaml#/components/headers/X-Request-Id'
+      '401':
+        $ref: '../openapi.yaml#/components/responses/Unauthorized'
+      '404':
+        $ref: '../openapi.yaml#/components/responses/NotFound'
+      '429':
+        $ref: '../openapi.yaml#/components/responses/RateLimited'
+      '500':
+        $ref: '../openapi.yaml#/components/responses/InternalError'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'

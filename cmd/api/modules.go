@@ -4,6 +4,7 @@ import (
 	"log/slog"
 
 	apihttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/http"
+	assistanthttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/assistant/adapter/http"
 	authhttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/adapter/http"
 	bookingshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/bookings/adapter/http"
 	chathttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/chat/adapter/http"
@@ -16,9 +17,11 @@ import (
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/notify"
 	paymentshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/payments/adapter/http"
 	ratingshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/ratings/adapter/http"
+	recohttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/reco/adapter/http"
 	reportshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/reports/adapter/http"
 	sanctionshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/sanctions/adapter/http"
 	searchhttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/search/adapter/http"
+	suggesthttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/suggest/adapter/http"
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/users"
 )
 
@@ -55,6 +58,12 @@ type moduleDeps struct {
 	Notifications *notificationshttp.Module
 	// Reports es el módulo de reportes y su revisión de la spec 011.
 	Reports *reportshttp.Module
+	// Suggest es la parte A de la spec 014 (sugerencias con IA al publicar).
+	Suggest *suggesthttp.Module
+	// Assistant es la parte B de la spec 014 (asistente de proyectos).
+	Assistant *assistanthttp.Module
+	// Reco es el módulo de recomendaciones con ML de la spec 015.
+	Reco *recohttp.Module
 	// Users da perfiles públicos por lote y acciones de administración.
 	Users interface {
 		users.Directory
@@ -81,5 +90,8 @@ func modules(deps moduleDeps) []apihttp.Module {
 		deps.Sanctions,     // 010 sanciones
 		deps.Notifications, // 011 avisos y push
 		deps.Reports,       // 011 reportes y moderación
+		deps.Suggest,       // 014 IA: sugerencias al publicar
+		deps.Assistant,     // 014 IA: asistente de proyectos
+		deps.Reco,          // 015 ML: recomendaciones
 	}
 }

@@ -1,0 +1,107 @@
+name: IaC validation
+
+on:
+  pull_request:
+    branches: [develop, main, 'spec/**']
+    paths:
+      - 'infra/**'
+      - '.github/workflows/iac.yml'
+      - 'scripts/verify-iac.mjs'
+      - 'scripts/verify-pilot-iac.mjs'
+      - 'docs/infra.md'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Compile and inspect Bicep
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install verified local tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool_dir="$RUNNER_TEMP/vaiven-iac-tools"
+          mkdir -p "$tool_dir"
+          cd "$tool_dir"
+          curl --fail --silent --show-error --location --retry 3 \
+            https://github.com/Azure/bicep/releases/download/v0.49.2/bicep-linux-x64 \
+            --output bicep
+          curl --fail --silent --show-error --location --retry 3 \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz \
+            --output gitleaks.tar.gz
+          sha256sum --check <<'SHA256'
+          0ab9de90c2493f206f8281bae74f9ee2d5ed3605548dab1adf41fef185e1f7c5  bicep
+          551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tar.gz
+          SHA256
+          chmod 0755 bicep
+          tar -xzf gitleaks.tar.gz gitleaks
+          echo "$tool_dir" >> "$GITHUB_PATH"
+      - name: Compile, lint and validate structure
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/vaiven-iac"
+          mkdir -p "$output"
+          bicep lint infra/main.bicep --no-restore --diagnostics-format sarif > "$output/bicep-lint.sarif" 2>&1
+          node -e 'const lint=JSON.parse(require("fs").readFileSync(process.argv[1])); process.exitCode = lint.runs.some(r => r.results?.length) ? 1 : 0;' "$output/bicep-lint.sarif"
+          bicep build infra/main.bicep --no-restore --outfile "$output/main.json"
+          for env in staging production; do
+            bicep build-params "infra/params/$env.bicepparam" --no-restore --outfile "$output/$env.json"
+          done
+          node scripts/verify-iac.mjs "$output/main.json" "$output/staging.json" "$output/production.json"
+          bicep lint infra/pilot.bicep --no-restore --diagnostics-format sarif > "$output/pilot-lint.sarif" 2>&1
+          node -e 'const lint=JSON.parse(require("fs").readFileSync(process.argv[1])); process.exitCode = lint.runs.some(r => r.results?.length) ? 1 : 0;' "$output/pilot-lint.sarif"
+          bicep build infra/pilot.bicep --no-restore --outfile "$output/pilot.json"
+          bicep build-params infra/params/pilot.bicepparam --no-restore --outfile "$output/pilot-params.json"
+          node scripts/verify-pilot-iac.mjs "$output/pilot.json" "$output/pilot-params.json"
+      - name: Scan IaC source for secrets
+        run: |
+          gitleaks dir --redact --no-banner infra
+          gitleaks dir --redact --no-banner .github/workflows/iac.yml
+      - name: Publish local validation diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.1
+        with:
+          name: bicep-diagnostics
+          path: ${{ runner.temp }}/vaiven-iac/*-lint.sarif
+          if-no-files-found: ignore
+          retention-days: 3
+
+  # Terraform (spec 018): solo Better Stack (observabilidad externa). Valida
+  # sin estado remoto, sin credenciales y sin plan ni apply.
+  terraform:
+    name: Terraform fmt, validate and security scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: infra/terraform/observability
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.17.1
+          terraform_wrapper: false
+      - name: terraform fmt -check
+        run: terraform fmt -check -recursive -diff
+      - name: terraform init (sin backend) y validate
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+      - name: Security scan of the configuration (Trivy config)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.70.0
+          scan-type: config
+          scan-ref: infra/terraform
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+          format: table

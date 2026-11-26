@@ -49,6 +49,8 @@ conversations:
         $ref: '../openapi.yaml#/components/responses/RateLimited'
       '500':
         $ref: '../openapi.yaml#/components/responses/InternalError'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'
 
 unreadCount:
   get:
@@ -81,6 +83,8 @@ unreadCount:
         $ref: '../openapi.yaml#/components/responses/RateLimited'
       '500':
         $ref: '../openapi.yaml#/components/responses/InternalError'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'
 
 messages:
   parameters:
@@ -169,6 +173,8 @@ messages:
         $ref: '../openapi.yaml#/components/responses/RateLimited'
       '500':
         $ref: '../openapi.yaml#/components/responses/InternalError'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'
   post:
     tags: [chat]
     operationId: sendMessage
@@ -223,6 +229,8 @@ messages:
         $ref: '../openapi.yaml#/components/responses/RateLimited'
       '500':
         $ref: '../openapi.yaml#/components/responses/InternalError'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'
 
 read:
   parameters:
@@ -249,6 +257,8 @@ read:
         $ref: '../openapi.yaml#/components/responses/RateLimited'
       '500':
         $ref: '../openapi.yaml#/components/responses/InternalError'
+      '503':
+        $ref: '../openapi.yaml#/components/responses/ServiceUnavailable'
 
 components:
   parameters:
