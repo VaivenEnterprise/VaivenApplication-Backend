@@ -670,7 +670,10 @@ func newSuggestModule(cfg config.Config, log *slog.Logger, authModule *authhttp.
 	imgs imgport.Service, usage *aimongo.UsageRepo, mod moderation.Checker) (*suggesthttp.Module, error) {
 	var gen suggestusecase.Describer
 	if cfg.AI.SuggestionsEnabled {
-		c, err := newAIProvider(cfg.AI.Suggest)
+		c, err := newAIProvider(cfg.AI.Suggest, aiopenai.Config{
+			Timeout:          cfg.AI.SuggestTimeout,
+			DisableReasoning: cfg.AI.SuggestReasoning == config.SuggestReasoningOff,
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -682,7 +685,7 @@ func newSuggestModule(cfg config.Config, log *slog.Logger, authModule *authhttp.
 	}
 	svc := suggestusecase.New(suggestusecase.Config{
 		Enabled: cfg.AI.SuggestionsEnabled, DailyLimit: cfg.AI.DailyLimit,
-		BaseFolder: cfg.Cloudinary.BaseFolder, Location: loc,
+		BaseFolder: cfg.Cloudinary.BaseFolder, Location: loc, Timeout: cfg.AI.SuggestTimeout,
 	}, suggestusecase.Deps{AI: gen, Images: imgs, Usage: usage, Moderation: mod})
 	return suggesthttp.NewModule(suggesthttp.ModuleDeps{
 		Service: svc, Authenticate: authModule.Authenticate(), Log: log,
@@ -698,7 +701,7 @@ func newAssistantModule(cfg config.Config, log *slog.Logger, authModule *authhtt
 	convs *assistantmongo.ConversationRepo, mod moderation.Checker) (*assistanthttp.Module, error) {
 	var planner assistantusecase.Planner
 	if cfg.AI.AssistantEnabled {
-		c, err := newAIProvider(cfg.AI.Assistant())
+		c, err := newAIProvider(cfg.AI.Assistant(), aiopenai.Config{})
 		if err != nil {
 			return nil, err
 		}
@@ -761,12 +764,15 @@ type aiGenerator interface {
 // newAIProvider crea el cliente de un proveedor (spec 014, RF-03, T016 y
 // T017): openai (Groq, OpenRouter u otro compatible) y ollama (local) usan el
 // adaptador compatible con OpenAI; gemini, el suyo. Cada parte tiene su
-// proveedor (AI_* para el asistente, SUGGEST_* para las sugerencias).
-func newAIProvider(p config.Provider) (aiGenerator, error) {
+// proveedor (AI_* para el asistente, SUGGEST_* para las sugerencias). opts trae
+// las opciones propias de la parte (tiempo y razonamiento; T018) y solo las
+// usa el adaptador compatible con OpenAI.
+func newAIProvider(p config.Provider, opts aiopenai.Config) (aiGenerator, error) {
 	if p.Name == config.AIProviderGemini {
 		return gemini.New(gemini.Config{BaseURL: p.BaseURL, Model: p.Model, APIKey: p.APIKey.Reveal()})
 	}
-	return aiopenai.New(aiopenai.Config{BaseURL: p.BaseURL, Model: p.Model, APIKey: p.APIKey.Reveal()})
+	opts.BaseURL, opts.Model, opts.APIKey = p.BaseURL, p.Model, p.APIKey.Reveal()
+	return aiopenai.New(opts)
 }
 
 // compressConfig devuelve la configuración de gzip si está activada

@@ -43,7 +43,7 @@ Se construye **después** de congelar la 1.0 (22 nov) y sale como actualización
 | RF-02 | El backend **no acepta URL**. Recibe el `publicId` de una imagen con finalidad `item_photo` **subida por esa misma persona** (`images.Service`) y construye él mismo la URL de la miniatura. Así evita SSRF y el uso de imágenes ajenas. |
 | RF-04 | La salida se **restringe**: `category` debe ser una de las claves de POL-14 (si no, se omite); `title` se recorta a 80 caracteres; el texto que el filtro no permita se descarta. |
 | RF-05 | **Límite de uso** por persona (provisional 20 sugerencias por día, `AI_DAILY_LIMIT`). Al excederse responde `rate_limited`. El contador vive en MongoDB con índice TTL. |
-| RF-06 | **Interruptor** `AI_ENABLED`. `GET /api/v1/meta` expone `features.aiSuggestions`. Si la función está apagada, o el proveedor no responde en 10 s, la respuesta es `service_unavailable` y la app sigue funcionando sin sugerencias. |
+| RF-06 | **Interruptor** `AI_ENABLED`. `GET /api/v1/meta` expone `features.aiSuggestions`. Si la función está apagada, o el proveedor no responde dentro del tiempo configurable (25 s por defecto, `SUGGEST_TIMEOUT`, de 5 s a 60 s; cambio 2026-11-26, T018, aprobado por el responsable), la respuesta es `service_unavailable` y la app sigue funcionando sin sugerencias. |
 | RF-07 | **Privacidad:** la foto se envía al proveedor solo a petición de la persona. No se guardan imágenes ni respuestas del modelo, salvo el contador de uso. Los registros no incluyen la imagen ni el texto sugerido. |
 
 ### Parte B — Asistente de proyectos

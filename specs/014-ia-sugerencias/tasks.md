@@ -130,6 +130,13 @@
   - Aceptación: variables `SUGGEST_PROVIDER`, `SUGGEST_BASE_URL`, `SUGGEST_MODEL` y `SUGGEST_API_KEY` (clave como `Secret`) que, si faltan, toman las `AI_*`; la parte A crea su propio cliente y la B sigue igual; `set-ai-key.sh` con `PROVIDER=openrouter` valida la clave y hace una prueba **con una imagen** antes de tocar la VM, escribe las `SUGGEST_*` y enciende o apaga solo `AI_ENABLED`; sin dependencias nuevas; pruebas de configuración
   - Refs: RF-03, RF-07 · P-01
   - Hecho (2026-11-17, BE-B): `config.AI.Suggest` y `config.AI.Assistant()` (`config.Provider`) con herencia de `AI_*`; cada proveedor exige su clave solo si su parte está encendida, y los errores nombran la variable que de verdad falta. `main.go` crea un cliente por parte. `set-ai-key.sh` con `PROVIDER=openrouter` valida la clave (`/key`) y hace una prueba **con una imagen** antes de tocar la VM; escribe solo las `SUGGEST_*` y `--enable`/`--disable` tocan solo `AI_ENABLED` (probado: la clave de Groq queda intacta). Modelo elegido de la lista pública de OpenRouter (8 gratuitos con imagen): `google/gemma-4-31b-it:free` daba 429 (proveedor saturado), así que queda `nvidia/nemotron-3.5-super-vl:free` (prueba con imagen OK, sin pago; clave y encendido aplicados en staging el 2026-11-17), con respaldo `google/gemma-4-26b-a4b-it:free`. Configuración al 100 %.
+- [ ] **T018** Tiempo configurable, razonamiento apagado y causa en los registros de las sugerencias (sin marcar hasta verificar en staging)
+  - Archivos: `internal/ai/domain/{cause.go, cause_test.go}`, `internal/ai/adapter/openai/{client.go, client_cause_test.go}`, `internal/ai/adapter/imagefetch/fetch.go`, `internal/config/{ai.go, ai_suggest_test.go, config_test.go}`, `internal/suggest/usecase/{suggest.go, suggest_timeout_test.go}`, `internal/suggest/adapter/http/{handler.go, handler_cause_test.go}`, `cmd/api/main.go`, `deploy/.env.example`, `deploy/production/.env.example`, `spec.md` (RF-06)
+  - Agente: `dev-go` · Depende de: T017
+  - Problema (medido el 2026-11-26): `POST /ai/listing-suggestions` daba 503 a los ~10 s; el modelo gratuito con visión de OpenRouter a veces responde en 3 s y a veces tarda ~14 s con HTTP 200 y contenido vacío (los tokens de razonamiento consumen el presupuesto). El caso de uso cortaba a 10 s fijos y el registro solo decía «proveedor no disponible».
+  - Aceptación: `SUGGEST_TIMEOUT` (duración, 25 s por defecto, válido de 5 s a 60 s; fuera de rango el arranque falla) llega al caso de uso, y el tope HTTP por intento nunca es menor que ese tiempo; `SUGGEST_REASONING` (`default` u `off`; sin definir, `off` si `SUGGEST_BASE_URL` es de `openrouter.ai`) agrega `"reasoning": {"enabled": false, "exclude": true}` solo a la petición de las sugerencias (el JSON para Groq y el asistente no cambia); contenido vacío o truncado (`finish_reason=length`) se reintenta una vez, y el reintento (también ante 429, 5xx o red) solo ocurre si al contexto le quedan 3 s o más; los errores del proveedor llevan causa (`timeout`, `http_status`, `empty_response`, `malformed_json`, `content_filter`, `network`, `image_fetch`) y el WARN del handler incluye `cause` y `upstreamStatus` sin cuerpos, claves, URLs ni texto del modelo; la respuesta al cliente es idéntica (503 `service_unavailable`, mismo mensaje) y el contrato OpenAPI no cambia; el asistente (parte B) conserva sus 12 s; sin dependencias nuevas; pruebas con `httptest`
+  - Refs: RF-06, RF-07 · P-01
+  - Pendiente: verificar en staging (varias sugerencias reales; revisar `cause` en los registros) antes de marcar `[x]`.
 
 ## Trazabilidad
 | Requisito | Tareas |
@@ -140,5 +147,5 @@
 | RF-09 a RF-16, RF-18 | T008 a T013 |
 | RNF-01 | T007, T010, T013 |
 
-| Total | 17 tareas |
+| Total | 18 tareas |
 |---|---|

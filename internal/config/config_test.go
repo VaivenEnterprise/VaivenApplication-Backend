@@ -66,7 +66,8 @@ func TestLoadDefaults(t *testing.T) {
 		AI: AI{
 			Provider: AIProviderOpenAI, BaseURL: DefaultOpenAIBaseURL, Model: DefaultOpenAIModel,
 			DailyLimit: 20, AssistantDailyLimit: 30, AssistantRadiusKm: 10,
-			Suggest: Provider{Name: AIProviderOpenAI, BaseURL: DefaultOpenAIBaseURL, Model: DefaultOpenAIModel},
+			Suggest:        Provider{Name: AIProviderOpenAI, BaseURL: DefaultOpenAIBaseURL, Model: DefaultOpenAIModel},
+			SuggestTimeout: DefaultSuggestTimeout, SuggestReasoning: SuggestReasoningDefault,
 		},
 		Reco:        Reco{Enabled: false},
 		DocsEnabled: true,
