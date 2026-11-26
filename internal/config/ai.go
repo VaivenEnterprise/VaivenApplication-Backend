@@ -1,6 +1,10 @@
 package config
 
-import "strings"
+import (
+	"net/url"
+	"strings"
+	"time"
+)
 
 // Proveedores de IA aceptados en AI_PROVIDER (spec 014, RF-03 y T016).
 // openai es cualquier API compatible con OpenAI (Groq en staging); ollama usa
@@ -19,6 +23,20 @@ const (
 	DefaultOllamaBaseURL = "http://localhost:11434/v1"
 	DefaultGeminiModel   = "gemini-2.5-flash"
 	maxAssistantRadiusKm = 50
+)
+
+// Tiempo de espera y razonamiento de las sugerencias (spec 014, T018).
+const (
+	DefaultSuggestTimeout = 25 * time.Second
+	MinSuggestTimeout     = 5 * time.Second
+	MaxSuggestTimeout     = 60 * time.Second
+
+	// SuggestReasoningDefault no envía nada al proveedor; SuggestReasoningOff
+	// desactiva el razonamiento (campo "reasoning" de OpenRouter).
+	SuggestReasoningDefault = "default"
+	SuggestReasoningOff     = "off"
+
+	openRouterHost = "openrouter.ai"
 )
 
 // AI es la configuración de la IA generativa (spec 014): sugerencias al
@@ -48,6 +66,13 @@ type AI struct {
 	// valor que falte toma el de AI_*, así que sin SUGGEST_* las dos partes
 	// usan el mismo proveedor.
 	Suggest Provider
+	// SuggestTimeout es el tiempo máximo de la llamada al proveedor de las
+	// sugerencias (SUGGEST_TIMEOUT; entre 5 s y 60 s; 25 s por defecto).
+	SuggestTimeout time.Duration
+	// SuggestReasoning es default u off (SUGGEST_REASONING). Sin definirla,
+	// vale off si SUGGEST_BASE_URL es de openrouter.ai y default en otro caso.
+	// Solo afecta a las sugerencias, nunca al asistente.
+	SuggestReasoning string
 }
 
 // Provider es un proveedor de IA y su modelo.
@@ -108,6 +133,13 @@ func loadAI(r *reader, appEnv string) AI {
 		Model:   r.text("SUGGEST_MODEL", a.Model),
 		APIKey:  Secret(r.text("SUGGEST_API_KEY", a.APIKey.Reveal())),
 	}
+	a.SuggestTimeout = r.duration("SUGGEST_TIMEOUT", DefaultSuggestTimeout)
+	if a.SuggestTimeout < MinSuggestTimeout || a.SuggestTimeout > MaxSuggestTimeout {
+		r.fail("SUGGEST_TIMEOUT", "debe estar entre 5s y 60s")
+		a.SuggestTimeout = DefaultSuggestTimeout
+	}
+	a.SuggestReasoning = r.oneOf("SUGGEST_REASONING", defaultSuggestReasoning(a.Suggest.BaseURL),
+		SuggestReasoningDefault, SuggestReasoningOff)
 	checkProvider(r, appEnv, "SUGGEST", a.Suggest, a.SuggestionsEnabled, "AI_ENABLED")
 	// Al heredar de AI_*, el error debe nombrar la variable que falta de verdad.
 	r.renameUnset("SUGGEST_MODEL", "AI_MODEL")
@@ -116,6 +148,15 @@ func loadAI(r *reader, appEnv string) AI {
 	// sugerencias y no hay SUGGEST_*, AI_* también es el suyo (ya revisado).
 	checkProvider(r, appEnv, "AI", a.Assistant(), a.AssistantEnabled, "ASSISTANT_ENABLED")
 	return a
+}
+
+// defaultSuggestReasoning apaga el razonamiento solo con OpenRouter, donde los
+// modelos que razonan pueden gastar el presupuesto y devolver contenido vacío.
+func defaultSuggestReasoning(baseURL string) string {
+	if u, err := url.Parse(baseURL); err == nil && strings.EqualFold(u.Hostname(), openRouterHost) {
+		return SuggestReasoningOff
+	}
+	return SuggestReasoningDefault
 }
 
 // checkProvider exige modelo y clave (salvo ollama) a un proveedor encendido.

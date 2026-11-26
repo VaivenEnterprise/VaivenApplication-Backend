@@ -23,7 +23,7 @@ import (
 const Feature = "suggest"
 
 const (
-	defaultTimeout = 10 * time.Second // RF-06
+	defaultTimeout = 25 * time.Second // RF-06 (cambio 2026-11-26, T018): configurable con SUGGEST_TIMEOUT
 	maxPublicIDLen = 255
 	dayLayout      = "2006-01-02"
 	mexicoCity     = "America/Mexico_City"
@@ -69,7 +69,7 @@ type Config struct {
 	Enabled    bool           // AI_ENABLED
 	DailyLimit int            // AI_DAILY_LIMIT
 	BaseFolder string         // CLOUDINARY_BASE_FOLDER (vaiven/<entorno>)
-	Timeout    time.Duration  // 0 = 10 s
+	Timeout    time.Duration  // SUGGEST_TIMEOUT; 0 = 25 s
 	Location   *time.Location // nil = America/Mexico_City
 }
 
@@ -177,7 +177,7 @@ func (s *Service) Suggest(ctx context.Context, userID, publicID string) (aidomai
 	}
 	sug, err := aidomain.ParseSuggestion(raw)
 	if err != nil {
-		return aidomain.Suggestion{}, ErrNoProposal.Wrap(err)
+		return aidomain.Suggestion{}, ErrNoProposal.Wrap(aidomain.WithCause(err, aidomain.CauseMalformedJSON, 0))
 	}
 	return s.moderate(ctx, sug)
 }
