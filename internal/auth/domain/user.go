@@ -92,13 +92,14 @@ type PublicUser struct {
 // Public devuelve el perfil público; una cuenta dada de baja se muestra como
 // «Cuenta eliminada».
 func (u User) Public() PublicUser {
-	name := u.DisplayName
 	if !u.IsActive() {
-		name = DeletedDisplayName
+		// Una cuenta eliminada no muestra promedio aunque un documento
+		// anterior a la baja limpia aún conserve las sumas (spec 021, N-2).
+		return PublicUser{ID: u.ID, DisplayName: DeletedDisplayName, MemberSince: u.CreatedAt}
 	}
 	return PublicUser{
 		ID:            u.ID,
-		DisplayName:   name,
+		DisplayName:   u.DisplayName,
 		RatingAverage: u.RatingAverage(),
 		RatingCount:   u.RatingCount,
 		MemberSince:   u.CreatedAt,

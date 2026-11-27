@@ -88,13 +88,13 @@ func TestIntegrationEnsureIndexesIdempotent(t *testing.T) {
 	for _, i := range idx {
 		got[i.Name] = true
 	}
-	for _, want := range []string{"booking_status", "reporter_createdAt", "reported_createdAt", "status_createdAt"} {
+	for _, want := range []string{"booking_status", "reporter_createdAt", "reported_createdAt", "status_createdAt", "purgeAt_ttl"} {
 		if !got[want] {
 			t.Errorf("falta el índice %s: %v", want, got)
 		}
 	}
-	if len(idx) != 5 { // _id_ + 4
-		t.Errorf("índices = %d, quiero 5", len(idx))
+	if len(idx) != 6 { // _id_ + 4 + TTL de purgeAt
+		t.Errorf("índices = %d, quiero 6", len(idx))
 	}
 }
 

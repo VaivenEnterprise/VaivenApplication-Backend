@@ -39,6 +39,7 @@ func ensurersWithPrefix(db *drv.Database) []namedEnsurer {
 	return []namedEnsurer{
 		{authmongo.NewUserRepo(db), "users: crear índices: "},
 		{authmongo.NewRefreshRepo(db), "refresh_tokens: crear índices: "},
+		{authmongo.NewDeletionJobs(db), "deletion_jobs: crear índices: "},
 		{itemsmongo.NewItemRepo(db), "items: crear índices: "},
 		{searchmongo.NewIndexes(db), "search: crear índices: "},
 		{bookingsmongo.NewRepo(db), "bookings: crear índices: "},

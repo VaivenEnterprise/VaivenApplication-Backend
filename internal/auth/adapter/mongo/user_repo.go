@@ -29,17 +29,17 @@ type userDoc struct {
 	Email           string        `bson:"email"`
 	PasswordHash    string        `bson:"passwordHash"`
 	DisplayName     string        `bson:"displayName"`
-	Phone           *string       `bson:"phone"`
+	Phone           *string       `bson:"phone,omitempty"`
 	Role            string        `bson:"role"`
 	Status          string        `bson:"status"`
 	AcceptedTermsAt time.Time     `bson:"acceptedTermsAt"`
 	RatingSum       int64         `bson:"ratingSum"`
 	RatingCount     int64         `bson:"ratingCount"`
-	SuspendedUntil  *time.Time    `bson:"suspendedUntil"`
+	SuspendedUntil  *time.Time    `bson:"suspendedUntil,omitempty"`
 	CreatedAt       time.Time     `bson:"createdAt"`
 	UpdatedAt       time.Time     `bson:"updatedAt"`
 	Version         int64         `bson:"version"`
-	DeactivatedAt   *time.Time    `bson:"deactivatedAt"`
+	DeactivatedAt   *time.Time    `bson:"deactivatedAt,omitempty"`
 }
 
 func toDoc(u domain.User) (userDoc, error) {
@@ -116,6 +116,13 @@ func UserIndexes() []adaptermongo.IndexSpec {
 			Keys:    bson.D{{Key: "email", Value: 1}},
 			Options: options.Index().SetName("email_unique").SetUnique(true),
 		},
+		// Bajas con pasos pendientes (spec 021): parcial, solo existe en las
+		// pocas cuentas marcadas con deletionPending: true.
+		drv.IndexModel{
+			Keys: bson.D{{Key: "deletionPending", Value: 1}},
+			Options: options.Index().SetName("deletionPending_partial").
+				SetPartialFilterExpression(bson.D{{Key: "deletionPending", Value: true}}),
+		},
 	)
 }
 
@@ -186,15 +193,18 @@ func (r *UserRepo) UpdateProfile(ctx context.Context, id string, p usecase.Profi
 	if p.DisplayName != nil {
 		set = append(set, bson.E{Key: "displayName", Value: *p.DisplayName})
 	}
+	update := bson.D{{Key: "$set", Value: set}, {Key: "$inc", Value: bson.D{{Key: "version", Value: 1}}}}
 	if p.ClearPhone {
-		set = append(set, bson.E{Key: "phone", Value: nil})
+		// Quitar un valor es $unset, nunca $set: null (spec 021, RF-10).
+		update = append(update, bson.E{Key: "$unset", Value: bson.D{{Key: "phone", Value: ""}}})
 	} else if p.Phone != nil {
 		set = append(set, bson.E{Key: "phone", Value: *p.Phone})
+		update[0].Value = set
 	}
 	var d userDoc
 	err = r.col.FindOneAndUpdate(ctx,
 		bson.D{{Key: "_id", Value: oid}, {Key: "status", Value: string(domain.StatusActive)}},
-		bson.D{{Key: "$set", Value: set}, {Key: "$inc", Value: bson.D{{Key: "version", Value: 1}}}},
+		update,
 		options.FindOneAndUpdate().SetReturnDocument(options.After),
 	).Decode(&d)
 	if errors.Is(err, drv.ErrNoDocuments) {
@@ -228,24 +238,54 @@ func (r *UserRepo) UpdatePasswordHash(ctx context.Context, id, passwordHash stri
 	return nil
 }
 
-// Deactivate da de baja la cuenta y anonimiza correo, nombre y teléfono
-// (RF-08). El correo anónimo es único, así que el índice se conserva.
+// LockActive es el cerrojo de la baja (spec 021): $inc de version sobre la
+// cuenta activa. Dentro de una transacción, dos bajas simultáneas chocan aquí
+// (WriteConflict) y la segunda ve la cuenta ya dada de baja. false si no existe
+// o ya no está activa.
+func (r *UserRepo) LockActive(ctx context.Context, id string) (bool, error) {
+	oid, err := bson.ObjectIDFromHex(id)
+	if err != nil {
+		return false, nil
+	}
+	res, err := r.col.UpdateOne(ctx,
+		bson.D{{Key: "_id", Value: oid}, {Key: "status", Value: string(domain.StatusActive)}},
+		bson.D{{Key: "$inc", Value: bson.D{{Key: "version", Value: 1}}}})
+	if err != nil {
+		return false, fmt.Errorf("users: cerrojo de la baja: %w", err)
+	}
+	return res.MatchedCount == 1, nil
+}
+
+// Deactivate da de baja la cuenta activa (spec 021, RF-02, §5.2 de la spec): deja
+// solo los campos que se conservan. Reemplaza correo y nombre, fija estado y
+// fecha de baja, marca deletionPending (hay pasos posteriores al commit) y
+// QUITA con $unset passwordHash, phone, suspendedUntil, role, ratingSum y
+// ratingCount; ningún campo queda en null. acceptedTermsAt se conserva (D-6).
+// El correo anónimo es único, así que el índice se conserva y el original
+// queda libre. Si la cuenta no existe o ya no está activa devuelve
+// domain.ErrUserNotFound (el cerrojo status: active hace la baja atómica).
 func (r *UserRepo) Deactivate(ctx context.Context, id, anonymizedEmail string, now time.Time) error {
 	oid, err := bson.ObjectIDFromHex(id)
 	if err != nil {
 		return domain.ErrUserNotFound
 	}
-	res, err := r.col.UpdateOne(ctx, bson.D{{Key: "_id", Value: oid}}, bson.D{
-		{Key: "$set", Value: bson.D{
-			{Key: "email", Value: anonymizedEmail},
-			{Key: "displayName", Value: domain.DeletedDisplayName},
-			{Key: "phone", Value: nil},
-			{Key: "status", Value: string(domain.StatusDeactivated)},
-			{Key: "deactivatedAt", Value: now},
-			{Key: "updatedAt", Value: now},
-		}},
-		{Key: "$inc", Value: bson.D{{Key: "version", Value: 1}}},
-	})
+	res, err := r.col.UpdateOne(ctx,
+		bson.D{{Key: "_id", Value: oid}, {Key: "status", Value: string(domain.StatusActive)}},
+		bson.D{
+			{Key: "$set", Value: bson.D{
+				{Key: "email", Value: anonymizedEmail},
+				{Key: "displayName", Value: domain.DeletedDisplayName},
+				{Key: "status", Value: string(domain.StatusDeactivated)},
+				{Key: "deactivatedAt", Value: now},
+				{Key: "updatedAt", Value: now},
+				{Key: "deletionPending", Value: true},
+			}},
+			{Key: "$unset", Value: bson.D{
+				{Key: "passwordHash", Value: ""}, {Key: "phone", Value: ""}, {Key: "suspendedUntil", Value: ""},
+				{Key: "role", Value: ""}, {Key: "ratingSum", Value: ""}, {Key: "ratingCount", Value: ""},
+			}},
+			{Key: "$inc", Value: bson.D{{Key: "version", Value: 1}}},
+		})
 	if err != nil {
 		return fmt.Errorf("users: baja: %w", err)
 	}
@@ -253,6 +293,47 @@ func (r *UserRepo) Deactivate(ctx context.Context, id, anonymizedEmail string, n
 		return domain.ErrUserNotFound
 	}
 	return nil
+}
+
+// ListPending devuelve hasta limit cuentas con pasos pendientes de la baja
+// (deletionPending: true), de la más antigua a la más reciente.
+func (r *UserRepo) ListPending(ctx context.Context, limit int) ([]string, error) {
+	cur, err := r.col.Find(ctx, bson.D{{Key: "deletionPending", Value: true}},
+		options.Find().SetProjection(bson.D{{Key: "_id", Value: 1}}).SetSort(bson.D{{Key: "_id", Value: 1}}).SetLimit(int64(limit)))
+	if err != nil {
+		return nil, fmt.Errorf("users: bajas pendientes: %w", err)
+	}
+	var docs []struct {
+		ID bson.ObjectID `bson:"_id"`
+	}
+	if err := cur.All(ctx, &docs); err != nil {
+		return nil, fmt.Errorf("users: bajas pendientes: %w", err)
+	}
+	out := make([]string, 0, len(docs))
+	for _, d := range docs {
+		out = append(out, d.ID.Hex())
+	}
+	return out, nil
+}
+
+// ClearIfDone quita la marca deletionPending con $unset (nunca la deja en
+// null). Devuelve true si la cuenta la tenía. Quien llama ya comprobó que no
+// quedan pasos pendientes.
+func (r *UserRepo) ClearIfDone(ctx context.Context, id string, now time.Time) (bool, error) {
+	oid, err := bson.ObjectIDFromHex(id)
+	if err != nil {
+		return false, nil
+	}
+	res, err := r.col.UpdateOne(ctx,
+		bson.D{{Key: "_id", Value: oid}, {Key: "deletionPending", Value: true}},
+		bson.D{
+			{Key: "$unset", Value: bson.D{{Key: "deletionPending", Value: ""}}},
+			{Key: "$set", Value: bson.D{{Key: "updatedAt", Value: now}}},
+		})
+	if err != nil {
+		return false, fmt.Errorf("users: quitar marca de baja: %w", err)
+	}
+	return res.ModifiedCount == 1, nil
 }
 
 // PublicUsers implementa users.Directory: perfiles públicos por lote. Los ids
@@ -290,35 +371,49 @@ func (r *UserRepo) PublicUsers(ctx context.Context, ids []string) (map[string]us
 	return out, nil
 }
 
-// Suspend implementa users.Admin: fija suspendedUntil (RF-13).
+// Suspend implementa users.Admin: fija suspendedUntil (RF-13). Solo sobre
+// cuentas activas: sobre una cuenta ya dada de baja no hace nada y no es error
+// (recrearía un campo que la baja quitó, spec 021 plan §6).
 func (r *UserRepo) Suspend(ctx context.Context, userID string, until time.Time) error {
-	return r.updateByID(ctx, userID, bson.D{{Key: "$set", Value: bson.D{
+	return r.updateActive(ctx, userID, bson.D{{Key: "$set", Value: bson.D{
 		{Key: "suspendedUntil", Value: until.UTC()},
 		{Key: "updatedAt", Value: time.Now().UTC()},
 	}}})
 }
 
-// AddRating implementa users.Admin: suma una calificación de 1 a 5.
+// AddRating implementa users.Admin: suma una calificación de 1 a 5. Sobre una
+// cuenta dada de baja no hace nada y no es error: la estrella ya quedó en
+// ratings y no se acumula en un perfil que no se muestra.
 func (r *UserRepo) AddRating(ctx context.Context, userID string, score int) error {
 	if score < 1 || score > 5 {
 		return fmt.Errorf("users: calificación fuera de rango: %d", score)
 	}
-	return r.updateByID(ctx, userID, bson.D{{Key: "$inc", Value: bson.D{
+	return r.updateActive(ctx, userID, bson.D{{Key: "$inc", Value: bson.D{
 		{Key: "ratingSum", Value: int64(score)},
 		{Key: "ratingCount", Value: int64(1)},
 	}}})
 }
 
-func (r *UserRepo) updateByID(ctx context.Context, id string, update bson.D) error {
+// updateActive aplica update solo si la cuenta está activa. Si no coincide,
+// distingue entre una cuenta que no existe (domain.ErrUserNotFound) y una que
+// existe pero no está activa (sin error y sin cambios).
+func (r *UserRepo) updateActive(ctx context.Context, id string, update bson.D) error {
 	oid, err := bson.ObjectIDFromHex(id)
 	if err != nil {
 		return domain.ErrUserNotFound
 	}
-	res, err := r.col.UpdateOne(ctx, bson.D{{Key: "_id", Value: oid}}, update)
+	res, err := r.col.UpdateOne(ctx, bson.D{{Key: "_id", Value: oid}, {Key: "status", Value: string(domain.StatusActive)}}, update)
 	if err != nil {
 		return fmt.Errorf("users: actualizar: %w", err)
 	}
-	if res.MatchedCount == 0 {
+	if res.MatchedCount > 0 {
+		return nil
+	}
+	n, err := r.col.CountDocuments(ctx, bson.D{{Key: "_id", Value: oid}}, options.Count().SetLimit(1))
+	if err != nil {
+		return fmt.Errorf("users: actualizar: %w", err)
+	}
+	if n == 0 {
 		return domain.ErrUserNotFound
 	}
 	return nil
@@ -326,7 +421,8 @@ func (r *UserRepo) updateByID(ctx context.Context, id string, update bson.D) err
 
 // Comprobaciones en compilación de los puertos que implementa UserRepo.
 var (
-	_ usecase.Users   = (*UserRepo)(nil)
-	_ users.Directory = (*UserRepo)(nil)
-	_ users.Admin     = (*UserRepo)(nil)
+	_ usecase.Users            = (*UserRepo)(nil)
+	_ users.Directory          = (*UserRepo)(nil)
+	_ users.Admin              = (*UserRepo)(nil)
+	_ usecase.PendingDeletions = (*UserRepo)(nil)
 )

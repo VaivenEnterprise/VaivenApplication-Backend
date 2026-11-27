@@ -26,11 +26,14 @@ var purpose = map[string]struct {
 	kind purposeKind
 	why  string
 }{
-	"refresh_tokens.tokenHash_unique": {forUnique, "un refresh token (su hash) no se repite; búsqueda al canjear"},
-	"refresh_tokens.familyId":         {forQuery, "revocar la familia al detectar reutilización (CA-03 de la 003)"},
-	"refresh_tokens.userId":           {forQuery, "revocar todas las sesiones de una persona (baja, rotación)"},
-	"refresh_tokens.expiresAt_ttl":    {forTTL, "borrar refresh tokens vencidos"},
-	"users.email_unique":              {forUnique, "una cuenta por correo; inicio de sesión por correo"},
+	"refresh_tokens.tokenHash_unique":     {forUnique, "un refresh token (su hash) no se repite; búsqueda al canjear"},
+	"refresh_tokens.familyId":             {forQuery, "revocar la familia al detectar reutilización (CA-03 de la 003)"},
+	"refresh_tokens.userId":               {forQuery, "revocar todas las sesiones de una persona (baja, rotación)"},
+	"refresh_tokens.expiresAt_ttl":        {forTTL, "borrar refresh tokens vencidos"},
+	"deletion_jobs.nextAttemptAt_partial": {forQuery, "reclamar los pasos de baja vencidos (worker); parcial: solo jobs por hacer"},
+	"deletion_jobs.userId":                {forQuery, "contar los pasos pendientes de una baja para quitar deletionPending"},
+	"users.email_unique":                  {forUnique, "una cuenta por correo; inicio de sesión por correo"},
+	"users.deletionPending_partial":       {forQuery, "cuentas con pasos pendientes de la baja (spec 021); parcial: solo existe mientras hay pendientes"},
 
 	"bookings.item_status_dates":          {forQuery, "detectar choques de fechas de un objeto por estado"},
 	"bookings.requester_status_createdAt": {forQuery, "GET /me/bookings como solicitante, por estado y recientes"},
@@ -53,13 +56,16 @@ var purpose = map[string]struct {
 
 	"ratings.booking_rater_unique": {forUnique, "una calificación por persona y reserva"},
 	"ratings.ratee_id":             {forQuery, "calificaciones recibidas, más recientes primero"},
+	"ratings.rater":                {forQuery, "quitar los comentarios de quien se da de baja (spec 021, D-3)"},
 
 	"incidents.booking_status":     {forQuery, "incidencias abiertas de una reserva"},
 	"incidents.reporter_createdAt": {forQuery, "GET /me/incidents como quien reporta"},
 	"incidents.reported_createdAt": {forQuery, "incidencias contra una persona"},
 	"incidents.status_createdAt":   {forQuery, "cola de administración por estado, más antiguas primero"},
+	"incidents.purgeAt_ttl":        {forTTL, "borrar la incidencia a los 12 meses de la baja de una cuenta implicada (spec 021, D-4)"},
 
 	"sanctions.user_createdAt": {forQuery, "sanciones de una persona, más recientes primero"},
+	"sanctions.purgeAt_ttl":    {forTTL, "borrar la sanción a los 12 meses de la baja de la cuenta sancionada (spec 021, D-4)"},
 
 	"notifications.user_id":     {forQuery, "avisos de una persona, más recientes primero (cursor por _id)"},
 	"notifications.user_read":   {forQuery, "contar y marcar los no leídos de una persona"},
@@ -69,6 +75,8 @@ var purpose = map[string]struct {
 
 	"reports.reporter_target_unique": {forUnique, "una persona reporta el mismo contenido una sola vez"},
 	"reports.status_created":         {forQuery, "cola de moderación por estado, más antiguos primero"},
+	"reports.target":                 {forQuery, "reportes recibidos por una persona (targetType user), para la retención de su baja (spec 021, D-4)"},
+	"reports.purgeAt_ttl":            {forTTL, "borrar el reporte a los 12 meses de la baja de una cuenta implicada (spec 021, D-4)"},
 
 	"ai_usage.user_feature_day_unique": {forUnique, "límite diario atómico de IA por persona, función y día (RF-05 y RF-15 de la 014)"},
 	"ai_usage.created_ttl":             {forTTL, "borrar contadores de uso de IA a los 3 días (plan P-04 de la 014)"},

@@ -29,8 +29,11 @@ import (
 	assistantsearch "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/assistant/adapter/search"
 	assistantusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/assistant/usecase"
 	authhttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/adapter/http"
+	authimages "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/adapter/imagedestroyer"
 	authmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/adapter/mongo"
+	authnotices "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/adapter/notices"
 	authdomain "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/domain"
+	authjobs "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/jobs"
 	authusecase "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/auth/usecase"
 	bookingshttp "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/bookings/adapter/http"
 	bookingsmongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/bookings/adapter/mongo"
@@ -161,8 +164,22 @@ func run() error {
 	} else {
 		log.Info("validación $jsonSchema de items", "resultado", string(itemsSchema))
 	}
+	// Validadores de campos opcionales del resto de colecciones (spec 021, T008):
+	// en el despliegue A solo avisan (warn); sin dbAdmin se omiten como los demás.
+	optionals, err := adaptermongo.EnsureOptionalFieldValidators(ctx, db, adaptermongo.OptionalFieldsAction)
+	if err != nil {
+		return fmt.Errorf("no se pudo aplicar la validación de campos opcionales: %w", err)
+	}
+	log.Info("validación de campos opcionales", "accion", adaptermongo.OptionalFieldsAction,
+		"creadas", optionals.Created, "actualizadas", optionals.Updated, "sin_cambios", optionals.Unchanged)
+	if len(optionals.Skipped) > 0 {
+		log.Warn("validación de campos opcionales no aplicada; aplícala con un usuario dbAdmin (docs/servicios.md)", "colecciones", optionals.Skipped)
+	}
 	userRepo := authmongo.NewUserRepo(db)
 	refreshRepo := authmongo.NewRefreshRepo(db)
+	// Bandeja de salida de la baja de cuenta (spec 021): sus índices se crean
+	// junto con los demás.
+	deletionJobsRepo := authmongo.NewDeletionJobs(db)
 	itemRepo := itemsmongo.NewItemRepo(db)
 	// Los índices de búsqueda (006) van después de los de items (005).
 	bookingRepo := bookingsmongo.NewRepo(db)
@@ -184,7 +201,7 @@ func run() error {
 	// Eventos de las recomendaciones (spec 015, T003): sus índices se crean aunque
 	// RECO_ENABLED esté apagado, por la misma razón.
 	recoInteractionsRepo := recomongo.NewInteractionRepo(db)
-	if err := adaptermongo.EnsureAll(ctx, userRepo, refreshRepo, itemRepo, searchmongo.NewIndexes(db), bookingRepo, convRepo, msgRepo, paymentsRepo,
+	if err := adaptermongo.EnsureAll(ctx, userRepo, refreshRepo, deletionJobsRepo, itemRepo, searchmongo.NewIndexes(db), bookingRepo, convRepo, msgRepo, paymentsRepo,
 		ratingsRepo, incidentsRepo, sanctionsRepo, notificationsRepo, pushTokensRepo, reportsRepo, aiUsageRepo, aiConversationsRepo, recoInteractionsRepo); err != nil {
 		return fmt.Errorf("no se pudieron crear los índices: %w", err)
 	}
@@ -215,9 +232,48 @@ func run() error {
 		revocations = redis.NewRevocations(rc)
 	}
 
+	// Puerto compartido de avisos (Art. XII.4): el Notifier real de la spec 011
+	// guarda el aviso y, si PUSH_ENABLED, encola el push que envía el worker.
+	notifier, pushWorker, err := newNotifier(cfg, log, notificationsRepo, pushTokensRepo, userRepo)
+	if err != nil {
+		return err
+	}
+
+	// Baja de cuenta atómica (spec 021): una transacción de MongoDB y un eraser
+	// por módulo (Art. XII), una línea cada uno. El orden importa: bookings
+	// primero, porque cierra las solicitudes pendientes y desprende las fotos
+	// antes de que otros módulos borren lo suyo.
+	noticeSender, err := authnotices.New(notifier)
+	if err != nil {
+		return err
+	}
+	// Fotos de objetos y evidencias: el job «image» las destruye en Cloudinary
+	// con reintento (spec 021, D-2); nunca queda en nil.
+	imageDestroyer, err := newImageDestroyer(cfg)
+	if err != nil {
+		return err
+	}
+	deletion := accountDeletion{
+		Tx: adaptermongo.NewTxRunner(db),
+		Erasers: []authusecase.Eraser{
+			bookingsmongo.NewEraser(db),
+			itemsmongo.NewEraser(db),
+			chatmongo.NewEraser(db),
+			ratingsmongo.NewEraser(db),
+			notificationsmongo.NewEraser(db),
+			aimongo.NewEraser(db),
+			assistantmongo.NewEraser(db),
+			recomongo.NewEraser(db),
+			incidentsmongo.NewEraser(db),
+			reportsmongo.NewEraser(db),
+			sanctionsmongo.NewEraser(db),
+		},
+		Jobs: deletionJobsRepo, Pending: userRepo, Images: imageDestroyer, Notices: noticeSender,
+	}
+
 	// Reservas reales (spec 007, RF-14): impiden dar de baja una cuenta (003)
 	// o eliminar un objeto (005) con reservas aceptadas o en curso.
-	authModule, err := newAuthModule(cfg, log, userRepo, refreshRepo, limiter, bookingsmongo.NewUserActivity(db), revocations)
+	authModule, authSvc, err := newAuthModule(cfg, log, userRepo, refreshRepo, limiter, bookingsmongo.NewUserActivity(db), revocations, deletion)
 	if err != nil {
 		return err
 	}
@@ -241,12 +297,6 @@ func run() error {
 		return err
 	}
 
-	// Puerto compartido de avisos (Art. XII.4): el Notifier real de la spec 011
-	// guarda el aviso y, si PUSH_ENABLED, encola el push que envía el worker.
-	notifier, pushWorker, err := newNotifier(cfg, log, notificationsRepo, pushTokensRepo, userRepo)
-	if err != nil {
-		return err
-	}
 	// Chat de cada reserva (spec 008); su servicio es el chat.Opener real que
 	// abre la conversación al crear una solicitud (reemplaza el vacío de 007).
 	chatSvc, err := chatusecase.NewService(chatusecase.Deps{
@@ -410,6 +460,13 @@ func run() error {
 		jobs.RunExpirer(ctx, bookingsSvc, nil, log)
 		close(expirerDone)
 	}()
+	// Bajas de cuenta pendientes cada 60 s (spec 021, N-1): jobs de la bandeja de
+	// salida y marca deletionPending; termina con ctx.
+	deletionDone := make(chan struct{})
+	go func() {
+		authjobs.RunDeletionWorker(ctx, authSvc, nil, log)
+		close(deletionDone)
+	}()
 	// Devoluciones tardías cada 5 min (plan 009 P-05); termina con ctx.
 	lateDone := make(chan struct{})
 	go func() {
@@ -506,24 +563,36 @@ func run() error {
 		return fmt.Errorf("el servidor se detuvo: %w", err)
 	}
 	<-expirerDone // la tarea termina con ctx; se espera antes de cerrar MongoDB
+	<-deletionDone
 	<-lateDone
 	<-pushDone
 	log.Info("servidor detenido")
 	return nil
 }
 
+// accountDeletion reúne lo que necesita la baja de cuenta atómica (spec 021).
+type accountDeletion struct {
+	Tx      authusecase.TxRunner
+	Erasers []authusecase.Eraser
+	Jobs    authusecase.Jobs
+	Pending authusecase.PendingDeletions
+	Images  authusecase.ImageDestroyer
+	Notices authusecase.NoticeSender
+}
+
 // newAuthModule arma el módulo de la spec 003: argon2id, JWT, casos de uso y
 // rutas, con el límite de register, login y refresh sobre el limitador común.
-func newAuthModule(cfg config.Config, log *slog.Logger, users *authmongo.UserRepo, refresh *authmongo.RefreshRepo, limiter ratelimit.Limiter, bookings authusecase.ActiveBookingChecker, revocations revocation.Store) (*authhttp.Module, error) {
+// Devuelve también el servicio, que reanuda las bajas pendientes en segundo plano.
+func newAuthModule(cfg config.Config, log *slog.Logger, users *authmongo.UserRepo, refresh *authmongo.RefreshRepo, limiter ratelimit.Limiter, bookings authusecase.ActiveBookingChecker, revocations revocation.Store, deletion accountDeletion) (*authhttp.Module, *authusecase.Service, error) {
 	jwt, err := security.NewJWT(cfg.Auth.AccessSecret.Reveal(), cfg.Auth.AccessTTL)
 	if err != nil {
-		return nil, fmt.Errorf("no se pudo configurar JWT: %w", err)
+		return nil, nil, fmt.Errorf("no se pudo configurar JWT: %w", err)
 	}
 	// argon2id con presupuesto de memoria y espera acotada; el señuelo del
 	// login se calcula aquí, al arrancar (P-01, A-07).
 	hasher, err := security.NewHasher(security.DefaultMemoryBudgetKiB, security.DefaultMaxWait)
 	if err != nil {
-		return nil, fmt.Errorf("no se pudo preparar argon2id: %w", err)
+		return nil, nil, fmt.Errorf("no se pudo preparar argon2id: %w", err)
 	}
 	svc, err := authusecase.NewService(authusecase.Deps{
 		Users:       users,
@@ -536,11 +605,17 @@ func newAuthModule(cfg config.Config, log *slog.Logger, users *authmongo.UserRep
 		Bookings:    bookings,
 		Revocations: revocations,
 		Events:      authhttp.SlogEvents{Log: log},
+		Tx:          deletion.Tx,
+		Erasers:     deletion.Erasers,
+		Jobs:        deletion.Jobs,
+		Pending:     deletion.Pending,
+		Images:      deletion.Images,
+		Notices:     deletion.Notices,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("no se pudo crear el servicio de auth: %w", err)
+		return nil, nil, fmt.Errorf("no se pudo crear el servicio de auth: %w", err)
 	}
-	return authhttp.NewModule(authhttp.ModuleDeps{
+	mod, err := authhttp.NewModule(authhttp.ModuleDeps{
 		Service:           svc,
 		Tokens:            jwt,
 		Log:               log,
@@ -550,6 +625,24 @@ func newAuthModule(cfg config.Config, log *slog.Logger, users *authmongo.UserRep
 		AccountLoginLimit: cfg.Auth.LoginAttemptsPerAccount,
 		Revocations:       revocations,
 	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return mod, svc, nil
+}
+
+// newImageDestroyer arma el borrado de fotos de la baja de cuenta (spec 021,
+// D-2): la Admin API de Cloudinary detrás del puerto images/port.Destroyer.
+func newImageDestroyer(cfg config.Config) (authusecase.ImageDestroyer, error) {
+	d, err := images.NewDestroyer(images.Config{
+		CloudName: cfg.Cloudinary.CloudName,
+		APIKey:    cfg.Cloudinary.APIKey,
+		APISecret: cfg.Cloudinary.APISecret.Reveal(),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("no se pudo configurar el borrado de imágenes: %w", err)
+	}
+	return authimages.New(d)
 }
 
 // newImagesModule arma el módulo de la spec 004: Cloudinary sin SDK, la

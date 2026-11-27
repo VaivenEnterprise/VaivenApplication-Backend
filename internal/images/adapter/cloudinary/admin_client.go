@@ -173,3 +173,68 @@ func adminEscapePublicID(publicID string) (string, error) {
 	}
 	return strings.Join(segments, "/"), nil
 }
+
+// adminDeleteJSON es la parte de la respuesta de borrado que se usa.
+type adminDeleteJSON struct {
+	Deleted map[string]string `json:"deleted"`
+}
+
+// DeleteResource borra una imagen con DELETE
+// /v1_1/<cloud>/resources/image/<deliveryType>?public_ids[]=<publicID>&invalidate=true
+// e invalida la copia en la caché de la CDN (spec 021, D-2). Es idempotente:
+// una imagen que ya no existe (HTTP 404 o «not_found» en la respuesta) cuenta
+// como borrada y devuelve nil. Un fallo, un tiempo agotado o credenciales
+// rechazadas devuelven un error que envuelve domain.ErrUnavailable; el API
+// secret nunca aparece en el error.
+func (c *AdminClient) DeleteResource(ctx context.Context, deliveryType, publicID string) error {
+	if deliveryType != "upload" && deliveryType != "authenticated" {
+		return fmt.Errorf("cloudinary: tipo de entrega inválido %q", deliveryType)
+	}
+	if _, err := adminEscapePublicID(publicID); err != nil {
+		return err
+	}
+
+	q := url.Values{}
+	q.Add("public_ids[]", publicID)
+	q.Set("invalidate", "true")
+	endpoint := c.baseURL + "/v1_1/" + url.PathEscape(c.cloudName) +
+		"/resources/image/" + deliveryType + "?" + q.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return fmt.Errorf("cloudinary: crear la petición: %w", err)
+	}
+	req.SetBasicAuth(c.apiKey, c.secret)
+	req.Header.Set("Accept", "application/json")
+
+	res, err := c.httpClient.Do(req)
+	if err != nil {
+		// El error de transporte no lleva credenciales (van en Authorization);
+		// la URL lleva el public_id, que no es dato personal.
+		return fmt.Errorf("cloudinary: borrar la imagen: %w: %w", domain.ErrUnavailable, err)
+	}
+	defer res.Body.Close()
+	body := io.LimitReader(res.Body, adminMaxBody)
+
+	switch {
+	case res.StatusCode == http.StatusOK:
+	case res.StatusCode == http.StatusNotFound:
+		return nil
+	case res.StatusCode == http.StatusUnauthorized || res.StatusCode == http.StatusForbidden:
+		return fmt.Errorf("cloudinary: credenciales rechazadas (HTTP %d): %w", res.StatusCode, domain.ErrUnavailable)
+	case res.StatusCode == http.StatusTooManyRequests || res.StatusCode >= 500:
+		return fmt.Errorf("cloudinary: servicio no disponible (HTTP %d): %w", res.StatusCode, domain.ErrUnavailable)
+	default:
+		return fmt.Errorf("cloudinary: respuesta inesperada (HTTP %d)", res.StatusCode)
+	}
+
+	var out adminDeleteJSON
+	if err := json.NewDecoder(body).Decode(&out); err != nil {
+		return fmt.Errorf("cloudinary: respuesta inválida: %w: %w", domain.ErrUnavailable, err)
+	}
+	switch out.Deleted[publicID] {
+	case "deleted", "not_found":
+		return nil
+	default:
+		return fmt.Errorf("cloudinary: la imagen no quedó borrada: %w", domain.ErrUnavailable)
+	}
+}

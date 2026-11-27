@@ -80,6 +80,12 @@ var queries = map[string]queryCase{
 	"refresh_tokens.familyId": {filter: bson.D{{Key: "familyId", Value: "f0"}}},
 	"refresh_tokens.userId":   {filter: bson.D{{Key: "userId", Value: "u0"}}},
 
+	"users.deletionPending_partial": {filter: bson.D{{Key: "deletionPending", Value: true}}},
+
+	"deletion_jobs.nextAttemptAt_partial": {filter: bson.D{{Key: "failedAt", Value: bson.D{{Key: "$exists", Value: false}}},
+		{Key: "nextAttemptAt", Value: bson.D{{Key: "$lte", Value: base.Add(10 * time.Hour)}}}}},
+	"deletion_jobs.userId": {filter: bson.D{{Key: "userId", Value: "u0"}}},
+
 	"bookings.item_status_dates": {filter: bson.D{{Key: "itemId", Value: "i0"},
 		{Key: "status", Value: bson.D{{Key: "$in", Value: bson.A{"a", "b"}}}},
 		{Key: "startDate", Value: bson.D{{Key: "$lte", Value: base.Add(30 * 24 * time.Hour)}}},
@@ -107,6 +113,7 @@ var queries = map[string]queryCase{
 	"messages.conversation_seq": {filter: bson.D{{Key: "conversationId", Value: "c0"}},
 		sort: bson.D{{Key: "seq", Value: -1}, {Key: "_id", Value: -1}}},
 	"ratings.ratee_id": {filter: bson.D{{Key: "rateeId", Value: "re0"}}, sort: bson.D{{Key: "_id", Value: -1}}},
+	"ratings.rater":    {filter: bson.D{{Key: "raterId", Value: "rt0"}}},
 
 	"incidents.booking_status":     {filter: bson.D{{Key: "bookingId", Value: "b0"}, {Key: "status", Value: "a"}}},
 	"incidents.reporter_createdAt": {filter: bson.D{{Key: "reporterId", Value: "rp0"}}, sort: bson.D{{Key: "createdAt", Value: -1}}},
@@ -120,6 +127,7 @@ var queries = map[string]queryCase{
 	"push_tokens.user":        {filter: bson.D{{Key: "userId", Value: "u0"}}},
 
 	"reports.status_created": {filter: bson.D{{Key: "status", Value: "a"}}, sort: bson.D{{Key: "createdAt", Value: 1}}},
+	"reports.target":         {filter: bson.D{{Key: "targetType", Value: "user"}, {Key: "targetId", Value: "t0"}}},
 
 	"reco_interactions.user_createdAt": {filter: bson.D{{Key: "userId", Value: "u0"}}, sort: bson.D{{Key: "createdAt", Value: -1}}},
 }

@@ -26,7 +26,7 @@ const (
 type modelMetaDoc struct {
 	ID          string     `bson:"_id"`
 	BuildID     string     `bson:"buildId"`
-	BuiltAt     *time.Time `bson:"builtAt"`
+	BuiltAt     *time.Time `bson:"builtAt,omitempty"`
 	LockedUntil time.Time  `bson:"lockedUntil"`
 	LockOwner   string     `bson:"lockOwner"`
 	CreatedAt   time.Time  `bson:"createdAt"`
@@ -61,7 +61,7 @@ func (r *MetaRepo) TryLock(ctx context.Context, owner string, now time.Time) (bo
 	filter := bson.D{{Key: "_id", Value: modelMetaID}, {Key: "lockedUntil", Value: bson.D{{Key: "$lte", Value: now}}}}
 	update := bson.D{
 		{Key: "$set", Value: bson.D{{Key: "lockedUntil", Value: now.Add(domain.LockTTL)}, {Key: "lockOwner", Value: owner}, {Key: "updatedAt", Value: now}}},
-		{Key: "$setOnInsert", Value: bson.D{{Key: "buildId", Value: ""}, {Key: "builtAt", Value: nil}, {Key: "createdAt", Value: now}}},
+		{Key: "$setOnInsert", Value: bson.D{{Key: "buildId", Value: ""}, {Key: "createdAt", Value: now}}},
 	}
 	err := r.col.FindOneAndUpdate(ctx, filter, update, options.FindOneAndUpdate().SetUpsert(true)).Err()
 	switch {

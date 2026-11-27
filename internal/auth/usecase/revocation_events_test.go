@@ -126,8 +126,12 @@ func TestDeactivateRevokesAllAccess(t *testing.T) {
 	rev2 := &fakeRevocations{fail: errBoom}
 	e2 := newEnv(t, withRevocation(rev2, &recordedEvents{}))
 	reg2 := e2.mustRegister(t)
-	if err := e2.svc.Deactivate(context.Background(), reg2.User.ID, "una-contrasena-larga"); !errors.Is(err, errBoom) {
-		t.Errorf("baja sin poder revocar el acceso = %v", err)
+	// Redis caído tras el commit: la baja sigue válida y queda marcada (RF-03).
+	if err := e2.svc.Deactivate(context.Background(), reg2.User.ID, "una-contrasena-larga"); err != nil {
+		t.Errorf("baja sin poder revocar el acceso = %v, want nil", err)
+	}
+	if e2.users.byID[reg2.User.ID].IsActive() || !e2.users.pending[reg2.User.ID] {
+		t.Error("la cuenta debe quedar dada de baja y con deletionPending")
 	}
 }
 

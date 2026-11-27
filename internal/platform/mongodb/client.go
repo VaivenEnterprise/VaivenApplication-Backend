@@ -39,7 +39,7 @@ func Connect(ctx context.Context, uri string, timeout time.Duration) (*Client, e
 		return nil, fmt.Errorf("mongodb: %w: el timeout debe ser mayor que cero", ErrInvalidParams)
 	}
 
-	opts := options.Client().ApplyURI(uri).SetServerSelectionTimeout(timeout)
+	opts := clientOptions(uri, timeout)
 	mc, err := mongo.Connect(opts)
 	if err != nil {
 		// El driver valida la URI aquí; nunca se incluye la URI en el error
@@ -77,4 +77,16 @@ func (c *Client) Disconnect(ctx context.Context) error {
 		return fmt.Errorf("mongodb: disconnect: %w", err)
 	}
 	return nil
+}
+
+// clientOptions arma las opciones del cliente. Además de la URI y el plazo de
+// selección de servidor, activa NilSliceAsEmpty y NilMapAsEmpty (spec 021,
+// RF-10): un slice o map nil se guarda como [] o {} y nunca como null, así la
+// base no acumula valores null por descuido. Solo afectan a la escritura; la
+// lectura de documentos viejos con null sigue funcionando.
+func clientOptions(uri string, timeout time.Duration) *options.ClientOptions {
+	return options.Client().
+		ApplyURI(uri).
+		SetServerSelectionTimeout(timeout).
+		SetBSONOptions(&options.BSONOptions{NilSliceAsEmpty: true, NilMapAsEmpty: true})
 }

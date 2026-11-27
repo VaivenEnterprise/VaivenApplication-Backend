@@ -46,26 +46,93 @@ func TestDocRoundTrip(t *testing.T) {
 	}
 }
 
-func TestSameValidation(t *testing.T) {
-	want := bson.M{"$jsonSchema": ItemsSchema()}
-	raw := func(v any) bson.Raw {
-		b, err := bson.Marshal(v)
-		if err != nil {
-			t.Fatal(err)
+// hasNull indica si el documento BSON tiene un null en cualquier nivel.
+func hasNull(t *testing.T, raw bson.Raw) bool {
+	t.Helper()
+	elems, err := raw.Elements()
+	if err != nil {
+		t.Fatalf("BSON inválido: %v", err)
+	}
+	var walk func(v bson.RawValue) bool
+	walk = func(v bson.RawValue) bool {
+		switch v.Type {
+		case bson.TypeNull:
+			return true
+		case bson.TypeEmbeddedDocument:
+			return hasNull(t, v.Document())
+		case bson.TypeArray:
+			vals, _ := v.Array().Values()
+			for _, it := range vals {
+				if walk(it) {
+					return true
+				}
+			}
 		}
-		return b
+		return false
 	}
-	ok := raw(bson.M{"validator": want, "validationLevel": "moderate", "validationAction": "error"})
-	if !sameValidation(ok, want) {
-		t.Error("el mismo validador debe coincidir")
+	for _, el := range elems {
+		if walk(el.Value()) {
+			return true
+		}
 	}
-	for name, opts := range map[string]bson.Raw{
-		"vacío":      nil,
-		"otro nivel": raw(bson.M{"validator": want, "validationLevel": "strict", "validationAction": "error"}),
-		"otro":       raw(bson.M{"validator": bson.M{}, "validationLevel": "moderate", "validationAction": "error"}),
-	} {
-		if sameValidation(opts, want) {
-			t.Errorf("%s: no debe coincidir", name)
+	return false
+}
+
+// Un objeto sin reglas, barrio ni ubicación no guarda ningún null (spec 021,
+// T005) y los lectores aceptan tanto el documento nuevo como el viejo con null.
+func TestDocWithoutOptionalFieldsHasNoNull(t *testing.T) {
+	now := time.Date(2026, 11, 8, 16, 0, 0, 0, time.UTC)
+	in := domain.Item{
+		ID: bson.NewObjectID().Hex(), OwnerID: "u1", Title: "Taladro", Description: "x",
+		Category: "hogar", Condition: domain.ConditionNew, Modality: domain.ModalityLoan,
+		DeclaredValueCents: 5_000, PriceSource: domain.PriceManual,
+		Zone:   domain.Zone{Municipality: "Tlalpan"},
+		Photos: []images.Image{{PublicID: "p"}}, Status: domain.StatusActive, CreatedAt: now, UpdatedAt: now, Version: 1,
+	}
+	d, err := toDoc(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := bson.Marshal(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := bson.Raw(b)
+	if hasNull(t, raw) {
+		t.Errorf("el objeto nuevo guarda null: %s", raw)
+	}
+	if _, err := raw.LookupErr("usageRules"); err == nil {
+		t.Error("usageRules debe estar ausente")
+	}
+	if _, err := raw.LookupErr("zone", "neighborhood"); err == nil {
+		t.Error("zone.neighborhood debe estar ausente")
+	}
+	if _, err := raw.LookupErr("location"); err == nil {
+		t.Error("location debe estar ausente")
+	}
+
+	var old bson.D
+	if err := bson.Unmarshal(b, &old); err != nil {
+		t.Fatal(err)
+	}
+	old = append(old, bson.E{Key: "usageRules", Value: nil})
+	for i := range old {
+		if old[i].Key == "zone" {
+			old[i].Value = bson.D{{Key: "municipality", Value: "Tlalpan"}, {Key: "neighborhood", Value: nil}}
+		}
+	}
+	oldRaw, err := bson.Marshal(old)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, src := range map[string][]byte{"nuevo sin campo": b, "viejo con null": oldRaw} {
+		var got itemDoc
+		if err := bson.Unmarshal(src, &got); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		it := got.toDomain()
+		if it.UsageRules != nil || it.Zone.Neighborhood != nil || it.Location != nil {
+			t.Errorf("%s: los opcionales deben leerse como nil: %+v", name, it)
 		}
 	}
 }

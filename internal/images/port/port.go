@@ -29,3 +29,13 @@ type Service interface {
 	// URLs calcula url y thumbUrl al leer (RF-07).
 	URLs(img domain.Image) (domain.URLs, error)
 }
+
+// Destroyer borra imágenes en el proveedor (spec 021, D-2: la baja de cuenta
+// borra las fotos de sus objetos). Es un puerto aparte de Service para no
+// romper los fakes existentes (Art. XII.4). Idempotente: una imagen que ya no
+// existe cuenta como borrada.
+type Destroyer interface {
+	// Destroy borra la imagen deliveryType/publicID e invalida su caché.
+	// deliveryType es "upload" o "authenticated".
+	Destroy(ctx context.Context, deliveryType, publicID string) error
+}

@@ -89,6 +89,10 @@ func TestIndexes(t *testing.T) {
 	if found["reporter_target_unique"] == nil || found["reporter_target_unique"]["unique"] != true || found["status_created"] == nil {
 		t.Errorf("faltan índices del plan §3: %v", found)
 	}
+	// Spec 021: reportes recibidos por una persona y TTL de la retención de 12 meses.
+	if found["target"] == nil || found["purgeAt_ttl"] == nil || found["purgeAt_ttl"]["expireAfterSeconds"] != int32(0) {
+		t.Errorf("faltan los índices de la 021: %v", found)
+	}
 }
 
 func TestCreateAndByID(t *testing.T) {

@@ -31,7 +31,7 @@ type conversationDoc struct {
 	BookingID      string          `bson:"bookingId"`
 	ParticipantIDs []string        `bson:"participantIds"`
 	Unread         map[string]int  `bson:"unread"`
-	LastMessage    *lastMessageDoc `bson:"lastMessage"`
+	LastMessage    *lastMessageDoc `bson:"lastMessage,omitempty"`
 	LastMessageAt  time.Time       `bson:"lastMessageAt"`
 	CreatedAt      time.Time       `bson:"createdAt"`
 	// Seq es el número del último mensaje; lo incrementa Sender en la

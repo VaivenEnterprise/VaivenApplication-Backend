@@ -273,3 +273,84 @@ func TestAdminClientDoesNotPrintSecret(t *testing.T) {
 		}
 	}
 }
+
+func TestAdminDeleteResource(t *testing.T) {
+	c := adminTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Errorf("método = %s", r.Method)
+		}
+		if got, want := r.URL.EscapedPath(), "/v1_1/"+adminTestCloud+"/resources/image/authenticated"; got != want {
+			t.Errorf("ruta = %q; quiero %q", got, want)
+		}
+		if got := r.URL.Query()["public_ids[]"]; len(got) != 1 || got[0] != "vaiven/items/u1/foto uno" {
+			t.Errorf("public_ids[] = %v", got)
+		}
+		if got := r.URL.Query().Get("invalidate"); got != "true" {
+			t.Errorf("invalidate = %q; quiero true (invalidación de caché)", got)
+		}
+		user, pass, ok := r.BasicAuth()
+		if !ok || user != adminTestKey || pass != adminTestSecret {
+			t.Errorf("autenticación básica = %q, %q, %v", user, pass, ok)
+		}
+		_, _ = fmt.Fprint(w, `{"deleted":{"vaiven/items/u1/foto uno":"deleted"},"partial":false}`)
+	})
+	const publicID = "vaiven/items/u1/foto uno"
+	const deliveryType = "authenticated"
+	if err := c.DeleteResource(context.Background(), deliveryType, publicID); err != nil {
+		t.Fatalf("DeleteResource: %v", err)
+	}
+}
+
+func TestAdminDeleteResourceIdempotent(t *testing.T) {
+	t.Run("404 cuenta como hecho", func(t *testing.T) {
+		c := adminTestClient(t, func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNotFound) })
+		if err := c.DeleteResource(context.Background(), "upload", "a/b"); err != nil {
+			t.Fatalf("err = %v; quiero nil", err)
+		}
+	})
+	t.Run("not_found en la respuesta cuenta como hecho", func(t *testing.T) {
+		c := adminTestClient(t, func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = fmt.Fprint(w, `{"deleted":{"a/b":"not_found"}}`)
+		})
+		if err := c.DeleteResource(context.Background(), "upload", "a/b"); err != nil {
+			t.Fatalf("err = %v; quiero nil", err)
+		}
+	})
+}
+
+func TestAdminDeleteResourceFailures(t *testing.T) {
+	cases := map[string]http.HandlerFunc{
+		"500":               func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusInternalServerError) },
+		"429":               func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusTooManyRequests) },
+		"401":               func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusUnauthorized) },
+		"403":               func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusForbidden) },
+		"json inválido":     func(w http.ResponseWriter, _ *http.Request) { _, _ = fmt.Fprint(w, "no es json") },
+		"sin estado del id": func(w http.ResponseWriter, _ *http.Request) { _, _ = fmt.Fprint(w, `{"deleted":{}}`) },
+	}
+	for name, h := range cases {
+		t.Run(name, func(t *testing.T) {
+			c := adminTestClient(t, h)
+			adminAssertUnavailable(t, c.DeleteResource(context.Background(), "upload", "a/b"))
+		})
+	}
+	t.Run("respuesta inesperada", func(t *testing.T) {
+		c := adminTestClient(t, func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusBadRequest) })
+		err := c.DeleteResource(context.Background(), "upload", "a/b")
+		if err == nil || strings.Contains(err.Error(), adminTestSecret) {
+			t.Fatalf("err = %v", err)
+		}
+	})
+	t.Run("tiempo agotado", func(t *testing.T) {
+		c := adminTestClient(t, func(_ http.ResponseWriter, _ *http.Request) { time.Sleep(200 * time.Millisecond) },
+			WithAdminHTTPClient(&http.Client{Timeout: 20 * time.Millisecond}))
+		adminAssertUnavailable(t, c.DeleteResource(context.Background(), "upload", "a/b"))
+	})
+	t.Run("argumentos inválidos", func(t *testing.T) {
+		c := adminTestClient(t, func(_ http.ResponseWriter, _ *http.Request) { t.Error("no debe llamar") })
+		for _, tc := range []struct{ typ, id string }{{"private", "a/b"}, {"upload", ""}, {"upload", "a/../b"}} {
+			if err := c.DeleteResource(context.Background(), tc.typ, tc.id); err == nil {
+				t.Errorf("DeleteResource(%q, %q) = nil", tc.typ, tc.id)
+			}
+		}
+	})
+}

@@ -44,6 +44,9 @@ func RatingIndexes() []adaptermongo.IndexSpec {
 	return adaptermongo.SpecsFor(RatingsCollection, []drv.IndexModel{
 		{Keys: bson.D{{Key: "bookingId", Value: 1}, {Key: "raterId", Value: 1}}, Options: options.Index().SetName("booking_rater_unique").SetUnique(true)},
 		{Keys: bson.D{{Key: "rateeId", Value: 1}, {Key: "_id", Value: -1}}, Options: options.Index().SetName("ratee_id")},
+		// Quitar los comentarios de quien se da de baja (spec 021, D-3): el único
+		// por reserva y calificador no sirve, su prefijo es bookingId.
+		{Keys: bson.D{{Key: "raterId", Value: 1}}, Options: options.Index().SetName("rater")},
 	}...)
 }
 
@@ -52,7 +55,8 @@ func (r *Repo) Indexes() []adaptermongo.IndexSpec { return RatingIndexes() }
 
 // EnsureIndexes crea los índices de ratings (plan §3): el único
 // {bookingId, raterId}, que impide calificar dos veces la misma reserva, y
-// {rateeId, _id desc} para listar las recibidas.
+// {rateeId, _id desc} para listar las recibidas, y {raterId} para quitar los
+// comentarios de una cuenta dada de baja.
 func (r *Repo) EnsureIndexes(ctx context.Context) error {
 	_, err := r.col.Indexes().CreateMany(ctx, adaptermongo.Models(r.Indexes()))
 	if err != nil {
@@ -70,7 +74,7 @@ type ratingDoc struct {
 	RateeID   string        `bson:"rateeId"`
 	RatedRole string        `bson:"ratedRole"`
 	Score     int           `bson:"score"`
-	Comment   *string       `bson:"comment"`
+	Comment   *string       `bson:"comment,omitempty"`
 	CreatedAt time.Time     `bson:"createdAt"`
 	UpdatedAt time.Time     `bson:"updatedAt"`
 }

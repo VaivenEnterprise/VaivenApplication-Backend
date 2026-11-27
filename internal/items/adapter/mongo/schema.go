@@ -2,13 +2,11 @@ package mongo
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
-	"fmt"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	drv "go.mongodb.org/mongo-driver/v2/mongo"
-	"go.mongodb.org/mongo-driver/v2/mongo/options"
+
+	adaptermongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/mongo"
 )
 
 // SchemaOutcome dice qué hizo EnsureSchema con la colección items.
@@ -23,11 +21,6 @@ const (
 	// tiene permiso para collMod (rol dbAdmin); se aplica a mano
 	// (docs/servicios.md §9) y el arranque sigue.
 	SchemaSkipped SchemaOutcome = "omitida_sin_permiso"
-)
-
-const (
-	codeUnauthorized    = 13
-	codeNamespaceExists = 48
 )
 
 // ItemsSchema es el $jsonSchema mínimo de items (plan §3): campos
@@ -91,76 +84,33 @@ func ItemsSchema() bson.M {
 	}
 }
 
-// EnsureSchema aplica el validador a items (nivel moderate, acción error). Si
-// la colección no existe la crea con él (el usuario de la app puede); si ya
-// tiene el mismo validador no hace nada; si no, intenta collMod y, sin
-// permiso, devuelve SchemaSkipped sin error.
+// ValidatorSpec es la especificación (forma tolerante) de items para
+// `admin enforce-validators` (T030).
+func ValidatorSpec() adaptermongo.ValidatorSpec {
+	return adaptermongo.ValidatorSpec{Collection: ItemsCollection, Schema: ItemsSchema(), Action: adaptermongo.ValidationActionError}
+}
+
+// EnsureSchema aplica el validador a items (nivel moderate, acción error) con
+// adaptermongo.EnsureValidatorKeepStrict. Si la colección no existe la crea con
+// él (el usuario de la app puede); si ya tiene el mismo validador no hace nada;
+// si no, intenta collMod y, sin permiso, devuelve SchemaSkipped sin error. Aplica
+// el esquema TOLERANTE (acepta null en los opcionales) y no endurece por su
+// cuenta: si items ya tiene el estricto (lo aplicó `admin enforce-validators`
+// tras migrar y verificar cero null, T030) lo respeta y no lo afloja.
 func EnsureSchema(ctx context.Context, db *drv.Database) (SchemaOutcome, error) {
-	validator := bson.M{"$jsonSchema": ItemsSchema()}
-	specs, err := db.ListCollectionSpecifications(ctx, bson.D{{Key: "name", Value: ItemsCollection}})
+	out, err := adaptermongo.EnsureValidatorKeepStrict(ctx, db, ItemsCollection, ItemsSchema(),
+		adaptermongo.ValidationLevelModerate, adaptermongo.ValidationActionError)
 	if err != nil {
-		return "", fmt.Errorf("items: listar colecciones: %w", err)
+		return "", err
 	}
-	if len(specs) == 1 && sameValidation(specs[0].Options, validator) {
-		return SchemaUnchanged, nil
-	}
-	if len(specs) == 0 {
-		err := db.CreateCollection(ctx, ItemsCollection, options.CreateCollection().
-			SetValidator(validator).SetValidationLevel("moderate").SetValidationAction("error"))
-		if err == nil {
-			return SchemaCreated, nil
-		}
-		if !hasCode(err, codeNamespaceExists) {
-			return "", fmt.Errorf("items: crear colección con validador: %w", err)
-		}
-	}
-	err = db.RunCommand(ctx, bson.D{
-		{Key: "collMod", Value: ItemsCollection},
-		{Key: "validator", Value: validator},
-		{Key: "validationLevel", Value: "moderate"},
-		{Key: "validationAction", Value: "error"},
-	}).Err()
-	switch {
-	case err == nil:
+	switch out {
+	case adaptermongo.ValidatorCreated:
+		return SchemaCreated, nil
+	case adaptermongo.ValidatorUpdated:
 		return SchemaUpdated, nil
-	case hasCode(err, codeUnauthorized):
+	case adaptermongo.ValidatorSkipped:
 		return SchemaSkipped, nil
 	default:
-		return "", fmt.Errorf("items: aplicar validador con collMod: %w", err)
+		return SchemaUnchanged, nil
 	}
-}
-
-// sameValidation compara validador, nivel y acción guardados con los
-// esperados, normalizando el orden de claves y el tipo de los números.
-func sameValidation(opts bson.Raw, validator bson.M) bool {
-	var cur struct {
-		Validator        bson.M `bson:"validator"`
-		ValidationLevel  string `bson:"validationLevel"`
-		ValidationAction string `bson:"validationAction"`
-	}
-	if len(opts) == 0 || bson.Unmarshal(opts, &cur) != nil ||
-		cur.ValidationLevel != "moderate" || cur.ValidationAction != "error" {
-		return false
-	}
-	a, errA := canonicalJSON(cur.Validator)
-	b, errB := canonicalJSON(validator)
-	return errA == nil && errB == nil && a == b
-}
-
-func canonicalJSON(v any) (string, error) {
-	b, err := bson.MarshalExtJSON(bson.M{"v": v}, false, false)
-	if err != nil {
-		return "", err
-	}
-	var generic any
-	if err := json.Unmarshal(b, &generic); err != nil {
-		return "", err
-	}
-	out, err := json.Marshal(generic)
-	return string(out), err
-}
-
-func hasCode(err error, code int) bool {
-	var se drv.ServerError
-	return errors.As(err, &se) && se.HasErrorCode(code)
 }

@@ -64,7 +64,7 @@ func TestIntegrationEnsureIndexesAndCreate(t *testing.T) {
 	for _, i := range idx {
 		found = found || i.Name == "user_createdAt"
 	}
-	if !found || len(idx) != 2 {
+	if !found || len(idx) != 3 { // _id_ + user_createdAt + TTL de purgeAt
 		t.Errorf("índices = %v", idx)
 	}
 

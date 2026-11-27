@@ -37,6 +37,12 @@ func IncidentIndexes() []adaptermongo.IndexSpec {
 		{Keys: bson.D{{Key: "reporterId", Value: 1}, {Key: "createdAt", Value: -1}}, Options: options.Index().SetName("reporter_createdAt")},
 		{Keys: bson.D{{Key: "reportedId", Value: 1}, {Key: "createdAt", Value: -1}}, Options: options.Index().SetName("reported_createdAt")},
 		{Keys: bson.D{{Key: "status", Value: 1}, {Key: "createdAt", Value: 1}}, Options: options.Index().SetName("status_createdAt")},
+		{
+			// Retención de 12 meses tras la baja (spec 021, D-4): borra el documento
+			// cuando llega purgeAt. Los documentos sin el campo no se ven afectados.
+			Keys:    bson.D{{Key: PurgeAtField, Value: 1}},
+			Options: options.Index().SetName("purgeAt_ttl").SetExpireAfterSeconds(0),
+		},
 	}...)
 }
 
@@ -87,10 +93,10 @@ type incidentDoc struct {
 	Evidence    []imageDoc    `bson:"evidence"`
 	Status      string        `bson:"status"`
 	Notes       []noteDoc     `bson:"notes"`
-	Final       *finalDoc     `bson:"finalResponse"`
+	Final       *finalDoc     `bson:"finalResponse,omitempty"`
 	CreatedAt   time.Time     `bson:"createdAt"`
 	UpdatedAt   time.Time     `bson:"updatedAt"`
-	ClosedAt    *time.Time    `bson:"closedAt"`
+	ClosedAt    *time.Time    `bson:"closedAt,omitempty"`
 	Version     int64         `bson:"version"`
 }
 

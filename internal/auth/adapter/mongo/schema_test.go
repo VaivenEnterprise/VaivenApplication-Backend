@@ -1,34 +1,14 @@
 package mongo
 
 import (
-	"errors"
-	"fmt"
+	"slices"
 	"testing"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
-	drv "go.mongodb.org/mongo-driver/v2/mongo"
-)
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
-func TestIsUnauthorized(t *testing.T) {
-	cases := map[string]struct {
-		err  error
-		want bool
-	}{
-		"CommandError 13":          {drv.CommandError{Code: 13, Name: "Unauthorized"}, true},
-		"CommandError 13 envuelto": {fmt.Errorf("collMod: %w", drv.CommandError{Code: 13}), true},
-		"CommandError 121":         {drv.CommandError{Code: 121}, false},
-		"error genérico":           {errors.New("unauthorized"), false},
-		"nil":                      {nil, false},
-	}
-	for name, c := range cases {
-		if got := isUnauthorized(c.err); got != c.want {
-			t.Errorf("%s: isUnauthorized = %v, want %v", name, got, c.want)
-		}
-	}
-	if !hasErrorCode(drv.CommandError{Code: 48}, codeNamespaceExists) {
-		t.Error("hasErrorCode(48) = false")
-	}
-}
+	adaptermongo "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/adapter/mongo"
+)
 
 // Los campos obligatorios del esquema deben existir en properties.
 func TestSchemasRequiredFieldsHaveProperties(t *testing.T) {
@@ -51,27 +31,97 @@ func TestSchemasRequiredFieldsHaveProperties(t *testing.T) {
 	}
 }
 
-func TestSameValidation(t *testing.T) {
-	validator := bson.M{"$jsonSchema": UsersSchema()}
-	opts := func(v bson.M, level, action string) bson.Raw {
-		raw, err := bson.Marshal(bson.M{"validator": v, "validationLevel": level, "validationAction": action})
-		if err != nil {
-			t.Fatal(err)
-		}
-		return raw
-	}
-	if !sameValidation(opts(validator, "moderate", "error"), validator) {
-		t.Error("el mismo validador debe considerarse igual")
-	}
-	for name, raw := range map[string]bson.Raw{
-		"otro esquema": opts(bson.M{"$jsonSchema": bson.M{"bsonType": "object"}}, "moderate", "error"),
-		"otro nivel":   opts(validator, "strict", "error"),
-		"otra acción":  opts(validator, "moderate", "warn"),
-		"sin opciones": nil,
-		"basura":       {0x01},
+// UsersSchema es condicional por estado: active exige el conjunto completo y
+// deactivated solo lo que conserva la baja (spec 021, T013).
+// El esquema tolerante acepta null en los opcionales (despliegue A); el estricto
+// (T030) no, y conserva el esquema condicional por estado.
+func TestStrictAuthSchemasRejectNull(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		schema bson.M
+		nulls  []string
+	}{
+		{"users", UsersSchema(), []string{"phone", "suspendedUntil", "deactivatedAt"}},
+		{"refresh_tokens", RefreshTokensSchema(), []string{"usedAt", "revokedAt"}},
 	} {
-		if sameValidation(raw, validator) {
-			t.Errorf("%s: no debe considerarse igual", name)
+		strict := adaptermongo.StrictSchema(c.schema)
+		for _, f := range c.nulls {
+			tol := c.schema["properties"].(bson.M)[f].(bson.M)["bsonType"].(bson.A)
+			if !slices.Contains(tol, any("null")) {
+				t.Errorf("%s.%s: el esquema tolerante debe aceptar null", c.name, f)
+			}
+			if got := strict["properties"].(bson.M)[f].(bson.M)["bsonType"]; got != "string" && got != "date" {
+				t.Errorf("%s.%s: el estricto debe tener un solo tipo sin null, got %v", c.name, f, got)
+			}
 		}
+	}
+	if len(adaptermongo.StrictSchema(UsersSchema())["anyOf"].(bson.A)) != 2 {
+		t.Error("el estricto de users debe conservar el esquema condicional por estado")
+	}
+	specs := ValidatorSpecs()
+	if len(specs) != 2 || specs[0].Collection != UsersCollection || specs[1].Collection != RefreshTokensCollection || specs[0].Action != "error" {
+		t.Errorf("ValidatorSpecs = %+v", specs)
+	}
+}
+
+func TestUsersSchemaIsConditionalByStatus(t *testing.T) {
+	s := UsersSchema()
+	props := s["properties"].(bson.M)
+	branches := s["anyOf"].(bson.A)
+	if len(branches) != 2 {
+		t.Fatalf("anyOf debe tener una rama por estado, tiene %d", len(branches))
+	}
+	want := map[string][]string{
+		"active":      {"passwordHash", "role", "ratingSum", "ratingCount"},
+		"deactivated": {"deactivatedAt"},
+	}
+	for _, b := range branches {
+		br := b.(bson.M)
+		status := br["properties"].(bson.M)["status"].(bson.M)["enum"].(bson.A)[0].(string)
+		req := br["required"].(bson.A)
+		if len(req) != len(want[status]) {
+			t.Errorf("%s: required = %v, want %v", status, req, want[status])
+		}
+		for i, f := range req {
+			if f.(string) != want[status][i] {
+				t.Errorf("%s: required[%d] = %v, want %s", status, i, f, want[status][i])
+			}
+			if _, ok := props[f.(string)]; !ok {
+				t.Errorf("%s: %q no está en properties", status, f)
+			}
+		}
+	}
+	// Lo que borra la baja nunca es obligatorio en todos los estados.
+	for _, f := range s["required"].(bson.A) {
+		switch f.(string) {
+		case "passwordHash", "role", "ratingSum", "ratingCount", "phone", "suspendedUntil":
+			t.Errorf("%q no puede ser obligatorio para todo estado", f)
+		}
+	}
+	if dp := props["deletionPending"].(bson.M)["bsonType"]; dp != "bool" {
+		t.Errorf("deletionPending = %v, want bool (sin null)", dp)
+	}
+}
+
+// El índice parcial de deletionPending está declarado (y por tanto entra al
+// catálogo de `admin indexes`).
+func TestUserIndexesDeclareDeletionPending(t *testing.T) {
+	var found bool
+	for _, ix := range UserIndexes() {
+		var o options.IndexOptions
+		for _, set := range ix.Model.Options.List() {
+			if err := set(&o); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if o.Name != nil && *o.Name == "deletionPending_partial" {
+			found = true
+			if o.PartialFilterExpression == nil || o.Unique != nil {
+				t.Errorf("deletionPending debe ser parcial y no único: %+v", o)
+			}
+		}
+	}
+	if !found {
+		t.Error("UserIndexes debe declarar el índice parcial de deletionPending")
 	}
 }

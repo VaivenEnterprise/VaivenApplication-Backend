@@ -29,6 +29,7 @@ import (
 var sources = []func() []adaptermongo.IndexSpec{
 	authmongo.UserIndexes,
 	authmongo.RefreshTokenIndexes,
+	authmongo.DeletionJobIndexes,
 	itemsmongo.ItemIndexes,
 	searchmongo.SearchIndexes,
 	bookingsmongo.BookingIndexes,

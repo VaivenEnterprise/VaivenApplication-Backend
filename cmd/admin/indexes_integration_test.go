@@ -20,7 +20,7 @@ import (
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/platform/mongodb"
 )
 
-// baselinePath es el fixture de equivalencia de T004 (plan 012 §7.6): los 40
+// baselinePath es el fixture de equivalencia de T004 (plan 012 §7.6): los 48
 // índices que crean los EnsureIndexes en una base limpia, sin _id_.
 var baselinePath = filepath.Join("testdata", "indexes_baseline.json")
 
@@ -113,7 +113,7 @@ type baselineIndex struct {
 
 // TestIntegrationIndexBaseline es la prueba 1 del plan 012 §7.6: los
 // EnsureIndexes de los 14 repositorios, en una base limpia, crean exactamente
-// los 40 índices del fixture (34 de la 012 + 3 de la spec 014 + 3 de la 015) (claves, orden, opciones, TTL, filtro parcial y
+// los 48 índices del fixture (34 de la 012 + 3 de la spec 014 + 3 de la 015 + 8 de la 021) (claves, orden, opciones, TTL, filtro parcial y
 // configuración de texto). Con VAIVEN_UPDATE_INDEX_BASELINE=1 regenera el
 // fixture en lugar de compararlo.
 func TestIntegrationIndexBaseline(t *testing.T) {
@@ -124,8 +124,8 @@ func TestIntegrationIndexBaseline(t *testing.T) {
 		t.Fatalf("EnsureAll: %v", err)
 	}
 	got := effectiveIndexes(t, db)
-	if len(got) != 40 {
-		t.Errorf("índices creados = %d, want 40", len(got))
+	if len(got) != 48 {
+		t.Errorf("índices creados = %d, want 48", len(got))
 	}
 
 	if os.Getenv(updateBaselineEnv) == "1" {
