@@ -14,8 +14,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -25,11 +25,15 @@ import (
 )
 
 const (
-	httpTimeout  = 20 * time.Second // tope por intento; el caso de uso pone 10–12 s
+	httpTimeout  = 20 * time.Second // tope mínimo por intento; sube si el caso de uso pide más (Config.Timeout)
+	attemptSlack = 5 * time.Second  // margen sobre Config.Timeout: el contexto del caso de uso corta primero
 	retryDelay   = 500 * time.Millisecond
-	maxRespBytes = 1 << 20
-	temperature  = 0.4
-	maxOutTokens = 4096 // los modelos que razonan gastan tokens antes de responder
+	// minRetryBudget es el tiempo mínimo que debe quedar en el contexto para
+	// intentar de nuevo: con menos, el segundo intento no alcanzaría a responder.
+	minRetryBudget = 3 * time.Second
+	maxRespBytes   = 1 << 20
+	temperature    = 0.4
+	maxOutTokens   = 4096 // los modelos que razonan gastan tokens antes de responder
 )
 
 // Config es lo que el cliente necesita de config.AI.
@@ -37,6 +41,13 @@ type Config struct {
 	BaseURL string // p. ej. https://api.groq.com/openai/v1 o http://localhost:11434/v1
 	Model   string
 	APIKey  string // vacía solo con Ollama local
+	// Timeout es el presupuesto de tiempo del caso de uso (0 = no se declara).
+	// El tope HTTP por intento nunca es menor que este valor (spec 014, T018).
+	Timeout time.Duration
+	// DisableReasoning pide a OpenRouter que no gaste tokens razonando
+	// ("reasoning": {"enabled": false, "exclude": true}). Solo para el
+	// proveedor de las sugerencias; el resto recibe el mismo JSON de siempre.
+	DisableReasoning bool
 }
 
 // Client es el cliente compatible con OpenAI.
@@ -53,12 +64,17 @@ func New(cfg Config) (*Client, error) {
 		return nil, errors.New("openai: faltan AI_BASE_URL o AI_MODEL")
 	}
 	cfg.BaseURL = strings.TrimRight(cfg.BaseURL, "/")
-	return &Client{cfg: cfg, http: &http.Client{Timeout: httpTimeout}, sleep: sleepCtx}, nil
+	timeout := httpTimeout
+	if cfg.Timeout+attemptSlack > timeout {
+		timeout = cfg.Timeout + attemptSlack
+	}
+	return &Client{cfg: cfg, http: &http.Client{Timeout: timeout}, sleep: sleepCtx}, nil
 }
 
 // Generate envía la petición y devuelve el JSON que produjo el modelo (aún sin
-// validar: lo valida internal/ai/domain). Reintenta una vez ante tiempos de
-// espera, 429 y 5xx.
+// validar: lo valida internal/ai/domain). Reintenta una vez ante errores de
+// red, 429, 5xx y respuestas vacías o truncadas, pero solo si al contexto le
+// queda tiempo (minRetryBudget). Los errores llevan su causa (aidomain.CauseOf).
 func (c *Client) Generate(ctx context.Context, req aidomain.Request) ([]byte, error) {
 	body, err := c.buildBody(ctx, req)
 	if err != nil {
@@ -68,11 +84,36 @@ func (c *Client) Generate(ctx context.Context, req aidomain.Request) ([]byte, er
 	if err == nil || !retry {
 		return out, err
 	}
+	if !timeLeft(ctx) {
+		return nil, err
+	}
 	if c.sleep(ctx, retryDelay) != nil {
-		return nil, aidomain.ErrUnavailable
+		return nil, aidomain.WithCause(aidomain.ErrUnavailable, aidomain.CauseTimeout, 0)
+	}
+	if !timeLeft(ctx) {
+		return nil, err
 	}
 	out, _, err = c.call(ctx, body)
 	return out, err
+}
+
+// timeLeft indica si al contexto le queda tiempo para otro intento.
+func timeLeft(ctx context.Context) bool {
+	if ctx.Err() != nil {
+		return false
+	}
+	d, ok := ctx.Deadline()
+	return !ok || time.Until(d) >= minRetryBudget
+}
+
+// transportCause distingue un tiempo agotado de otro fallo de red.
+func transportCause(ctx context.Context, err error) aidomain.Cause {
+	var ne net.Error
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) ||
+		(errors.As(err, &ne) && ne.Timeout()) {
+		return aidomain.CauseTimeout
+	}
+	return aidomain.CauseNetwork
 }
 
 // --- Petición ---
@@ -102,6 +143,14 @@ type chatRequest struct {
 	Temperature    float64         `json:"temperature"`
 	MaxTokens      int             `json:"max_tokens"`
 	ResponseFormat *responseFormat `json:"response_format,omitempty"`
+	// Reasoning solo se envía con DisableReasoning (OpenRouter); omitempty deja
+	// el JSON igual al de siempre para Groq, Ollama y el resto.
+	Reasoning *reasoning `json:"reasoning,omitempty"`
+}
+
+type reasoning struct {
+	Enabled bool `json:"enabled"`
+	Exclude bool `json:"exclude,omitempty"`
 }
 
 func (c *Client) buildBody(ctx context.Context, req aidomain.Request) ([]byte, error) {
@@ -130,6 +179,9 @@ func (c *Client) buildBody(ctx context.Context, req aidomain.Request) ([]byte, e
 			continue
 		}
 		cr.Messages = append(cr.Messages, message{Role: role, Content: t.Text})
+	}
+	if c.cfg.DisableReasoning {
+		cr.Reasoning = &reasoning{Enabled: false, Exclude: true}
 	}
 	// El modo JSON no siempre se admite junto con imágenes: solo se pide sin
 	// imagen. En los dos casos el JSON se extrae del texto (extractJSON).
@@ -180,31 +232,36 @@ func (c *Client) call(ctx context.Context, body []byte) (out []byte, retry bool,
 	}
 	res, err := c.http.Do(req)
 	if err != nil {
-		return nil, ctx.Err() == nil, aidomain.ErrUnavailable
+		return nil, ctx.Err() == nil, aidomain.WithCause(aidomain.ErrUnavailable, transportCause(ctx, err), 0)
 	}
 	defer func() { _ = res.Body.Close() }()
 	raw, err := io.ReadAll(io.LimitReader(res.Body, maxRespBytes))
 	if err != nil {
-		return nil, true, aidomain.ErrUnavailable
+		return nil, true, aidomain.WithCause(aidomain.ErrUnavailable, transportCause(ctx, err), 0)
 	}
 	switch {
 	case res.StatusCode == http.StatusTooManyRequests || res.StatusCode >= 500:
-		return nil, true, aidomain.ErrUnavailable
+		return nil, true, aidomain.WithCause(aidomain.ErrUnavailable, aidomain.CauseHTTPStatus, res.StatusCode)
 	case res.StatusCode != http.StatusOK:
 		// Solo el estado: el cuerpo podría repetir la petición.
-		return nil, false, fmt.Errorf("%w (HTTP %d)", aidomain.ErrUnavailable, res.StatusCode)
+		return nil, false, aidomain.WithCause(aidomain.ErrUnavailable, aidomain.CauseHTTPStatus, res.StatusCode)
 	}
 	var cr chatResponse
 	if err := json.Unmarshal(raw, &cr); err != nil || len(cr.Choices) == 0 {
-		return nil, false, aidomain.ErrUnavailable
+		return nil, false, aidomain.WithCause(aidomain.ErrUnavailable, aidomain.CauseMalformedJSON, 0)
 	}
 	ch := cr.Choices[0]
 	if ch.FinishReason == "content_filter" {
-		return nil, false, aidomain.ErrBlocked
+		return nil, false, aidomain.WithCause(aidomain.ErrBlocked, aidomain.CauseContentFilter, 0)
 	}
 	text := extractJSON(ch.Message.Content)
 	if text == "" {
-		return nil, false, aidomain.ErrUnavailable
+		// Contenido vacío o cortado por longitud (los modelos que razonan pueden
+		// gastar el presupuesto antes de responder): vale reintentar una vez.
+		if strings.TrimSpace(ch.Message.Content) == "" || ch.FinishReason == "length" {
+			return nil, true, aidomain.WithCause(aidomain.ErrUnavailable, aidomain.CauseEmptyResponse, 0)
+		}
+		return nil, false, aidomain.WithCause(aidomain.ErrUnavailable, aidomain.CauseMalformedJSON, 0)
 	}
 	return []byte(text), false, nil
 }

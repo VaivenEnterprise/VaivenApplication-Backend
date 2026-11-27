@@ -139,7 +139,16 @@ func (m *Module) fail(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.As(err, &de) && de.Code == shared.CodeUnavailable:
 		// Caída o bloqueo del proveedor: se registra la causa (sin contenido).
 		if de.Err != nil {
-			m.log.WarnContext(r.Context(), "suggest: proveedor de IA no disponible", "error", de.Err)
+			// cause y upstreamStatus son valores cerrados (spec 014, T018): sin
+			// cuerpos, claves, URLs ni texto del modelo.
+			attrs := []any{"error", de.Err}
+			if cause, status, ok := aidomain.CauseOf(de.Err); ok {
+				attrs = append(attrs, "cause", string(cause))
+				if status > 0 {
+					attrs = append(attrs, "upstreamStatus", status)
+				}
+			}
+			m.log.WarnContext(r.Context(), "suggest: proveedor de IA no disponible", attrs...)
 		}
 	case !errors.As(err, &de):
 		m.log.ErrorContext(r.Context(), "suggest: error interno", "error", err)
