@@ -8,6 +8,18 @@
 #     API no puede llamar a Cloudinary, IA ni Expo, y ZAP no puede tocar
 #     staging ni producción;
 #   - los secretos son aleatorios por ejecución y nunca se imprimen.
+# Sesión (spec 020, T006; RF-18): el escaneo corre AUTENTICADO. Antes de ZAP se
+# registra una persona sintética en la API efímera (correo y contraseña
+# aleatorios por ejecución, sin datos reales), se obtiene su token de acceso y se
+# entrega a ZAP como cabecera Authorization con las variables de entorno ZAP_AUTH_HEADER*
+# de los escaneos empaquetados (no con -z/replacer: el script parte -z por espacios). El token
+# se enmascara en el registro de Actions y nunca se imprime. Un paso final
+# comprueba en el registro de la API que el escaneo alcanzó rutas protegidas.
+# Exclusión: DELETE /me, POST /auth/logout y DELETE /me/push-tokens se quitan de
+# la copia del contrato que recibe ZAP (destruyen la sesión sintética); el paso
+# de cobertura exige un mínimo de rutas protegidas alcanzadas. La
+# persona administradora (rol admin) queda para una mejora: exige sembrar el rol
+# en la base del runner.
 # Puerta: scripts/zap-gate.mjs falla con cualquier alerta High sin excepción
 # vigente (.zap/exceptions.json, con vencimiento). Una prueba negativa
 # comprueba primero que la puerta bloquea un informe con una High.
@@ -62,9 +74,10 @@ jobs:
             sleep 2
           done
           jwt=$(openssl rand -hex 32)
+          # JWT_ACCESS_TTL largo: el escaneo dura más que los 15 min por omisión.
           docker run -d --name api --network zapnet \
             -e APP_ENV=development -e MONGO_URI='mongodb://mongo:27017/?replicaSet=rs0' -e MONGO_DB=vaiven_zap \
-            -e REDIS_URL=redis://redis:6379/0 -e JWT_ACCESS_SECRET="$jwt" \
+            -e REDIS_URL=redis://redis:6379/0 -e JWT_ACCESS_SECRET="$jwt" -e JWT_ACCESS_TTL=3h \
             -e CLOUDINARY_CLOUD_NAME=zap -e CLOUDINARY_API_KEY=000000 -e CLOUDINARY_API_SECRET=zap-sin-uso \
             -e AI_ENABLED=false -e ASSISTANT_ENABLED=false -e RECO_ENABLED=false -e PUSH_ENABLED=false -e DOCS_ENABLED=false \
             -e RATE_LIMIT_GLOBAL_PER_MIN=100000 -e RATE_LIMIT_AUTH_PER_MIN=100000 -e LOGIN_ATTEMPTS_PER_ACCOUNT=100000 \
@@ -76,17 +89,85 @@ jobs:
           done
           docker logs api | tail -20
           echo "::error::la API no arrancó"; exit 1
-      - name: ZAP active API scan
+      - name: ZAP active API scan (authenticated, synthetic user)
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p zap-work && chmod 0777 zap-work
-          cp internal/adapter/http/docs/openapi.yaml zap-work/openapi.yaml
+          # Exclusión (RF-18): ZAP ejercería operaciones que destruyen la sesión
+          # de la persona sintética y dejarían sin sesión al resto del escaneo:
+          # DELETE /me (baja de la cuenta), POST /auth/logout (revoca la sesión)
+          # y DELETE /me/push-tokens. La exclusión por URL de ZAP no distingue el
+          # método (GET/PATCH /me y POST /me/push-tokens sí deben escanearse), así
+          # que se quitan esas 3 operaciones de la COPIA del contrato que se le
+          # entrega a ZAP (la ruta que se queda sin operaciones se quita entera); el
+          # contrato del repositorio no cambia.
+          awk -v drop='/api/v1/me:delete,/api/v1/auth/logout:post,/api/v1/me/push-tokens:delete' '
+            BEGIN { n = split(drop, d, ","); for (i = 1; i <= n; i++) want[d[i]] = 1 }
+            /^  \/[^ ]*:$/ { path = substr($0, 3, length($0) - 3); pend = $0; next }
+            skip && /^ {0,4}[^ ]/ { skip = 0 }
+            !skip && /^    (get|post|put|patch|delete):$/ {
+              m = $1; sub(/:$/, "", m)
+              if ((path ":" m) in want) { skip = 1; dropped++; next }
+            }
+            !skip { if (pend != "") { print pend; pend = "" } print }
+            END { if (dropped != n) { print "se esperaban " n " operaciones a excluir y se quitaron " dropped > "/dev/stderr"; exit 1 } }
+          ' internal/adapter/http/docs/openapi.yaml > zap-work/openapi.yaml
           cp .zap/api-rules.tsv zap-work/api-rules.tsv
-          # -I: no falla por advertencias; la puerta de abajo decide.
-          docker run --rm --network zapnet -v "$PWD/zap-work:/zap/wrk:rw" "$ZAP_IMAGE" \
+
+          # 1) Persona sintética en la base vacía del runner (nada real).
+          email="zap-$(openssl rand -hex 6)@example.com"
+          pass="$(openssl rand -hex 16)"
+          body=$(printf '{"email":"%s","password":"%s","displayName":"ZAP Sintetico","acceptTerms":true,"isAdult":true}' "$email" "$pass")
+          resp=$(docker run --rm --network zapnet busybox:1.37 wget -qO- \
+            --header='Content-Type: application/json' --post-data="$body" http://api:8080/api/v1/auth/register)
+          token=$(printf '%s' "$resp" | jq -r '.tokens.accessToken // empty')
+          unset resp pass body
+          if [ -z "$token" ]; then
+            echo "::error::no se pudo obtener el token de la persona sintética"; exit 1
+          fi
+          echo "::add-mask::$token"
+
+          # 2) El token funciona: una ruta protegida responde 200 con él.
+          docker run --rm --network zapnet busybox:1.37 wget -qO /dev/null \
+            --header="Authorization: Bearer $token" "http://api:8080/api/v1/me?precheck=1" \
+            || { echo "::error::el token sintético no abre /api/v1/me"; exit 1; }
+
+          # 3) ZAP añade Authorization a cada petición con ZAP_AUTH_HEADER*.
+          #    -I: no falla por advertencias; la puerta de abajo decide.
+          #    La marca de inicio permite contar solo lo que hizo el escaneo.
+          date -u +%Y-%m-%dT%H:%M:%SZ > zap-work/scan-start.txt
+          docker run --rm --network zapnet -v "$PWD/zap-work:/zap/wrk:rw" \
+            -e ZAP_AUTH_HEADER=Authorization \
+            -e "ZAP_AUTH_HEADER_VALUE=Bearer ${token}" \
+            -e ZAP_AUTH_HEADER_SITE=api \
+            "$ZAP_IMAGE" \
             zap-api-scan.py -t /zap/wrk/openapi.yaml -f openapi -O http://api:8080 \
             -c api-rules.tsv -J zap-report.json -r zap-report.html -I
+          unset token
+      - name: Coverage proof (the scan reached protected routes)
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker logs --since "$(cat zap-work/scan-start.txt)" api > zap-work/api.log 2>&1 || true
+          # Rutas protegidas con respuesta 2xx: solo rutas y estados, sin cabeceras.
+          # No cuentan las publicas (/meta, /categories, listado /items) ni la
+          # comprobacion previa del flujo (?precheck=1).
+          grep -E 'path=/api/v1/(me|users|items|bookings|conversations|recommendations)' zap-work/api.log \
+            | grep -vE 'precheck=1|path=/api/v1/(meta|categories)( |$)|path=/api/v1/items( |\?|/?$)' \
+            | grep -E 'status=(200|201|204)' \
+            | sed -E 's/.*path=([^ ]+) status=([0-9]+).*/\1 \2/' \
+            | sed -E 's/[0-9a-f]{24}/{id}/g' | sort | uniq -c | sort -rn > zap-work/protected-2xx.txt || true
+          total=$(awk '{s+=$1} END {print s+0}' zap-work/protected-2xx.txt)
+          routes=$(wc -l < zap-work/protected-2xx.txt)
+          {
+            echo "### Cobertura autenticada"
+            echo "Rutas protegidas distintas con 2xx: $routes (peticiones: $total)"
+            head -40 zap-work/protected-2xx.txt | sed 's/^/    /'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$routes" -lt 5 ]; then
+            echo "::error::el escaneo no alcanzó suficientes rutas protegidas ($routes < 5): la sesión sintética no se aplicó"; exit 1
+          fi
       - name: Gate (no High without a valid exception)
         run: node scripts/zap-gate.mjs zap-work/zap-report.json .zap/exceptions.json | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Upload ZAP report
@@ -97,6 +178,7 @@ jobs:
           path: |
             zap-work/zap-report.json
             zap-work/zap-report.html
+            zap-work/protected-2xx.txt
           if-no-files-found: warn
           retention-days: 14
       - name: Tear down
