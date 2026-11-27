@@ -1,0 +1,55 @@
+# Fuzzing nativo de Go, nocturno (spec 020, T002; RF-10 a RF-12).
+#
+# Corre cada objetivo de scripts/fuzz.sh durante FUZZ_TIME (12 objetivos x 2 min
+# = 24 min en total, por encima del mínimo de 10 min de RF-12). No usa servicios
+# de pago: solo `go test -fuzz` en el runner de GitHub.
+#
+# Un fallo (crash) deja el trabajo en rojo. El caso mínimo queda en
+# <paquete>/testdata/fuzz/<Objetivo>/ y se sube como artefacto: se versiona en el
+# repositorio como regresión y `go test` lo ejecuta en cada PR (RF-13).
+name: Fuzz nightly
+
+on:
+  workflow_dispatch:
+    inputs:
+      fuzz_time:
+        description: Tiempo por objetivo (formato de -fuzztime)
+        default: 2m
+  schedule:
+    - cron: '23 4 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fuzz-nightly
+  cancel-in-progress: false
+
+jobs:
+  fuzz:
+    name: Fuzz targets
+    if: github.event.repository.fork == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      FUZZ_TIME: ${{ inputs.fuzz_time || '2m' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Seed corpus as regular tests (regressions)
+        run: go test -count=1 -run 'Fuzz' ./internal/...
+      - name: Fuzz every target
+        run: bash scripts/fuzz.sh "$FUZZ_TIME"
+      - name: Upload failing inputs
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fuzz-failures
+          path: internal/**/testdata/fuzz/
+          if-no-files-found: ignore
+          retention-days: 30

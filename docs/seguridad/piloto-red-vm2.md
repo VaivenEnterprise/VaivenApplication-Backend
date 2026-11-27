@@ -86,6 +86,8 @@ Son **datos históricos**: el día de la creación se vuelven a leer en el porta
 - con VM2 solo detenida: el disco (2,40 USD/mes) y el balanceador (≈ 18 USD/mes);
 - por eso el retiro **borra** el balanceador, VM2, su disco, su NIC, su NSG y el Storage, y lo confirma en *Cost Management*.
 
+**Costo real (2026-11-21):** lectura del responsable en el portal tras el retiro: gasto del mes de USD 2,10 y crédito disponible de USD 197,90, con «11 días restantes» (vencimiento ≈ 2026-12-02, igual que la nota anterior). Frente a la lectura del 2026-11-18 (≈ USD 1,8) el aumento es de ≈ USD 0,30, que incluye el piloto (≈ 4 h) y la base normal de VM1: muy por debajo del estimado de ≈ USD 3,20 y del tope de USD 15. No queda ningún recurso del piloto, así que el costo residual es 0. *Cost Management* puede tardar de 24 a 72 h en reflejar el consumo; se recomienda volver a leerlo después del 2026-11-23. Al agotarse o vencer el crédito, los servicios se pausan.
+
 **Regla:** si el día de la creación no se puede leer el saldo o el costo proyectado supera el crédito disponible menos el 20 %, no se crea nada.
 
 ## 6. Implementación (2026-11-19, pasarela aprobada por el responsable)
