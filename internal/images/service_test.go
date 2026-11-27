@@ -103,3 +103,33 @@ func TestConfigHidesSecret(t *testing.T) {
 		}
 	}
 }
+
+func TestNewDestroyer(t *testing.T) {
+	var gotMethod, gotQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod, gotQuery = r.Method, r.URL.RawQuery
+		_, _ = fmt.Fprint(w, `{"deleted":{"vaiven/x":"deleted"}}`)
+	}))
+	t.Cleanup(srv.Close)
+	cfg := Config{CloudName: "nube", APIKey: "llave", APISecret: testSecret,
+		AdminOptions: []cloudinary.AdminOption{cloudinary.WithAdminBaseURL(srv.URL)}}
+	d, err := NewDestroyer(cfg)
+	if err != nil {
+		t.Fatalf("NewDestroyer: %v", err)
+	}
+	if err := d.Destroy(context.Background(), "upload", "vaiven/x"); err != nil {
+		t.Fatalf("Destroy: %v", err)
+	}
+	if gotMethod != http.MethodDelete || !strings.Contains(gotQuery, "invalidate=true") {
+		t.Fatalf("petición = %s ?%s", gotMethod, gotQuery)
+	}
+
+	srv.Close()
+	err = func() error { return d.Destroy(context.Background(), "upload", "vaiven/x") }()
+	if err == nil || strings.Contains(err.Error(), testSecret) {
+		t.Fatalf("err = %v; quiero un error sin el secreto", err)
+	}
+	if _, err := NewDestroyer(Config{}); err == nil {
+		t.Fatal("NewDestroyer sin credenciales debe fallar")
+	}
+}

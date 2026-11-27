@@ -45,9 +45,9 @@ func (d *imageDoc) toDomain() *images.Image {
 
 type itemSnapshotDoc struct {
 	Title      string    `bson:"title"`
-	UsageRules *string   `bson:"usageRules"`
+	UsageRules *string   `bson:"usageRules,omitempty"`
 	Modality   string    `bson:"modality"`
-	FirstPhoto *imageDoc `bson:"firstPhoto"`
+	FirstPhoto *imageDoc `bson:"firstPhoto,omitempty"`
 }
 
 type priceSnapshotDoc struct {
@@ -61,9 +61,9 @@ type paymentDoc struct {
 	Stage        string     `bson:"stage"`
 	AmountCents  int64      `bson:"amountCents"`
 	Status       string     `bson:"status"`
-	ReportedAt   *time.Time `bson:"reportedAt"`
-	ReportedNote *string    `bson:"reportedNote"`
-	ConfirmedAt  *time.Time `bson:"confirmedAt"`
+	ReportedAt   *time.Time `bson:"reportedAt,omitempty"`
+	ReportedNote *string    `bson:"reportedNote,omitempty"`
+	ConfirmedAt  *time.Time `bson:"confirmedAt,omitempty"`
 }
 
 // qrDoc, handoverDoc y adjustmentDoc son los campos que escribe la spec 009
@@ -72,19 +72,19 @@ type paymentDoc struct {
 type qrDoc struct {
 	TokenHash       string     `bson:"tokenHash"`
 	ExpiresAt       time.Time  `bson:"expiresAt"`
-	UsedAt          *time.Time `bson:"usedAt"`
+	UsedAt          *time.Time `bson:"usedAt,omitempty"`
 	EvidenceVersion int        `bson:"evidenceVersion"`
 }
 
 type handoverDoc struct {
-	RecordedAt      *time.Time `bson:"recordedAt"`
-	RecordedByID    *string    `bson:"recordedById"`
+	RecordedAt      *time.Time `bson:"recordedAt,omitempty"`
+	RecordedByID    *string    `bson:"recordedById,omitempty"`
 	ConditionNotes  string     `bson:"conditionNotes"`
 	Photos          []imageDoc `bson:"photos"`
 	EvidenceVersion int        `bson:"evidenceVersion"`
-	QR              *qrDoc     `bson:"qr"`
-	ConfirmedAt     *time.Time `bson:"confirmedAt"`
-	ConfirmedByID   *string    `bson:"confirmedById"`
+	QR              *qrDoc     `bson:"qr,omitempty"`
+	ConfirmedAt     *time.Time `bson:"confirmedAt,omitempty"`
+	ConfirmedByID   *string    `bson:"confirmedById,omitempty"`
 }
 
 // EncodeHandover y EncodeQR dan a los repositorios de la spec 009 la misma
@@ -168,18 +168,18 @@ type bookingDoc struct {
 	Payments       []paymentDoc     `bson:"payments"`
 	Status         string           `bson:"status"`
 	StatusHistory  []historyDoc     `bson:"statusHistory"`
-	ExpiresAt      *time.Time       `bson:"expiresAt"`
-	MeetingPoint   *string          `bson:"meetingPoint"`
-	CancelReason   *string          `bson:"cancelReason"`
-	CancelledBy    *string          `bson:"cancelledBy"`
-	RejectReason   *string          `bson:"rejectReason"`
-	ConversationID *string          `bson:"conversationId"`
-	Delivery       *handoverDoc     `bson:"delivery"`
-	Return         *handoverDoc     `bson:"return"`
+	ExpiresAt      *time.Time       `bson:"expiresAt,omitempty"`
+	MeetingPoint   *string          `bson:"meetingPoint,omitempty"`
+	CancelReason   *string          `bson:"cancelReason,omitempty"`
+	CancelledBy    *string          `bson:"cancelledBy,omitempty"`
+	RejectReason   *string          `bson:"rejectReason,omitempty"`
+	ConversationID *string          `bson:"conversationId,omitempty"`
+	Delivery       *handoverDoc     `bson:"delivery,omitempty"`
+	Return         *handoverDoc     `bson:"return,omitempty"`
 	IsLate         bool             `bson:"isLate"`
-	LateAt         *time.Time       `bson:"lateAt"`
+	LateAt         *time.Time       `bson:"lateAt,omitempty"`
 	Adjustments    []adjustmentDoc  `bson:"adjustments"`
-	AffectedBy     *string          `bson:"affectedBy"`
+	AffectedBy     *string          `bson:"affectedBy,omitempty"`
 	CreatedAt      time.Time        `bson:"createdAt"`
 	UpdatedAt      time.Time        `bson:"updatedAt"`
 	Version        int64            `bson:"version"`

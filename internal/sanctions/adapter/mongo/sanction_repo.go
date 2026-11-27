@@ -34,6 +34,12 @@ func SanctionIndexes() []adaptermongo.IndexSpec {
 			Keys:    bson.D{{Key: "userId", Value: 1}, {Key: "createdAt", Value: -1}},
 			Options: options.Index().SetName("user_createdAt"),
 		},
+		drv.IndexModel{
+			// Retención de 12 meses tras la baja (spec 021, D-4): borra el documento
+			// cuando llega purgeAt. Los documentos sin el campo no se ven afectados.
+			Keys:    bson.D{{Key: PurgeAtField, Value: 1}},
+			Options: options.Index().SetName("purgeAt_ttl").SetExpireAfterSeconds(0),
+		},
 	)
 }
 
@@ -56,8 +62,8 @@ type sanctionDoc struct {
 	UserID           string        `bson:"userId"`
 	Type             string        `bson:"type"`
 	Reason           string        `bson:"reason"`
-	EndsAt           *time.Time    `bson:"endsAt"`
-	IncidentID       *string       `bson:"incidentId"`
+	EndsAt           *time.Time    `bson:"endsAt,omitempty"`
+	IncidentID       *string       `bson:"incidentId,omitempty"`
 	CreatedByAdminID string        `bson:"createdByAdminId"`
 	CreatedAt        time.Time     `bson:"createdAt"`
 	UpdatedAt        time.Time     `bson:"updatedAt"`

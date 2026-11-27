@@ -223,7 +223,7 @@ func TestIntegrationEnsureSchemasLegacyCollections(t *testing.T) {
 	}); err != nil {
 		t.Errorf("RefreshRepo.Create: %v", err)
 	}
-	if err := NewRefreshRepo(db).RevokeAllForUser(ctx, u.ID, now); err != nil {
-		t.Errorf("RevokeAllForUser: %v", err)
+	if err := NewRefreshRepo(db).DeleteAllForUser(ctx, u.ID); err != nil {
+		t.Errorf("DeleteAllForUser: %v", err)
 	}
 }

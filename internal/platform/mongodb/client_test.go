@@ -87,3 +87,13 @@ func TestConnectAndPingReal(t *testing.T) {
 		t.Errorf("Database().Name() = %q", db.Name())
 	}
 }
+
+func TestClientOptionsNeverWriteNullCollections(t *testing.T) {
+	o := clientOptions("mongodb://localhost:27017", time.Second)
+	if o.BSONOptions == nil || !o.BSONOptions.NilSliceAsEmpty || !o.BSONOptions.NilMapAsEmpty {
+		t.Fatalf("BSONOptions = %+v; deben activar NilSliceAsEmpty y NilMapAsEmpty (spec 021, RF-10)", o.BSONOptions)
+	}
+	if o.ServerSelectionTimeout == nil || *o.ServerSelectionTimeout != time.Second {
+		t.Errorf("ServerSelectionTimeout = %v, want 1s", o.ServerSelectionTimeout)
+	}
+}

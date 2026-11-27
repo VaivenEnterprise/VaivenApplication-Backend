@@ -22,7 +22,7 @@
 | POL-14 | Categorías | `herramientas_manuales` (Herramientas manuales), `herramientas_electricas` (Herramientas eléctricas), `construccion_jardineria` (Construcción y jardinería), `movilidad` (Patines, patinetas, bicicletas y similares), `deportes` (Deportes y aire libre), `hogar` (Hogar), `otros` (Otros) | `policy.POL14Categories`, `GET /api/v1/categories` |
 | POL-15 | Sanciones | Advertencia o suspensión con fecha de fin, decididas a mano por administración; no cambian el promedio de calificaciones | `sanctions`, `RequireActive` |
 | POL-16 | Contenido prohibido | Sexual, armas, drogas e ilegal: filtro por lista de palabras, reportes y revisión humana. La lista de palabras es provisional y la debe revisar el equipo (`internal/moderation/blocklist.go`) | `moderation`, `reports` |
-| POL-17 | Baja de cuenta | Si hay reservas activas, se rechaza. Si no, se **anonimiza** la cuenta: se sustituyen correo, nombre y teléfono, se revocan sesiones y tokens de push, y se muestra «Cuenta eliminada». Reservas, evidencia e incidencias se conservan sin datos que identifiquen a la persona | `auth` (`DELETE /api/v1/me`) |
+| POL-17 | Baja de cuenta | Si hay reservas activas (aceptadas o en curso), se rechaza con 409 y no cambia nada. Si no, la baja es **atómica** (una sola transacción en MongoDB) y **borra o anonimiza**: la cuenta queda solo con id, estado, fecha de baja, correo anonimizado, «Cuenta eliminada», aceptación de términos y fechas; se borran sesiones, tokens de push, avisos, uso de IA y recomendaciones y los objetos con sus fotos (Cloudinary, con reintento); el texto de sus mensajes pasa a «Mensaje eliminado» y se quita el comentario de sus calificaciones (las estrellas y los promedios ajenos no cambian); las solicitudes pendientes se cierran con aviso a la contraparte. Incidencias, denuncias y sanciones donde participa se conservan **12 meses** desde la baja y luego se borran solas (con sus evidencias). Las reservas y su historial se conservan con ids seudónimos. Los respaldos fuera de MongoDB quedan fuera de alcance. Ningún campo queda en `null` en la base | `auth` (`DELETE /api/v1/me`) y un `Eraser` por módulo (spec 021) |
 
 ## Límites técnicos relacionados (no son POL, pero afectan a la persona usuaria)
 
@@ -34,3 +34,18 @@
 | Vida del token de acceso / refresh | 15 minutos / 30 días | `JWT_ACCESS_TTL` / `REFRESH_TTL` |
 | Conservación de avisos | 90 días | constante `RetentionDays` (TTL en MongoDB) |
 | Cuerpo de una petición | 1 MiB | constante `maxBodyBytes` en `router.go` |
+
+## Detalle de la baja de cuenta (POL-17, spec 021)
+
+Decisiones del responsable del 2026-11-26 que la baja cumple:
+
+| ID | Qué se hace |
+|---|---|
+| D-1 | Mensajes de chat de la cuenta eliminada: el texto pasa a «Mensaje eliminado»; la conversación conserva orden y fechas y la contraparte la sigue viendo (solo lectura) |
+| D-2 | Objetos publicados: se borran por completo junto con sus fotos en Cloudinary (asíncrono y con reintento; un fallo no deja la cuenta a medias). Las reservas pasadas conservan su `itemSnapshot` (sin la foto, que ya no existe) |
+| D-3 | Valoraciones: las estrellas se conservan; el comentario escrito por la cuenta eliminada se quita |
+| D-4 | Incidencias, denuncias y sanciones que involucran a la persona: 12 meses desde la baja (`purgeAt`, índice TTL); si las dos partes se dan de baja, cuenta la primera; el texto no se toca antes de purgar |
+| D-5 | Ningún `null` ni dato sin normalizar en MongoDB: los opcionales se omiten y los validadores `$jsonSchema` los rechazan |
+| D-6 | Se conserva `acceptedTermsAt` como prueba de consentimiento (no identifica a la persona) |
+
+Fuera de alcance: copias de seguridad de MongoDB (`docs/respaldos.md`) y de Cloudinary, que pueden conservar datos de cuentas ya eliminadas hasta que caduquen; recuperar una baja; exportar los datos antes de borrarlos.

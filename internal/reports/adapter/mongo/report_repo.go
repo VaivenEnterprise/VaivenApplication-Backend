@@ -35,6 +35,17 @@ func ReportIndexes() []adaptermongo.IndexSpec {
 			Options: options.Index().SetName("reporter_target_unique").SetUnique(true),
 		},
 		{Keys: bson.D{{Key: "status", Value: 1}, {Key: "createdAt", Value: 1}}, Options: options.Index().SetName("status_created")},
+		{
+			// Baja de la persona reportada (spec 021, D-4): reportes sobre un usuario.
+			Keys:    bson.D{{Key: "targetType", Value: 1}, {Key: "targetId", Value: 1}},
+			Options: options.Index().SetName("target"),
+		},
+		{
+			// Retención de 12 meses tras la baja (spec 021, D-4): borra el documento
+			// cuando llega purgeAt. Los documentos sin el campo no se ven afectados.
+			Keys:    bson.D{{Key: PurgeAtField, Value: 1}},
+			Options: options.Index().SetName("purgeAt_ttl").SetExpireAfterSeconds(0),
+		},
 	}...)
 }
 
@@ -66,9 +77,9 @@ type reportDoc struct {
 	TargetType string         `bson:"targetType"`
 	TargetID   string         `bson:"targetId"`
 	Reason     string         `bson:"reason"`
-	Details    *string        `bson:"details"`
+	Details    *string        `bson:"details,omitempty"`
 	Status     string         `bson:"status"`
-	Resolution *resolutionDoc `bson:"resolution"`
+	Resolution *resolutionDoc `bson:"resolution,omitempty"`
 	CreatedAt  time.Time      `bson:"createdAt"`
 }
 

@@ -12,7 +12,8 @@ import (
 // Resolve aplica la decisión de adminID a un reporte abierto (RF-10, RF-11):
 //   - dismiss: sin falta, solo cierra el reporte;
 //   - hide_item: bloquea el objeto (items.Moderation.Block, CA-05) y avisa a su
-//     dueño con content_removed;
+//     dueño con content_removed; si el objeto ya no existe (su dueña se dio de
+//     baja, spec 021) no hay nada que ocultar y el reporte se cierra;
 //   - suspend_user: suspende 7 días (provisional, plan P-07) a la persona
 //     reportada, al dueño del objeto o a quien escribió el mensaje, y la avisa
 //     con sanction_applied.
@@ -63,7 +64,12 @@ func (s *Service) Resolve(ctx context.Context, adminID, reportID, action, note s
 func (s *Service) hideItem(ctx context.Context, rep domain.Report) error {
 	snap, err := s.d.Items.Snapshot(ctx, rep.TargetID)
 	if err != nil {
-		return mapNotFound(err)
+		if mapNotFound(err) == domain.ErrTargetNotFound {
+			// El objeto ya no existe (su dueña se dio de baja, spec 021, R-03): no
+			// hay nada que ocultar ni a quién avisar, y el reporte se cierra.
+			return nil
+		}
+		return err
 	}
 	if err := s.d.Items.Block(ctx, rep.TargetID); err != nil {
 		return mapNotFound(err)

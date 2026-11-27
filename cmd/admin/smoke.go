@@ -19,23 +19,56 @@ import (
 	"time"
 
 	"github.com/VaivenEnterprise/VaivenApplication-Backend/internal/config"
+	imagescloudinary "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/images/adapter/cloudinary"
 	imagesdomain "github.com/VaivenEnterprise/VaivenApplication-Backend/internal/images/domain"
 )
 
 // smoke es la prueba de humo que ESCRIBE datos (spec 013, T007, CA-03): crea
 // una cuenta desechable, sube una foto con una firma real, publica un objeto,
-// lo lee, lo borra y da de baja la cuenta. Siempre limpia lo que creó, aunque
-// un paso falle. Se niega a correr contra producción: allí se usa
+// lo lee y da de baja la cuenta. Con la baja de la spec 021 la baja borra el
+// objeto y encola el borrado de su foto, así que la prueba comprueba, con una
+// segunda cuenta desechable, que el objeto desaparece (404) y espera a que el
+// worker de bajas borre la foto en Cloudinary (CA-09). Siempre limpia lo que
+// creó, aunque un paso falle. Se niega a correr contra producción: allí se usa
 // scripts/smoke.sh, que solo lee.
-const smokeTimeout = 2 * time.Minute
+const smokeTimeout = 4 * time.Minute
+
+// smokePhotoWait es lo máximo que se espera a que el worker de bajas (corre cada
+// 60 s) borre la foto; smokePhotoPoll es el intervalo de la consulta. Son
+// variables para acortarlas en las pruebas.
+var (
+	smokePhotoWait = 150 * time.Second
+	smokePhotoPoll = 5 * time.Second
+)
 
 // smokeEmailDomain es un dominio reservado (RFC 2606): nunca recibe correo.
 const smokeEmailDomain = "vaiven.invalid"
 
-// smokePhotoDestroyer borra la foto subida (el borrado de un objeto es lógico
-// y no toca Cloudinary).
+// smokePhotoDestroyer borra la foto subida y consulta si sigue en Cloudinary.
+// Destroy solo se usa si la baja no la borró (falla de la prueba): normalmente
+// la borra el worker de bajas.
 type smokePhotoDestroyer interface {
 	Destroy(ctx context.Context, ref imagesdomain.Ref) error
+	// Exists indica si la foto sigue en Cloudinary.
+	Exists(ctx context.Context, ref imagesdomain.Ref) (bool, error)
+}
+
+// smokePhotos es el cliente real: cloudinaryPhotos para borrar y la Admin API
+// para consultar.
+type smokePhotos struct {
+	*cloudinaryPhotos
+	admin *imagescloudinary.AdminClient
+}
+
+func (p smokePhotos) Exists(ctx context.Context, ref imagesdomain.Ref) (bool, error) {
+	_, err := p.admin.GetResource(ctx, imagesdomain.PurposeItemPhoto.Delivery().CloudinaryType(), ref.PublicID)
+	if errors.Is(err, imagescloudinary.ErrResourceNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, errors.New("no se pudo consultar la foto en Cloudinary")
+	}
+	return true, nil
 }
 
 type smokeDeps struct {
@@ -61,7 +94,14 @@ func newSmokeDeps(cfg config.Config, connectTo, apiHost string) (smokeDeps, erro
 		}
 		return dialer.DialContext(ctx, network, addr)
 	}
-	photos := newCloudinaryPhotos(nil, cfg.Cloudinary.CloudName, cfg.Cloudinary.APIKey, cfg.Cloudinary.APISecret.Reveal())
+	admin, err := imagescloudinary.NewAdminClient(cfg.Cloudinary.CloudName, cfg.Cloudinary.APIKey, cfg.Cloudinary.APISecret.Reveal())
+	if err != nil {
+		return smokeDeps{}, errors.New("faltan las credenciales de Cloudinary para borrar la foto de prueba")
+	}
+	photos := smokePhotos{
+		cloudinaryPhotos: newCloudinaryPhotos(nil, cfg.Cloudinary.CloudName, cfg.Cloudinary.APIKey, cfg.Cloudinary.APISecret.Reveal()),
+		admin:            admin,
+	}
 	return smokeDeps{client: &http.Client{Timeout: 30 * time.Second, Transport: tr}, photos: photos, random: rand.Reader}, nil
 }
 
@@ -104,11 +144,12 @@ func runSmoke(args []string, stdout, stderr io.Writer, cfg config.Config, open s
 }
 
 type smokeRun struct {
-	base   string
-	deps   smokeDeps
-	out    io.Writer
-	token  string
-	failed bool
+	base     string
+	deps     smokeDeps
+	out      io.Writer
+	token    string // sesión de la cuenta de la prueba
+	observer string // sesión de la cuenta observadora
+	failed   bool
 }
 
 func (s *smokeRun) step(name string, err error) bool {
@@ -147,22 +188,28 @@ func (s *smokeRun) run(ctx context.Context) (code int) {
 	}
 	email := "smoke-" + suffix + "@" + smokeEmailDomain
 
+	observerEmail := "smoke-obs-" + suffix + "@" + smokeEmailDomain
+
 	// Limpieza en orden inverso, pase lo que pase.
 	var itemID, publicID string
-	registered := false
+	registered, observerRegistered := false, false
 	defer func() {
 		cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 		defer cancel()
-		if itemID != "" {
+		if itemID != "" { // la baja no llegó a borrarlo
 			_, err := s.call(cctx, http.MethodDelete, "/api/v1/items/"+url.PathEscape(itemID), nil, http.StatusNoContent, nil)
 			s.step("limpieza: objeto", err)
 		}
-		if publicID != "" {
+		if publicID != "" { // la baja no la borró (o la prueba falló antes)
 			s.step("limpieza: foto", s.deps.photos.Destroy(cctx, imagesdomain.Ref{PublicID: publicID}))
 		}
 		if registered && s.token != "" {
 			_, err := s.call(cctx, http.MethodDelete, "/api/v1/me", map[string]any{"password": password}, http.StatusNoContent, nil)
 			s.step("limpieza: baja de la cuenta", err)
+		}
+		if observerRegistered {
+			_, err := s.callAs(cctx, s.observer, http.MethodDelete, "/api/v1/me", map[string]any{"password": password}, http.StatusNoContent, nil)
+			s.step("limpieza: baja del observador", err)
 		}
 		// Una limpieza fallida también hace fallar la prueba.
 		if s.failed && code == 0 {
@@ -241,12 +288,64 @@ func (s *smokeRun) run(ctx context.Context) (code int) {
 	if !s.step("leer objeto", err) {
 		return 1
 	}
-	_, err = s.call(ctx, http.MethodDelete, "/api/v1/items/"+url.PathEscape(itemID), nil, http.StatusNoContent, nil)
-	if !s.step("borrar objeto", err) {
+
+	// Segunda cuenta desechable: tras la baja el token de la primera deja de
+	// valer, así que el observador es quien comprueba que el objeto desapareció.
+	var obs struct {
+		Tokens struct {
+			AccessToken string `json:"accessToken"`
+		} `json:"tokens"`
+	}
+	_, err = s.callAs(ctx, "", http.MethodPost, "/api/v1/auth/register", map[string]any{
+		"email": observerEmail, "password": password, "displayName": "Observador de humo",
+		"acceptTerms": true, "isAdult": true,
+	}, http.StatusCreated, &obs)
+	if !s.step("registro del observador", err) {
 		return 1
 	}
-	itemID = ""
+	observerRegistered, s.observer = true, obs.Tokens.AccessToken
+
+	// La baja borra el objeto y encola el borrado de su foto (spec 021, D-2).
+	_, err = s.call(ctx, http.MethodDelete, "/api/v1/me", map[string]any{"password": password}, http.StatusNoContent, nil)
+	if !s.step("baja de la cuenta", err) {
+		return 1
+	}
+	registered = false
+	_, err = s.callAs(ctx, s.observer, http.MethodGet, "/api/v1/items/"+url.PathEscape(itemID), nil, http.StatusNotFound, nil)
+	if !s.step("objeto borrado por la baja", err) {
+		return 1
+	}
+	itemID = "" // ya no existe: no hay nada que borrar en la limpieza
+
+	// El worker de bajas (cada 60 s) destruye la foto en Cloudinary.
+	if !s.step("foto borrada por la baja", s.waitPhotoGone(ctx, imagesdomain.Ref{PublicID: publicID})) {
+		return 1
+	}
+	publicID = "" // ya no existe en Cloudinary
 	return 0
+}
+
+// waitPhotoGone espera a que la foto desaparezca de Cloudinary (hasta
+// smokePhotoWait). Si sigue ahí la limpieza la borra y la prueba falla.
+func (s *smokeRun) waitPhotoGone(ctx context.Context, ref imagesdomain.Ref) error {
+	deadline := time.Now().Add(smokePhotoWait)
+	for {
+		exists, err := s.deps.photos.Exists(ctx, ref)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return errors.New("la foto sigue en Cloudinary: el worker de bajas no la borró a tiempo")
+		}
+		select {
+		case <-ctx.Done():
+			return errors.New("se agotó el tiempo esperando el borrado de la foto")
+		case <-time.After(smokePhotoPoll):
+		}
+	}
 }
 
 func (s *smokeRun) randomHex(n int) (string, error) {
@@ -260,6 +359,11 @@ func (s *smokeRun) randomHex(n int) (string, error) {
 // call hace una petición JSON a la API. Los errores solo incluyen el método,
 // la ruta y el estado HTTP: nunca el cuerpo (podría traer datos de la cuenta).
 func (s *smokeRun) call(ctx context.Context, method, path string, body any, want int, out any) (int, error) {
+	return s.callAs(ctx, s.token, method, path, body, want, out)
+}
+
+// callAs es call con el token de acceso indicado ("" = sin sesión).
+func (s *smokeRun) callAs(ctx context.Context, token, method, path string, body any, want int, out any) (int, error) {
 	var rd io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
@@ -275,8 +379,8 @@ func (s *smokeRun) call(ctx context.Context, method, path string, body any, want
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	if s.token != "" {
-		req.Header.Set("Authorization", "Bearer "+s.token)
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
 	}
 	res, err := s.deps.client.Do(req)
 	if err != nil {

@@ -259,9 +259,8 @@ func TestDeactivate(t *testing.T) { // CA-05, POL-17
 		u.Status != domain.StatusDeactivated || u.DeactivatedAt == nil {
 		t.Errorf("cuenta tras la baja = %+v", u)
 	}
-	rt, _ := e.refresh.ByHash(ctx, "h("+reg.Tokens.RefreshToken+")")
-	if rt.RevokedAt == nil {
-		t.Error("la baja debe revocar las sesiones")
+	if _, err := e.refresh.ByHash(ctx, "h("+reg.Tokens.RefreshToken+")"); !domain.Is(err, domain.ErrInvalidSession) {
+		t.Errorf("la baja debe borrar las sesiones, ByHash = %v", err)
 	}
 	if _, err := e.svc.Login(ctx, LoginInput{Email: "ana@example.com", Password: "una-contrasena-larga"}); !domain.Is(err, domain.ErrInvalidCredentials) {
 		t.Errorf("login tras la baja = %v", err)
@@ -269,8 +268,8 @@ func TestDeactivate(t *testing.T) { // CA-05, POL-17
 	if _, err := e.svc.Me(ctx, id); !domain.Is(err, domain.ErrInvalidSession) {
 		t.Errorf("Me tras la baja = %v", err)
 	}
-	if err := e.svc.Deactivate(ctx, id, "una-contrasena-larga"); !domain.Is(err, domain.ErrInvalidSession) {
-		t.Errorf("segunda baja = %v", err)
+	if err := e.svc.Deactivate(ctx, id, "una-contrasena-larga"); err != nil {
+		t.Errorf("segunda baja = %v, want nil (idempotente, RF-05)", err)
 	}
 	// El correo original queda libre para una cuenta nueva.
 	if _, err := e.svc.Register(ctx, validRegister()); err != nil {

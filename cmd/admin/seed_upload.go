@@ -119,7 +119,7 @@ func (p *cloudinaryPhotos) Destroy(ctx context.Context, ref imagesdomain.Ref) er
 // send hace la petición y solo informa el estado HTTP: el cuerpo de error de
 // Cloudinary puede repetir la cadena firmada.
 func (p *cloudinaryPhotos) send(req *http.Request, ok func(status int, body []byte) bool) error {
-	res, err := p.client.Do(req)
+	res, err := p.client.Do(req) //nolint:gosec // G704: la URL es la fija de la API de Cloudinary armada con el cloud name de la configuración
 	if err != nil {
 		return errors.New("no se pudo contactar a Cloudinary")
 	}

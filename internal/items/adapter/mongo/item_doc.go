@@ -29,7 +29,7 @@ type itemDoc struct {
 	DeclaredValueCents int64         `bson:"declaredValueCents"`
 	PricePerDayCents   int64         `bson:"pricePerDayCents"`
 	PriceSource        string        `bson:"priceSource"`
-	UsageRules         *string       `bson:"usageRules"`
+	UsageRules         *string       `bson:"usageRules,omitempty"`
 	Zone               zoneDoc       `bson:"zone"`
 	// Location es un GeoJSON Point [lng, lat] ya redondeado (RF-04). Se omite
 	// si no hay ubicación: el índice 2dsphere ignora documentos sin el campo.
@@ -43,7 +43,7 @@ type itemDoc struct {
 
 type zoneDoc struct {
 	Municipality string  `bson:"municipality"`
-	Neighborhood *string `bson:"neighborhood"`
+	Neighborhood *string `bson:"neighborhood,omitempty"`
 }
 
 type pointDoc struct {

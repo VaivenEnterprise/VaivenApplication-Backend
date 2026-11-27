@@ -81,3 +81,25 @@ func (r resources) Lookup(ctx context.Context, cloudinaryType, publicID string) 
 	}
 	return usecase.ResourceInfo{Format: res.Format, Width: res.Width, Height: res.Height, Bytes: res.Bytes}, nil
 }
+
+// NewDestroyer arma el borrador de imágenes sobre la Admin API de Cloudinary
+// (spec 021). Es independiente de Service: no cambia su interfaz.
+func NewDestroyer(cfg Config) (port.Destroyer, error) {
+	admin, err := cloudinary.NewAdminClient(cfg.CloudName, cfg.APIKey, cfg.APISecret, cfg.AdminOptions...)
+	if err != nil {
+		return nil, err
+	}
+	return destroyer{admin: admin}, nil
+}
+
+// destroyer adapta AdminClient.DeleteResource al puerto port.Destroyer.
+type destroyer struct {
+	admin *cloudinary.AdminClient
+}
+
+func (d destroyer) Destroy(ctx context.Context, deliveryType, publicID string) error {
+	if err := d.admin.DeleteResource(ctx, deliveryType, publicID); err != nil {
+		return fmt.Errorf("images: %w", err)
+	}
+	return nil
+}

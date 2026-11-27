@@ -123,7 +123,7 @@ func TestIntegrationEnsureIndexesIdempotent(t *testing.T) {
 	if unique, ok := got["booking_rater_unique"]; !ok || !unique {
 		t.Errorf("falta el índice único booking_rater_unique: %v", got)
 	}
-	if _, ok := got["ratee_id"]; !ok || len(idx) != 3 { // _id_ + 2
+	if _, ok := got["ratee_id"]; !ok || len(idx) != 4 { // _id_ + 3
 		t.Errorf("índices = %v", got)
 	}
 }

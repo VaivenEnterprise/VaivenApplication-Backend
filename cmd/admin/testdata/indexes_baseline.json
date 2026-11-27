@@ -167,6 +167,35 @@
     }
   },
   {
+    "collection": "deletion_jobs",
+    "name": "nextAttemptAt_partial",
+    "spec": {
+      "key": {
+        "nextAttemptAt": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "nextAttemptAt_partial",
+      "partialFilterExpression": {
+        "nextAttemptAt": {
+          "$exists": true
+        }
+      }
+    }
+  },
+  {
+    "collection": "deletion_jobs",
+    "name": "userId",
+    "spec": {
+      "key": {
+        "userId": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "userId"
+    }
+  },
+  {
     "collection": "incidents",
     "name": "booking_status",
     "spec": {
@@ -179,6 +208,21 @@
         }
       },
       "name": "booking_status"
+    }
+  },
+  {
+    "collection": "incidents",
+    "name": "purgeAt_ttl",
+    "spec": {
+      "key": {
+        "purgeAt": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "purgeAt_ttl",
+      "expireAfterSeconds": {
+        "$numberInt": "0"
+      }
     }
   },
   {
@@ -487,6 +531,18 @@
     }
   },
   {
+    "collection": "ratings",
+    "name": "rater",
+    "spec": {
+      "key": {
+        "raterId": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "rater"
+    }
+  },
+  {
     "collection": "reco_interactions",
     "name": "created_ttl",
     "spec": {
@@ -592,6 +648,21 @@
   },
   {
     "collection": "reports",
+    "name": "purgeAt_ttl",
+    "spec": {
+      "key": {
+        "purgeAt": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "purgeAt_ttl",
+      "expireAfterSeconds": {
+        "$numberInt": "0"
+      }
+    }
+  },
+  {
+    "collection": "reports",
     "name": "reporter_target_unique",
     "spec": {
       "key": {
@@ -625,6 +696,36 @@
     }
   },
   {
+    "collection": "reports",
+    "name": "target",
+    "spec": {
+      "key": {
+        "targetType": {
+          "$numberInt": "1"
+        },
+        "targetId": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "target"
+    }
+  },
+  {
+    "collection": "sanctions",
+    "name": "purgeAt_ttl",
+    "spec": {
+      "key": {
+        "purgeAt": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "purgeAt_ttl",
+      "expireAfterSeconds": {
+        "$numberInt": "0"
+      }
+    }
+  },
+  {
     "collection": "sanctions",
     "name": "user_createdAt",
     "spec": {
@@ -637,6 +738,21 @@
         }
       },
       "name": "user_createdAt"
+    }
+  },
+  {
+    "collection": "users",
+    "name": "deletionPending_partial",
+    "spec": {
+      "key": {
+        "deletionPending": {
+          "$numberInt": "1"
+        }
+      },
+      "name": "deletionPending_partial",
+      "partialFilterExpression": {
+        "deletionPending": true
+      }
     }
   },
   {

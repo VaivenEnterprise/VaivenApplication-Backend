@@ -64,3 +64,15 @@ Solo con aprobación de la persona responsable y anotándolo en `memoria.md`:
 |---|---|---|---|---|---|
 | 2026-11-16 | production | `vaiven_production_20261117T021736Z` (antes del primer despliegue, base vacía) | sí | — | BE-B |
 | 2026-11-16 | production | respaldo con la cuenta de administrador | sí | ✅ desde Cloudinary: 12 colecciones, 0 diferencias | BE-B |
+
+## 6. Antes de migrar (spec 021: quitar los `null`)
+
+`admin migrate-remove-nulls` modifica documentos reales y no se puede deshacer sin un respaldo. **Nunca se aplica sin respaldo previo.** Solo hace `$unset` de campos `null` y `$pull` de `null` sueltos en arreglos; nunca borra documentos. Orden obligatorio:
+
+1. **Respaldo** (paso 2 de este documento) y anotar su nombre, p. ej. `vaiven_staging_20261126T120000Z`. Comprobar que existe la copia fuera de la VM.
+2. **Dry-run** (es lo que hace el comando por omisión; no escribe nada): `admin migrate-remove-nulls`. Revisar los conteos por colección y que no aparezcan líneas `NO SOPORTADA` (rutas con más de un nivel de arreglo: el comando las reporta y no las toca; salida 1; se añade una regla antes de seguir).
+3. **Apply** con la referencia del respaldo: `admin migrate-remove-nulls --apply --backup-ref vaiven_staging_20261126T120000Z`. Sin `--backup-ref` el comando se niega. Con `APP_ENV=production` exige además `--yes-production` y solo se usa cuando el responsable lo indique. La salida registra el `backup-ref` y los documentos modificados por colección (sin valores ni ids).
+4. **Verificar**: `admin verify-no-nulls` (solo lectura) debe salir con 0. Repetir el paso 3 no debe cambiar nada (`0 documentos modificados`; es idempotente y reanudable: si se interrumpe, se vuelve a ejecutar).
+5. Solo entonces se endurecen los validadores (T030 de la spec 021) con el interruptor explícito `admin enforce-validators` (dry-run por omisión; `--apply` vuelve a verificar cero `null` y se niega si hay; con `APP_ENV=production` exige `--yes-production`; requiere un usuario con `dbAdmin`). La API **nunca** endurece sola al arrancar ni afloja un endurecimiento ya hecho. Para volver atrás: `admin enforce-validators --apply --tolerant`.
+
+**Si algo sale mal** (conteos inesperados, error a medias, un lector que dependía de un `null`): detener la API, restaurar el respaldo del paso 1 como en el paso 4 de «Recuperación real» (con `--keep` en una base de comprobación primero si hay duda), arrancar la API y anotar el motivo en `memoria.md`. Probar siempre primero en una copia o en staging.

@@ -26,8 +26,8 @@ type refreshDoc struct {
 	FamilyID  string        `bson:"familyId"`
 	TokenHash string        `bson:"tokenHash"`
 	ExpiresAt time.Time     `bson:"expiresAt"`
-	UsedAt    *time.Time    `bson:"usedAt"`
-	RevokedAt *time.Time    `bson:"revokedAt"`
+	UsedAt    *time.Time    `bson:"usedAt,omitempty"`
+	RevokedAt *time.Time    `bson:"revokedAt,omitempty"`
 	CreatedAt time.Time     `bson:"createdAt"`
 }
 
@@ -131,9 +131,14 @@ func (r *RefreshRepo) RevokeFamily(ctx context.Context, familyID string, at time
 	return r.revoke(ctx, bson.D{{Key: "familyId", Value: familyID}}, at)
 }
 
-// RevokeAllForUser revoca todas las sesiones de la persona (baja, RF-08).
-func (r *RefreshRepo) RevokeAllForUser(ctx context.Context, userID string, at time.Time) error {
-	return r.revoke(ctx, bson.D{{Key: "userId", Value: userID}}, at)
+// DeleteAllForUser borra todas las sesiones de la persona (baja, spec 021,
+// POL-17): no basta revocarlas, el documento no debe quedar. Es idempotente y
+// se ejecuta con el ctx de la transacción de la baja.
+func (r *RefreshRepo) DeleteAllForUser(ctx context.Context, userID string) error {
+	if _, err := r.col.DeleteMany(ctx, bson.D{{Key: "userId", Value: userID}}); err != nil {
+		return fmt.Errorf("refresh_tokens: borrar sesiones: %w", err)
+	}
+	return nil
 }
 
 func (r *RefreshRepo) revoke(ctx context.Context, filter bson.D, at time.Time) error {

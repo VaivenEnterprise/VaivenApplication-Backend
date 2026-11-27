@@ -88,6 +88,9 @@ func (r *ModelRepo) Save(ctx context.Context, buildID string, neighbors map[stri
 		if len(ids) > domain.PopularSize {
 			ids = ids[:domain.PopularSize]
 		}
+		if ids == nil {
+			ids = []string{} // nunca null en MongoDB (spec 021, RF-10)
+		}
 		pops = append(pops, popularDoc{ID: docID(buildID, key), BuildID: buildID, Key: key, Items: ids, CreatedAt: now, UpdatedAt: now})
 	}
 	if err := insertBatches(ctx, r.popular, pops); err != nil {

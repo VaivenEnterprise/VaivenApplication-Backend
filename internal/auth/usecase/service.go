@@ -38,11 +38,24 @@ type Deps struct {
 	NewFamilyID func() (string, error)
 	Revocations Revocations    // nil = sin revocación inmediata
 	Events      SecurityEvents // nil = sin eventos
+
+	// Baja atómica (spec 021). Tx nil ejecuta la baja sin transacción (solo
+	// pruebas y comandos sin replica set); la API siempre lo recibe. Erasers se
+	// llaman en este orden dentro de la transacción.
+	Tx      TxRunner
+	Erasers []Eraser
+	Jobs    Jobs             // nil = sin bandeja de salida (no se encolan fotos ni avisos)
+	Pending PendingDeletions // nil = sin reanudación por marca
+	// Images y Notices ejecutan los jobs de la bandeja (borrar una foto, avisar
+	// a una contraparte). nil = ese tipo de job falla y se reintenta.
+	Images  ImageDestroyer
+	Notices NoticeSender
 }
 
 // Service implementa los casos de uso de la cuenta.
 type Service struct {
-	d Deps
+	d       Deps
+	resumer *Resumer
 }
 
 // NewService crea el servicio. Falla si falta una dependencia obligatoria.
@@ -57,6 +70,9 @@ func NewService(d Deps) (*Service, error) {
 	if d.Now == nil {
 		d.Now = time.Now
 	}
+	if d.Tx == nil {
+		d.Tx = noTx{}
+	}
 	if d.NewFamilyID == nil {
 		d.NewFamilyID = randomID
 	}
@@ -65,7 +81,21 @@ func NewService(d Deps) (*Service, error) {
 	if d.Hasher.DecoyHash() == "" {
 		return nil, errors.New("auth: el hasher no tiene hash señuelo")
 	}
-	return &Service{d: d}, nil
+	resumer, err := NewResumer(ResumerDeps{
+		Users: d.Users, Pending: d.Pending, Jobs: d.Jobs, Revocations: d.Revocations, AccessTTL: d.Access.TTL(),
+		Images: d.Images, Notices: d.Notices, Events: d.Events, Now: d.Now,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &Service{d: d, resumer: resumer}, nil
+}
+
+// ResumeDeletions hace una pasada de los pasos pendientes de las bajas: ejecuta
+// los jobs vencidos y reanuda las cuentas marcadas con deletionPending (spec 021,
+// RF-04). Es idempotente; la llama el worker de bajas.
+func (s *Service) ResumeDeletions(ctx context.Context) (PassReport, error) {
+	return s.resumer.ResumeDeletions(ctx)
 }
 
 // now devuelve la hora en UTC truncada a milisegundos (precisión de MongoDB).

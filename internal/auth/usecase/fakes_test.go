@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -21,9 +22,14 @@ type fakeUsers struct {
 	next           int
 	failAll        error // si no es nil, todas las operaciones fallan
 	failUpdateHash error // solo UpdatePasswordHash falla
+	failLock       error // solo LockActive falla
+	failPending    error // ListPending y ClearIfDone fallan
+	pending        map[string]bool
 }
 
-func newFakeUsers() *fakeUsers { return &fakeUsers{byID: map[string]domain.User{}} }
+func newFakeUsers() *fakeUsers {
+	return &fakeUsers{byID: map[string]domain.User{}, pending: map[string]bool{}}
+}
 
 func (f *fakeUsers) Create(_ context.Context, u domain.User) (domain.User, error) {
 	f.mu.Lock()
@@ -113,6 +119,24 @@ func (f *fakeUsers) UpdatePasswordHash(_ context.Context, id, hash string, now t
 	return nil
 }
 
+func (f *fakeUsers) LockActive(_ context.Context, id string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.failAll != nil {
+		return false, f.failAll
+	}
+	if f.failLock != nil {
+		return false, f.failLock
+	}
+	u, ok := f.byID[id]
+	if !ok || !u.IsActive() {
+		return false, nil
+	}
+	u.Version++
+	f.byID[id] = u
+	return true, nil
+}
+
 func (f *fakeUsers) Deactivate(_ context.Context, id, anonymizedEmail string, now time.Time) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -120,13 +144,46 @@ func (f *fakeUsers) Deactivate(_ context.Context, id, anonymizedEmail string, no
 		return f.failAll
 	}
 	u, ok := f.byID[id]
-	if !ok {
+	if !ok || !u.IsActive() {
 		return domain.ErrUserNotFound
 	}
 	u.Email, u.DisplayName, u.Phone = anonymizedEmail, domain.DeletedDisplayName, nil
+	u.PasswordHash, u.Role, u.SuspendedUntil, u.RatingSum, u.RatingCount = "", "", nil, 0, 0
 	u.Status, u.DeactivatedAt, u.UpdatedAt = domain.StatusDeactivated, &now, now
+	u.Version++
 	f.byID[id] = u
+	f.pending[id] = true
 	return nil
+}
+
+// ListPending y ClearIfDone cumplen PendingDeletions.
+func (f *fakeUsers) ListPending(_ context.Context, limit int) ([]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.failPending != nil {
+		return nil, f.failPending
+	}
+	var out []string
+	for id := range f.pending {
+		if len(out) < limit {
+			out = append(out, id)
+		}
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+func (f *fakeUsers) ClearIfDone(_ context.Context, id string, _ time.Time) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.failPending != nil {
+		return false, f.failPending
+	}
+	if !f.pending[id] {
+		return false, nil
+	}
+	delete(f.pending, id)
+	return true, nil
 }
 
 // fakeRefresh es un repositorio de refresh tokens en memoria.
@@ -206,8 +263,18 @@ func (f *fakeRefresh) RevokeFamily(_ context.Context, familyID string, at time.T
 	return f.revoke(func(t domain.RefreshToken) bool { return t.FamilyID == familyID }, at)
 }
 
-func (f *fakeRefresh) RevokeAllForUser(_ context.Context, userID string, at time.Time) error {
-	return f.revoke(func(t domain.RefreshToken) bool { return t.UserID == userID }, at)
+func (f *fakeRefresh) DeleteAllForUser(_ context.Context, userID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.failRevoke != nil {
+		return f.failRevoke
+	}
+	for h, t := range f.byHash {
+		if t.UserID == userID {
+			delete(f.byHash, h)
+		}
+	}
+	return nil
 }
 
 // fakeHasher "hashea" anteponiendo un prefijo; cuenta las verificaciones.

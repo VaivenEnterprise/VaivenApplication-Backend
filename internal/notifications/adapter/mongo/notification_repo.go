@@ -67,7 +67,7 @@ type notificationDoc struct {
 	Title     string            `bson:"title"`
 	Body      string            `bson:"body"`
 	Data      map[string]string `bson:"data"`
-	ReadAt    *time.Time        `bson:"readAt"`
+	ReadAt    *time.Time        `bson:"readAt,omitempty"`
 	CreatedAt time.Time         `bson:"createdAt"`
 }
 

@@ -556,11 +556,17 @@ func TestResolveActionFailures(t *testing.T) {
 	boom := errors.New("boom")
 	ctx := context.Background()
 
-	// El objeto ya no existe: no se puede ocultar (404) y el reporte sigue abierto.
+	// El objeto ya no existe (spec 021, R-03): no hay nada que ocultar, no se avisa a
+	// nadie y el reporte se cierra sin error. No se puede suspender a un dueño
+	// desconocido (404) y el reporte sigue abierto.
 	e := newEnv(t)
 	e.repo.reports[repID] = openReport(domain.TargetItem, ghostID)
-	if _, err := e.s.Resolve(ctx, admin, repID, "hide_item", "nota valida"); !errors.Is(err, domain.ErrTargetNotFound) || e.repo.resolved.id != "" {
-		t.Errorf("hide_item sobre objeto eliminado: %v resolved=%q", err, e.repo.resolved.id)
+	if _, err := e.s.Resolve(ctx, admin, repID, "suspend_user", "nota valida"); !errors.Is(err, domain.ErrTargetNotFound) || e.repo.resolved.id != "" {
+		t.Errorf("suspend_user sobre objeto eliminado: %v resolved=%q", err, e.repo.resolved.id)
+	}
+	if v, err := e.s.Resolve(ctx, admin, repID, "hide_item", "nota valida"); err != nil || e.repo.resolved.id != repID ||
+		len(e.it.blocked) != 0 || len(e.nt.events) != 0 || v.TargetSummary != UnavailableSummary {
+		t.Errorf("hide_item sobre objeto eliminado: %v resolved=%q blocked=%v avisos=%v", err, e.repo.resolved.id, e.it.blocked, e.nt.events)
 	}
 	// Block falla.
 	e = newEnv(t)

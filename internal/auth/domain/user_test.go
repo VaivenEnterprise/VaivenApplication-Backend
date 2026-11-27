@@ -96,6 +96,11 @@ func TestUserState(t *testing.T) {
 	if u.IsActive() || u.Public().DisplayName != DeletedDisplayName {
 		t.Errorf("baja: activa=%v nombre=%q", u.IsActive(), u.Public().DisplayName)
 	}
+	// Una cuenta eliminada no muestra promedio ni cuenta, aunque aún tenga las
+	// sumas de antes de la baja limpia (spec 021, N-2).
+	if p := u.Public(); p.RatingAverage != nil || p.RatingCount != 0 || p.ID != "u1" || !p.MemberSince.Equal(earlier) {
+		t.Errorf("cuenta eliminada = %+v", p)
+	}
 }
 
 func TestIs(t *testing.T) {

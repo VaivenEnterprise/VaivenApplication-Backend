@@ -73,7 +73,6 @@ func (r *ConversationRepo) Open(ctx context.Context, bookingID, ownerID, request
 	update := bson.D{{Key: "$setOnInsert", Value: bson.D{
 		{Key: "participantIds", Value: bson.A{ownerID, requesterID}},
 		{Key: "unread", Value: bson.D{}},
-		{Key: "lastMessage", Value: nil},
 		{Key: "lastMessageAt", Value: now.UTC()},
 		{Key: "createdAt", Value: now.UTC()},
 	}}}

@@ -96,12 +96,17 @@ func TestIntegrationRefreshRepo(t *testing.T) {
 		t.Error("MarkUsed sobre un token revocado devolvió true")
 	}
 
-	if err := repo.RevokeAllForUser(ctx, "u1", now); err != nil {
-		t.Fatalf("RevokeAllForUser: %v", err)
+	// La baja BORRA las sesiones de la persona (spec 021): idempotente y sin
+	// tocar las de otra persona.
+	for i := 0; i < 2; i++ {
+		if err := repo.DeleteAllForUser(ctx, "u1"); err != nil {
+			t.Fatalf("DeleteAllForUser: %v", err)
+		}
 	}
-	h3, _ := repo.ByHash(ctx, "h3")
-	h4, _ := repo.ByHash(ctx, "h4")
-	if h3.RevokedAt == nil || h4.RevokedAt != nil {
-		t.Errorf("RevokeAllForUser: h3 revocado=%v (want true), h4 revocado=%v (want false)", h3.RevokedAt != nil, h4.RevokedAt != nil)
+	if _, err := repo.ByHash(ctx, "h3"); !domain.Is(err, domain.ErrInvalidSession) {
+		t.Errorf("DeleteAllForUser: h3 debe haberse borrado, ByHash = %v", err)
+	}
+	if _, err := repo.ByHash(ctx, "h4"); err != nil {
+		t.Errorf("DeleteAllForUser: h4 (otra persona) debe seguir, ByHash = %v", err)
 	}
 }
