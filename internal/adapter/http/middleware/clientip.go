@@ -46,7 +46,9 @@ func addrOf(remote string) (netip.Addr, bool) {
 	if err != nil {
 		return netip.Addr{}, false
 	}
-	return a.Unmap(), true
+	// Sin zona IPv6 (spec 020, hallazgo de fuzzing): netip.ParseAddr acepta
+	// «::%[», y Prefix.Contains nunca considera de confianza una dirección con zona.
+	return a.Unmap().WithZone(""), true
 }
 
 func isTrusted(trusted []netip.Prefix, a netip.Addr) bool {
@@ -71,7 +73,7 @@ func fromForwarded(trusted []netip.Prefix, values []string) (netip.Addr, bool) {
 		if err != nil {
 			return netip.Addr{}, false
 		}
-		a = a.Unmap()
+		a = a.Unmap().WithZone("") // la zona IPv6 no es parte de la identidad (spec 020)
 		if !isTrusted(trusted, a) {
 			return a, true
 		}

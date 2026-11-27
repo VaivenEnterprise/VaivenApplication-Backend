@@ -2,7 +2,7 @@
 
 - **Dueño sugerido:** BE-B · **Con:** BE-A (rutas de cuenta y de pagos que escriben en la bitácora) · **Prioridad:** P1
 - **Depende de:** 003, 009, 010, 011, 012, 016, 017 y 018 (sus controles y su contrato) · **Fase del plan:** A, «sin costo, en código» (`docs/seguridad/plan-nivel-bancario.md` §3.6 y §3.8)
-- **Constitución:** v2.0.0 · **Estado:** **Borrador** (2026-11-21). Ninguna tarea se implementa sin aprobación (Art. I).
+- **Constitución:** v2.0.0 · **Estado:** **Aprobada** (aprobada por el responsable (BE-B) el 2026-11-26). Queda una sola pregunta abierta, la del suplente de guardia (decisión humana, RF-20), que bloquea solo la parte E (C-10).
 - **Fuente:** `docs/seguridad/plan-nivel-bancario.md` §3.6 (bitácora inmutable y guardia) y §3.8 (pruebas); estado real de `docs/seguridad/matriz-018.md` (C-10).
 
 ## 1. Objetivo y por qué
@@ -39,9 +39,9 @@ Esta spec define **qué** hay que agregar para cerrar esas brechas **sin costo**
 | RF-02 | **Cadena de hash.** Cada registro incluye el hash del registro anterior y su propio hash, calculado sobre sus campos y el hash previo con un algoritmo estándar de la biblioteca estándar de Go. El primer registro apunta a un valor de génesis conocido. La inserción mantiene la cadena íntegra bajo concurrencia y con varias réplicas (Art. XIV: estado en MongoDB, no en memoria del proceso). |
 | RF-03 | Se auditan **al menos**: acciones de administración; sanciones (aplicar y levantar); cierre de incidencias; confirmación y reporte de pago; cambios de cuenta (correo, contraseña, MFA, eliminación); y **accesos de administradores a datos personales** de terceras personas. |
 | RF-04 | Cada registro guarda **solo**: identificador de quien actúa, acción (catálogo cerrado), identificador del objetivo, marca de tiempo UTC, `requestId` y resultado (éxito, rechazo, error). **Nunca** valores personales (correo, teléfono, dirección, texto de mensajes) ni secretos (contraseñas, tokens, códigos), conforme al Art. VI.5. |
-| RF-05 | Una acción auditada y su registro son **consistentes**: si la acción tiene éxito, queda registro; si no se puede escribir el registro de una acción sensible, la acción no se da por completada (política de fallo cerrado) [NEEDS CLARIFICATION: ver pregunta 2]. |
+| RF-05 | Una acción auditada y su registro son **consistentes**: si la acción tiene éxito, queda registro; si no se puede escribir el registro de una acción sensible, la acción no se da por completada (política de **fallo cerrado**). **Resuelto (2026-11-26, responsable):** en administración, sanciones, pagos y cambios de cuenta, si la bitácora no se puede escribir la operación auditada **falla** (error 503 sin efectos); se alerta con un evento de seguridad y se prueba la degradación. |
 | RF-06 | `cmd/admin` ofrece un comando de **verificación** que recorre la cadena y detecta cualquier alteración: registro modificado, eliminado, insertado fuera de orden o cadena cortada. Informa el primer punto de ruptura (posición e identificador) y termina con código distinto de cero si hay manipulación. Se puede ejecutar en la CI contra una base de pruebas y a mano contra staging, en solo lectura. |
-| RF-07 | **Periodo de retención** definido y documentado para `audit_log` [NEEDS CLARIFICATION: ver pregunta 1]. Los registros no se purgan por debajo de ese periodo. |
+| RF-07 | **Periodo de retención** definido y documentado para `audit_log`  **Resuelto (2026-11-26, responsable):** la retención es de **12 meses** (la misma que la spec 021, D-4), sin purga automática antes. Los registros no se purgan por debajo de ese periodo. |
 | RF-08 | **Copia diaria a almacenamiento inmutable (WORM)**: queda **fuera de alcance a costo cero** y se marca como mejora futura de pago (fase C del plan). Mientras tanto, el comando de verificación admite exportar el **hash de la cabeza de la cadena** (sin datos) para anclarlo fuera de la base (p. ej. en el issue de la revisión o en el repositorio), de modo que un borrado de la cola también sea detectable. |
 | RF-09 | La bitácora no es una API pública: no se agregan endpoints (ver §6). La lectura para revisión es solo por `cmd/admin`. |
 
@@ -76,7 +76,7 @@ Esta spec define **qué** hay que agregar para cerrar esas brechas **sin costo**
 | RF-19 | **Evidencia de entrega:** ejecutar `Security alerts` con entregas sintéticas **A3, A4, A5 y A6** (A1 y A2 ya tienen su evidencia o se repiten por completitud) y registrar, por cada una, que la persona destinataria **confirmó la recepción** (captura o referencia al issue, sin datos sensibles). |
 | RF-20 | **Suplente de guardia con nombre** (`ALERT_ASSIGNEES` con titular y suplente), recepción confirmada por el suplente y una regla escrita de escalamiento si el titular no responde en 15 min. |
 | RF-21 | **Simulacro de mesa trimestral:** acta con fecha, escenario, tiempos de detección y de respuesta, y acciones derivadas. El primero antes de declarar C-10 acreditado; la cadencia queda en el calendario de seguridad. |
-| RF-22 | **Cadencia de detección.** El cron de GitHub Actions de `security-alerts.yml` se ejecutó cada 5 a 9 horas en lugar de cada 30 minutos. La spec exige que la cadencia real de detección esté **medida y documentada** y propone opciones (sin decidir): (a) activar el programador externo de bajo costo cero ya disponible (p. ej. latido o monitor de Better Stack que dispare `workflow_dispatch`); (b) mover la detección a la propia VM con un temporizador (`systemd` o `cron`) que invoque `scripts/alert-scan.sh`; (c) aceptar la cadencia degradada y documentarla como riesgo residual con su impacto en el tiempo de aviso. Hasta decidir, el informe de C-10 declara la cadencia real [NEEDS CLARIFICATION: ver pregunta 4]. |
+| RF-22 | **Cadencia de detección.** El cron de GitHub Actions de `security-alerts.yml` se ejecutó cada 5 a 9 horas en lugar de cada 30 minutos. La spec exige que la cadencia real de detección esté **medida y documentada** y propone opciones (sin decidir): (a) activar el programador externo de bajo costo cero ya disponible (p. ej. latido o monitor de Better Stack que dispare `workflow_dispatch`); (b) mover la detección a la propia VM con un temporizador (`systemd` o `cron`) que invoque `scripts/alert-scan.sh`; (c) aceptar la cadencia degradada y documentarla como riesgo residual con su impacto en el tiempo de aviso. **Resuelto (2026-11-26, responsable):** sin cambios en la VM, la meta es **realista ≤ 6 h con el cron de GitHub** (opción c, riesgo residual documentado); el disparador externo (a) o el temporizador en la VM (b) quedan como **mejora futura**. El informe de C-10 declara la cadencia real medida. |
 
 ### Requisitos no funcionales
 
@@ -85,7 +85,7 @@ Esta spec define **qué** hay que agregar para cerrar esas brechas **sin costo**
 | RNF-01 | **Sin cambios de contrato público.** No se espera ningún cambio en `openapi.yaml` ni en `api/paths/` (ni endpoints nuevos ni campos nuevos); si una corrección lo exigiera, se publica antes y se avisa a móvil (Art. IV.6). |
 | RNF-02 | **Costo cero** (Art. XIII.1): solo MongoDB, la biblioteca estándar, `go test -fuzz`, GitHub Actions y las herramientas ya en uso. Sin dependencias de Go nuevas salvo justificación en `plan.md` y registro en `memoria.md` (Art. VIII.1). |
 | RNF-03 | Arquitectura limpia (Art. III): el puerto de auditoría vive en `usecase`; solo el adaptador de MongoDB importa el controlador; `domain` y `usecase` no importan `mongo` ni `bson`. |
-| RNF-04 | La escritura en la bitácora no degrada el p95 de las rutas auditadas más de lo medido y aceptado en el plan [NEEDS CLARIFICATION: umbral; propuesta ≤ 10 ms]. |
+| RNF-04 | La escritura en la bitácora no degrada el p95 de las rutas auditadas más de lo medido y aceptado en el plan **Resuelto (2026-11-26, responsable):** umbral ≤ 10 ms **orientativo, no bloqueante**; se mide y se informa. |
 | RNF-05 | Cobertura ≥ 80 % en los paquetes nuevos de `domain` y `usecase` (Art. VII.1); `gofmt`, `go vet` y `golangci-lint` limpios (Art. VII.3). |
 | RNF-06 | Ningún registro, informe, acta ni salida de CI contiene secretos, tokens ni datos personales (Art. VI.5); los repositorios son públicos, así que las evidencias de C-10 solo llevan identificadores, severidad, entorno y hora. |
 
@@ -141,9 +141,9 @@ Esta spec define **qué** hay que agregar para cerrar esas brechas **sin costo**
 
 ## 8. Preguntas abiertas
 
-1. [NEEDS CLARIFICATION: **retención** de `audit_log` (RF-07); propuesta 24 meses, sin purga automática antes.]
-2. [NEEDS CLARIFICATION: política de fallo de la bitácora (RF-05): fallo cerrado en las acciones de dinero, sanciones y cuenta frente a fallo abierto con alerta; propuesta: cerrado.]
+1. **Resuelto (2026-11-26, responsable):** retención de `audit_log` de 12 meses, igual que la spec 021 (D-4), sin purga automática antes (RF-07).
+2. **Resuelto (2026-11-26, responsable):** fallo cerrado: si no se escribe el registro, la operación auditada (administración, sanciones, pagos y cuenta) falla (RF-05).
 3. [NEEDS CLARIFICATION: **suplente de guardia** (RF-20): persona con nombre y su cuenta de GitHub.]
-4. [NEEDS CLARIFICATION: **opción para la cadencia de detección** (RF-22): (a) disparador externo, (b) temporizador en la VM o (c) aceptar y documentar.]
-5. [NEEDS CLARIFICATION: umbral de latencia aceptable al auditar (RNF-04).]
-6. [NEEDS CLARIFICATION: catálogo definitivo de acciones auditadas por módulo, a confirmar con BE-A para las de cuenta y pagos.]
+4. **Resuelto (2026-11-26, responsable):** meta realista ≤ 6 h con el cron de GitHub, sin cambios en la VM; (a) y (b) como mejora futura (RF-22).
+5. **Resuelto (2026-11-26, responsable):** ≤ 10 ms orientativo, no bloqueante (RNF-04).
+6. **Resuelto (2026-11-26, responsable):** el catálogo de acciones auditadas es el listado de RF-03 (administración; sanciones aplicar y levantar; cierre de incidencias; confirmación y reporte de pago; cambios de cuenta; accesos de administradores a datos personales). BE-A lo instrumenta en sus rutas de cuenta y pagos sin cambiar el contrato.
